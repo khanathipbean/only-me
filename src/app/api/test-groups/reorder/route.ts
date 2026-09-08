@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const forbidden = await checkProjectRole(userId!, scenario.projectId, EDITOR_ROLES);
+  const { forbidden } = await checkProjectRole(userId!, scenario.projectId, EDITOR_ROLES);
   if (forbidden) {
     return forbidden;
   }

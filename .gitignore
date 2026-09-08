@@ -42,6 +42,10 @@ next-env.d.ts
 
 /src/generated/prisma
 
+# Local-disk Attachment storage (ticket 05). Swap for object storage later;
+# storageKey is opaque to the rest of the app either way.
+/uploads
+
 # mattpocock/skills: symlinked mirror of .agents/skills for Claude Code.
 # core.symlinks=false on this machine makes `git add` copy file contents
 # instead of storing a symlink, so ignore it and keep .agents/skills as

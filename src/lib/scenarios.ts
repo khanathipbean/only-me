@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
-import type { ScenarioPriority, WorkflowStatus } from "@/generated/prisma/client";
+import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
+import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
 export class ValidationError extends Error {}
 export class ConfirmRequiredError extends Error {
@@ -16,7 +17,7 @@ export type ScenarioInput = {
   testData?: string | null;
   steps?: string | null;
   expectedResult: string;
-  priority: ScenarioPriority;
+  priority: Priority;
   status?: WorkflowStatus;
   tags?: string[];
   ownerId?: string | null;
@@ -47,12 +48,18 @@ async function logScenarioEvent(
 async function setScenarioDeletedAt(
   id: string,
   actorId: string,
-  action: "archive" | "restore" | "delete",
+  action: SoftDeleteAction,
   deletedAt: Date | null,
 ) {
-  const scenario = await prisma.scenario.update({ where: { id }, data: { deletedAt } });
-  await logScenarioEvent(action, scenario, actorId);
-  return scenario;
+  const before = await prisma.scenario.findUniqueOrThrow({ where: { id } });
+  return setDeletedAt({
+    entityType: "Scenario",
+    actorId,
+    action,
+    deletedAt,
+    projectId: before.projectId,
+    update: (deletedAt) => prisma.scenario.update({ where: { id }, data: { deletedAt } }),
+  });
 }
 
 export async function createScenario(
@@ -95,7 +102,7 @@ export async function listScenariosForProject(
   filters: {
     search?: string;
     status?: WorkflowStatus;
-    priority?: ScenarioPriority;
+    priority?: Priority;
     sortBy?: ScenarioSortField;
     sortOrder?: "asc" | "desc";
   } = {},

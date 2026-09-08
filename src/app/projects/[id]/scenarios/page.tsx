@@ -2,7 +2,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { isScenarioSortField, listScenariosForProject } from "@/lib/scenarios";
-import type { ScenarioPriority, WorkflowStatus } from "@/generated/prisma/client";
+import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
 export default async function ScenariosPage({
   params,
@@ -27,7 +27,7 @@ export default async function ScenariosPage({
   const scenarios = await listScenariosForProject(projectId, {
     search,
     status: status as WorkflowStatus | undefined,
-    priority: priority as ScenarioPriority | undefined,
+    priority: priority as Priority | undefined,
     sortBy: isScenarioSortField(sortBy) ? sortBy : undefined,
     sortOrder: sortOrder === "asc" ? "asc" : undefined,
   });

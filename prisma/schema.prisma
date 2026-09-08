@@ -24,8 +24,12 @@ model User {
   updatedProjects Project[]       @relation("ProjectUpdatedBy")
   memberships     ProjectMember[]
   auditLogs       AuditLog[]
-  ownedScenarios   Scenario[]
-  ownedTestGroups  TestGroup[]
+  ownedScenarios      Scenario[]
+  ownedTestGroups     TestGroup[]
+  assignedTestCases   TestCase[]   @relation("TestCaseAssignee")
+  createdTestCases    TestCase[]   @relation("TestCaseCreatedBy")
+  updatedTestCases    TestCase[]   @relation("TestCaseUpdatedBy")
+  uploadedAttachments Attachment[]
 }
 
 enum ProjectStatus {
@@ -90,11 +94,26 @@ model AuditLog {
   project Project @relation(fields: [projectId], references: [id])
 }
 
-enum ScenarioPriority {
+/** Shared priority for Scenario and Test Case. */
+enum Priority {
   CRITICAL
   HIGH
   MEDIUM
   LOW
+}
+
+enum TestType {
+  POSITIVE
+  NEGATIVE
+  BOUNDARY
+}
+
+enum TestResult {
+  NOT_RUN
+  PASSED
+  FAILED
+  BLOCKED
+  SKIPPED
 }
 
 /** Shared workflow status for Scenario, Test Group, and Test Case. */
@@ -114,7 +133,7 @@ model Scenario {
   testData       String?
   steps          String?
   expectedResult String
-  priority       ScenarioPriority
+  priority       Priority
   status         WorkflowStatus   @default(DRAFT)
   tags           String[]         @default([])
   ownerId        String?
@@ -140,6 +159,57 @@ model TestGroup {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  scenario Scenario @relation(fields: [scenarioId], references: [id])
-  owner    User?    @relation(fields: [ownerId], references: [id])
+  scenario  Scenario   @relation(fields: [scenarioId], references: [id])
+  owner     User?      @relation(fields: [ownerId], references: [id])
+  testCases TestCase[]
+}
+
+model TestCase {
+  id             String      @id @default(cuid())
+  testGroupId    String
+  name           String
+  condition      String?
+  preconditions  String?
+  testData       String?
+  expectedResult String
+  priority       Priority
+  testType       TestType?
+  status         WorkflowStatus @default(DRAFT)
+  testResult     TestResult  @default(NOT_RUN)
+  assigneeId     String?
+  notes          String?
+  deletedAt      DateTime?
+  createdById    String
+  updatedById    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  testGroup   TestGroup    @relation(fields: [testGroupId], references: [id])
+  assignee    User?        @relation("TestCaseAssignee", fields: [assigneeId], references: [id])
+  createdBy   User         @relation("TestCaseCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?        @relation("TestCaseUpdatedBy", fields: [updatedById], references: [id])
+  steps       TestStep[]
+  attachments Attachment[]
+}
+
+model TestStep {
+  id             String @id @default(cuid())
+  testCaseId     String
+  sequence       Int
+  step           String
+  expectedResult String
+
+  testCase TestCase @relation(fields: [testCaseId], references: [id])
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  testCaseId   String
+  storageKey   String
+  fileName     String
+  uploadedById String
+  uploadedAt   DateTime @default(now())
+
+  testCase   TestCase @relation(fields: [testCaseId], references: [id])
+  uploadedBy User     @relation(fields: [uploadedById], references: [id])
 }

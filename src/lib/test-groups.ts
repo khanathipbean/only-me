@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 import type { WorkflowStatus } from "@/generated/prisma/client";
 
 export class ValidationError extends Error {}
@@ -51,16 +52,21 @@ async function logTestGroupEvent(
 async function setTestGroupDeletedAt(
   id: string,
   actorId: string,
-  action: "archive" | "restore" | "delete",
+  action: SoftDeleteAction,
   deletedAt: Date | null,
 ) {
   const before = await prisma.testGroup.findUniqueOrThrow({
     where: { id },
     include: { scenario: { select: { projectId: true } } },
   });
-  const testGroup = await prisma.testGroup.update({ where: { id }, data: { deletedAt } });
-  await logTestGroupEvent(action, testGroup, before.scenario.projectId, actorId);
-  return testGroup;
+  return setDeletedAt({
+    entityType: "TestGroup",
+    actorId,
+    action,
+    deletedAt,
+    projectId: before.scenario.projectId,
+    update: (deletedAt) => prisma.testGroup.update({ where: { id }, data: { deletedAt } }),
+  });
 }
 
 export async function createTestGroup(

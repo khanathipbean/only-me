@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { ForbiddenError, requireProjectRole } from "@/lib/rbac";
-import type { ProjectRole } from "@/generated/prisma/client";
+import type { ProjectMember, ProjectRole } from "@/generated/prisma/client";
 
 export async function requireApiSession() {
   const session = await auth();
@@ -11,14 +11,21 @@ export async function requireApiSession() {
   return { userId: session.user.id, unauthorized: null };
 }
 
-/** Returns a 403 response if the caller lacks one of `roles` on `projectId`, otherwise null. */
+/**
+ * Checks the caller's role on `projectId`. Returns the resolved `membership`
+ * (so callers don't have to re-fetch it) on success, or a 403 `forbidden`
+ * response otherwise.
+ */
 export async function checkProjectRole(userId: string, projectId: string, roles: ProjectRole[]) {
   try {
-    await requireProjectRole(userId, projectId, roles);
-    return null;
+    const membership = await requireProjectRole(userId, projectId, roles);
+    return { membership, forbidden: null as NextResponse | null };
   } catch (error) {
     if (error instanceof ForbiddenError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return {
+        membership: null as ProjectMember | null,
+        forbidden: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+      };
     }
     throw error;
   }
@@ -27,7 +34,7 @@ export async function checkProjectRole(userId: string, projectId: string, roles:
 type ProjectRouteContext = { params: Promise<{ id: string }> };
 type ProjectRouteHandler = (
   request: NextRequest,
-  ctx: { userId: string; projectId: string },
+  ctx: { userId: string; projectId: string; membership: ProjectMember },
 ) => Promise<NextResponse>;
 
 /** Wraps a route handler that acts on one project: checks session + project role, then hands off. */
@@ -43,19 +50,19 @@ export function withProjectRole(
 
     const { id: projectId } = await context.params;
 
-    const forbidden = await checkProjectRole(userId!, projectId, roles);
+    const { membership, forbidden } = await checkProjectRole(userId!, projectId, roles);
     if (forbidden) {
       return forbidden;
     }
 
-    return handler(request, { userId: userId!, projectId });
+    return handler(request, { userId: userId!, projectId, membership: membership! });
   };
 }
 
 type EntityRouteContext = { params: Promise<{ id: string }> };
 type EntityRouteHandler<T> = (
   request: NextRequest,
-  ctx: { userId: string; entityId: string; projectId: string; entity: T },
+  ctx: { userId: string; entityId: string; projectId: string; entity: T; membership: ProjectMember },
 ) => Promise<NextResponse>;
 
 /**
@@ -80,7 +87,7 @@ export function withEntityProjectRole<T extends { projectId: string }>(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const forbidden = await checkProjectRole(userId!, entity.projectId, roles);
+    const { membership, forbidden } = await checkProjectRole(userId!, entity.projectId, roles);
     if (forbidden) {
       return forbidden;
     }
@@ -90,6 +97,7 @@ export function withEntityProjectRole<T extends { projectId: string }>(
       entityId,
       projectId: entity.projectId,
       entity,
+      membership: membership!,
     });
   };
 }

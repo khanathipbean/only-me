@@ -72,8 +72,13 @@ export default async function TestGroupDetailPage({
       <p>Description: {testGroup.description ?? "—"}</p>
       <p>Test Objective: {testGroup.testObjective ?? "—"}</p>
 
-      <h2>Test Cases</h2>
-      <p>No Test Cases yet.</p>
+      <p>
+        <Link
+          href={`/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroup.id}/test-cases`}
+        >
+          View Test Cases
+        </Link>
+      </p>
 
       <p>
         <Link
