@@ -57,6 +57,9 @@ export default async function ProjectDetailPage({
         <Link href={`/projects/${project.id}/scenarios`}>View Scenarios</Link>
       </p>
       <p>
+        <Link href={`/projects/${project.id}/dashboard`}>View Dashboard</Link>
+      </p>
+      <p>
         <Link href={`/projects/${project.id}/audit-log`}>View Audit Trail</Link>
       </p>
       <p>
