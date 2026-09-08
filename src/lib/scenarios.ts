@@ -179,8 +179,24 @@ export async function duplicateScenario(id: string, actorId: string) {
   return copy;
 }
 
+/** Counts shown to the UI before a destructive or cross-project action. */
+export async function getScenarioDescendantCounts(scenarioId: string) {
+  const testGroups = await prisma.testGroup.findMany({
+    where: { scenarioId, deletedAt: null },
+    select: { id: true },
+  });
+  const testCases = await prisma.testCase.count({
+    where: { testGroupId: { in: testGroups.map((tg) => tg.id) }, deletedAt: null },
+  });
+  return { testGroups: testGroups.length, testCases };
+}
+
 export async function archiveScenario(id: string, actorId: string) {
-  return setScenarioDeletedAt(id, actorId, "archive", new Date());
+  const [scenario, descendantCounts] = await Promise.all([
+    setScenarioDeletedAt(id, actorId, "archive", new Date()),
+    getScenarioDescendantCounts(id),
+  ]);
+  return { ...scenario, descendantCounts };
 }
 
 export async function restoreScenario(id: string, actorId: string) {
@@ -191,5 +207,26 @@ export async function deleteScenario(id: string, actorId: string, confirm: boole
   if (!confirm) {
     throw new ConfirmRequiredError();
   }
-  return setScenarioDeletedAt(id, actorId, "delete", new Date());
+  const [scenario, descendantCounts] = await Promise.all([
+    setScenarioDeletedAt(id, actorId, "delete", new Date()),
+    getScenarioDescendantCounts(id),
+  ]);
+  return { ...scenario, descendantCounts };
+}
+
+export async function moveScenario(id: string, targetProjectId: string, actorId: string) {
+  const before = await prisma.scenario.findUniqueOrThrow({ where: { id } });
+
+  const scenario = await prisma.scenario.update({
+    where: { id },
+    data: { projectId: targetProjectId },
+  });
+
+  await logScenarioEvent("move", scenario, actorId, {
+    oldValue: { projectId: before.projectId },
+    newValue: { projectId: targetProjectId },
+  });
+
+  const descendantCounts = await getScenarioDescendantCounts(id);
+  return { ...scenario, descendantCounts };
 }

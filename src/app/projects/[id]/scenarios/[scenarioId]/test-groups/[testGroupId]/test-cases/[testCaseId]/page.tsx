@@ -12,10 +12,12 @@ import {
   deleteTestCase,
   duplicateTestCase,
   getTestCaseWithProjectId,
+  moveTestCase,
   restoreTestCase,
   updateAssignee,
   updateTestResultAndNotes,
 } from "@/lib/test-cases";
+import { getTestGroupWithProjectId } from "@/lib/test-groups";
 import { saveAttachment } from "@/lib/attachments";
 import { ConfirmForm } from "@/components/ConfirmForm";
 
@@ -77,6 +79,22 @@ export default async function TestCaseDetailPage({
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     await updateAssignee(testCaseId, (formData.get("assigneeId") as string) || null, session!.user.id);
     redirect(`${basePath}/${testCaseId}`);
+  }
+
+  async function move(formData: FormData) {
+    "use server";
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    const targetTestGroupId = formData.get("targetTestGroupId") as string;
+    const targetTestGroup = await getTestGroupWithProjectId(targetTestGroupId);
+    if (!targetTestGroup || targetTestGroup.deletedAt) {
+      throw new Error("Target Test Group not found or archived");
+    }
+    await requireProjectRoleOrNotFound(session!.user.id, targetTestGroup.projectId, EDITOR_ROLES);
+    await moveTestCase(testCaseId, targetTestGroupId, session!.user.id);
+    redirect(
+      `/projects/${targetTestGroup.projectId}/scenarios/${targetTestGroup.scenarioId}/test-groups/${targetTestGroupId}/test-cases/${testCaseId}`,
+    );
   }
 
   async function duplicate() {
@@ -181,6 +199,15 @@ export default async function TestCaseDetailPage({
             </label>
             <button type="submit">Change Assignee</button>
           </form>
+
+          <h3>Move to another Test Group</h3>
+          <ConfirmForm action={move} confirmMessage="Move this Test Case?">
+            <label>
+              Target Test Group ID
+              <input name="targetTestGroupId" required />
+            </label>
+            <button type="submit">Move</button>
+          </ConfirmForm>
 
           <ConfirmForm action={duplicate} confirmMessage="Duplicate this Test Case?">
             <button type="submit">Duplicate</button>

@@ -229,8 +229,20 @@ export async function duplicateTestGroup(id: string, actorId: string) {
   return copy;
 }
 
+/** Counts shown to the UI before a destructive or cross-scenario action. */
+export async function getTestGroupDescendantCounts(testGroupId: string) {
+  const testCases = await prisma.testCase.count({
+    where: { testGroupId, deletedAt: null },
+  });
+  return { testCases };
+}
+
 export async function archiveTestGroup(id: string, actorId: string) {
-  return setTestGroupDeletedAt(id, actorId, "archive", new Date());
+  const [testGroup, descendantCounts] = await Promise.all([
+    setTestGroupDeletedAt(id, actorId, "archive", new Date()),
+    getTestGroupDescendantCounts(id),
+  ]);
+  return { ...testGroup, descendantCounts };
 }
 
 export async function restoreTestGroup(id: string, actorId: string) {
@@ -241,5 +253,39 @@ export async function deleteTestGroup(id: string, actorId: string, confirm: bool
   if (!confirm) {
     throw new ConfirmRequiredError();
   }
-  return setTestGroupDeletedAt(id, actorId, "delete", new Date());
+  const [testGroup, descendantCounts] = await Promise.all([
+    setTestGroupDeletedAt(id, actorId, "delete", new Date()),
+    getTestGroupDescendantCounts(id),
+  ]);
+  return { ...testGroup, descendantCounts };
+}
+
+export async function moveTestGroup(id: string, targetScenarioId: string, actorId: string) {
+  const before = await prisma.testGroup.findUniqueOrThrow({
+    where: { id },
+    include: { scenario: { select: { projectId: true } } },
+  });
+
+  const targetProjectId = await resolveProjectId(targetScenarioId);
+
+  const maxSequence = await prisma.testGroup.aggregate({
+    where: { scenarioId: targetScenarioId },
+    _max: { sequence: true },
+  });
+
+  const testGroup = await prisma.testGroup.update({
+    where: { id },
+    data: {
+      scenarioId: targetScenarioId,
+      sequence: (maxSequence._max.sequence ?? 0) + 1,
+    },
+  });
+
+  await logTestGroupEvent("move", testGroup, targetProjectId, actorId, {
+    oldValue: { scenarioId: before.scenarioId },
+    newValue: { scenarioId: targetScenarioId },
+  });
+
+  const descendantCounts = await getTestGroupDescendantCounts(id);
+  return { ...testGroup, descendantCounts };
 }

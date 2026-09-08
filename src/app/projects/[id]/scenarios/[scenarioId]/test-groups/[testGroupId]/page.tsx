@@ -6,9 +6,12 @@ import {
   archiveTestGroup,
   deleteTestGroup,
   duplicateTestGroup,
+  getTestGroupDescendantCounts,
   getTestGroupWithProjectId,
+  moveTestGroup,
   restoreTestGroup,
 } from "@/lib/test-groups";
+import { getScenarioById } from "@/lib/scenarios";
 import { ConfirmForm } from "@/components/ConfirmForm";
 
 export default async function TestGroupDetailPage({
@@ -26,6 +29,22 @@ export default async function TestGroupDetailPage({
   const projectId = testGroup.projectId;
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const descendantCounts = await getTestGroupDescendantCounts(testGroupId);
+  const impact = `${descendantCounts.testCases} Test Case(s)`;
+
+  async function move(formData: FormData) {
+    "use server";
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    const targetScenarioId = formData.get("targetScenarioId") as string;
+    const targetScenario = await getScenarioById(targetScenarioId);
+    if (!targetScenario || targetScenario.deletedAt) {
+      throw new Error("Target Scenario not found or archived");
+    }
+    await requireProjectRoleOrNotFound(session!.user.id, targetScenario.projectId, EDITOR_ROLES);
+    await moveTestGroup(testGroupId, targetScenarioId, session!.user.id);
+    redirect(`/projects/${targetScenario.projectId}/scenarios/${targetScenarioId}/test-groups/${testGroupId}`);
+  }
 
   async function archive() {
     "use server";
@@ -88,6 +107,18 @@ export default async function TestGroupDetailPage({
         </Link>
       </p>
 
+      <h2>Move to another Scenario</h2>
+      <ConfirmForm
+        action={move}
+        confirmMessage={`Move this Test Group? It carries ${impact} with it.`}
+      >
+        <label>
+          Target Scenario ID
+          <input name="targetScenarioId" required />
+        </label>
+        <button type="submit">Move</button>
+      </ConfirmForm>
+
       <ConfirmForm action={duplicate} confirmMessage="Duplicate this Test Group?">
         <button type="submit">Duplicate</button>
       </ConfirmForm>
@@ -99,7 +130,7 @@ export default async function TestGroupDetailPage({
       ) : (
         <ConfirmForm
           action={archive}
-          confirmMessage="Archive this Test Group? It can be restored later."
+          confirmMessage={`Archive this Test Group? It carries ${impact}, kept and restorable later.`}
         >
           <button type="submit">Archive</button>
         </ConfirmForm>
@@ -107,7 +138,7 @@ export default async function TestGroupDetailPage({
 
       <ConfirmForm
         action={removeForever}
-        confirmMessage="Delete this Test Group? This cannot be undone from the UI."
+        confirmMessage={`Delete this Test Group? It carries ${impact}. This cannot be undone from the UI.`}
       >
         <button type="submit">Delete</button>
       </ConfirmForm>

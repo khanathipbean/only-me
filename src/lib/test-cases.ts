@@ -311,3 +311,25 @@ export async function deleteTestCase(id: string, actorId: string, confirm: boole
   }
   return setTestCaseDeletedAt(id, actorId, "delete", new Date());
 }
+
+/** A Test Case is a leaf: no descendants, so no descendant-count retrofit is needed on archive/delete. */
+export async function moveTestCase(id: string, targetTestGroupId: string, actorId: string) {
+  const before = await getTestCaseWithProjectId(id);
+  if (!before) {
+    throw new Error("Test Case not found");
+  }
+
+  const targetProjectId = await resolveProjectIdForTestGroup(targetTestGroupId);
+
+  const testCase = await prisma.testCase.update({
+    where: { id },
+    data: { testGroupId: targetTestGroupId, updatedById: actorId },
+  });
+
+  await logTestCaseEvent("move", testCase, targetProjectId, actorId, {
+    oldValue: { testGroupId: before.testGroupId },
+    newValue: { testGroupId: targetTestGroupId },
+  });
+
+  return testCase;
+}
