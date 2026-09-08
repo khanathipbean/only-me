@@ -7,7 +7,7 @@ import {
   isScenarioSortField,
   listScenariosForProject,
 } from "@/lib/scenarios";
-import type { ScenarioPriority, ScenarioStatus } from "@/generated/prisma/client";
+import type { ScenarioPriority, WorkflowStatus } from "@/generated/prisma/client";
 
 export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId }) => {
   const { searchParams } = new URL(request.url);
@@ -15,7 +15,7 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
   const sortOrder = searchParams.get("sortOrder");
   const scenarios = await listScenariosForProject(projectId, {
     search: searchParams.get("search") ?? undefined,
-    status: (searchParams.get("status") as ScenarioStatus | null) ?? undefined,
+    status: (searchParams.get("status") as WorkflowStatus | null) ?? undefined,
     priority: (searchParams.get("priority") as ScenarioPriority | null) ?? undefined,
     sortBy: isScenarioSortField(sortBy) ? sortBy : undefined,
     sortOrder: sortOrder === "asc" ? "asc" : undefined,

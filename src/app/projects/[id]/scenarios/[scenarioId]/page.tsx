@@ -73,8 +73,11 @@ export default async function ScenarioDetailPage({
       <p>Preconditions: {scenario.preconditions ?? "—"}</p>
       <p>Tags: {scenario.tags.length > 0 ? scenario.tags.join(", ") : "—"}</p>
 
-      <h2>Test Groups</h2>
-      <p>No Test Groups yet.</p>
+      <p>
+        <Link href={`/projects/${projectId}/scenarios/${scenario.id}/test-groups`}>
+          View Test Groups
+        </Link>
+      </p>
 
       <p>
         <Link href={`/projects/${projectId}/scenarios/${scenario.id}/edit`}>Edit</Link>

@@ -12,7 +12,7 @@ export async function requireApiSession() {
 }
 
 /** Returns a 403 response if the caller lacks one of `roles` on `projectId`, otherwise null. */
-async function checkProjectRole(userId: string, projectId: string, roles: ProjectRole[]) {
+export async function checkProjectRole(userId: string, projectId: string, roles: ProjectRole[]) {
   try {
     await requireProjectRole(userId, projectId, roles);
     return null;

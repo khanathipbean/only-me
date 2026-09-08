@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
-import type { ScenarioPriority, ScenarioStatus } from "@/generated/prisma/client";
+import type { ScenarioPriority, WorkflowStatus } from "@/generated/prisma/client";
 
 export class ValidationError extends Error {}
 export class ConfirmRequiredError extends Error {
@@ -17,7 +17,7 @@ export type ScenarioInput = {
   steps?: string | null;
   expectedResult: string;
   priority: ScenarioPriority;
-  status?: ScenarioStatus;
+  status?: WorkflowStatus;
   tags?: string[];
   ownerId?: string | null;
 };
@@ -94,7 +94,7 @@ export async function listScenariosForProject(
   projectId: string,
   filters: {
     search?: string;
-    status?: ScenarioStatus;
+    status?: WorkflowStatus;
     priority?: ScenarioPriority;
     sortBy?: ScenarioSortField;
     sortOrder?: "asc" | "desc";

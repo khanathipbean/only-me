@@ -24,7 +24,8 @@ model User {
   updatedProjects Project[]       @relation("ProjectUpdatedBy")
   memberships     ProjectMember[]
   auditLogs       AuditLog[]
-  ownedScenarios  Scenario[]
+  ownedScenarios   Scenario[]
+  ownedTestGroups  TestGroup[]
 }
 
 enum ProjectStatus {
@@ -96,7 +97,8 @@ enum ScenarioPriority {
   LOW
 }
 
-enum ScenarioStatus {
+/** Shared workflow status for Scenario, Test Group, and Test Case. */
+enum WorkflowStatus {
   DRAFT
   READY
   IN_PROGRESS
@@ -113,13 +115,31 @@ model Scenario {
   steps          String?
   expectedResult String
   priority       ScenarioPriority
-  status         ScenarioStatus   @default(DRAFT)
+  status         WorkflowStatus   @default(DRAFT)
   tags           String[]         @default([])
   ownerId        String?
   deletedAt      DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id])
-  owner   User?   @relation(fields: [ownerId], references: [id])
+  project    Project     @relation(fields: [projectId], references: [id])
+  owner      User?       @relation(fields: [ownerId], references: [id])
+  testGroups TestGroup[]
+}
+
+model TestGroup {
+  id            String         @id @default(cuid())
+  scenarioId    String
+  name          String
+  description   String?
+  testObjective String?
+  sequence      Int
+  status        WorkflowStatus @default(DRAFT)
+  ownerId       String?
+  deletedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  scenario Scenario @relation(fields: [scenarioId], references: [id])
+  owner    User?    @relation(fields: [ownerId], references: [id])
 }
