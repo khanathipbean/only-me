@@ -53,6 +53,9 @@ export default async function ProjectDetailPage({
       <p>
         <Link href={`/projects/${project.id}/edit`}>Edit</Link>
       </p>
+      <p>
+        <Link href={`/projects/${project.id}/scenarios`}>View Scenarios</Link>
+      </p>
 
       {project.deletedAt ? (
         <ConfirmForm action={restore} confirmMessage="Restore this project?">

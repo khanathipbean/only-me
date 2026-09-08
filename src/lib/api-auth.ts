@@ -11,6 +11,19 @@ export async function requireApiSession() {
   return { userId: session.user.id, unauthorized: null };
 }
 
+/** Returns a 403 response if the caller lacks one of `roles` on `projectId`, otherwise null. */
+async function checkProjectRole(userId: string, projectId: string, roles: ProjectRole[]) {
+  try {
+    await requireProjectRole(userId, projectId, roles);
+    return null;
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    throw error;
+  }
+}
+
 type ProjectRouteContext = { params: Promise<{ id: string }> };
 type ProjectRouteHandler = (
   request: NextRequest,
@@ -30,15 +43,53 @@ export function withProjectRole(
 
     const { id: projectId } = await context.params;
 
-    try {
-      await requireProjectRole(userId!, projectId, roles);
-    } catch (error) {
-      if (error instanceof ForbiddenError) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-      throw error;
+    const forbidden = await checkProjectRole(userId!, projectId, roles);
+    if (forbidden) {
+      return forbidden;
     }
 
     return handler(request, { userId: userId!, projectId });
+  };
+}
+
+type EntityRouteContext = { params: Promise<{ id: string }> };
+type EntityRouteHandler<T> = (
+  request: NextRequest,
+  ctx: { userId: string; entityId: string; projectId: string; entity: T },
+) => Promise<NextResponse>;
+
+/**
+ * Wraps a route handler that acts on an entity identified only by its own id
+ * (e.g. a Scenario), not a projectId in the URL: resolves the entity, checks
+ * the caller's role on the project it belongs to, then hands off.
+ */
+export function withEntityProjectRole<T extends { projectId: string }>(
+  roles: ProjectRole[],
+  resolveEntity: (id: string) => Promise<T | null>,
+  handler: EntityRouteHandler<T>,
+) {
+  return async (request: NextRequest, context: EntityRouteContext) => {
+    const { userId, unauthorized } = await requireApiSession();
+    if (unauthorized) {
+      return unauthorized;
+    }
+
+    const { id: entityId } = await context.params;
+    const entity = await resolveEntity(entityId);
+    if (!entity) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const forbidden = await checkProjectRole(userId!, entity.projectId, roles);
+    if (forbidden) {
+      return forbidden;
+    }
+
+    return handler(request, {
+      userId: userId!,
+      entityId,
+      projectId: entity.projectId,
+      entity,
+    });
   };
 }

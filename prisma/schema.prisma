@@ -24,6 +24,7 @@ model User {
   updatedProjects Project[]       @relation("ProjectUpdatedBy")
   memberships     ProjectMember[]
   auditLogs       AuditLog[]
+  ownedScenarios  Scenario[]
 }
 
 enum ProjectStatus {
@@ -57,6 +58,7 @@ model Project {
   updatedBy     User?           @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
   members       ProjectMember[]
   auditLogs     AuditLog[]
+  scenarios     Scenario[]
 }
 
 model ProjectMember {
@@ -85,4 +87,39 @@ model AuditLog {
 
   actor   User    @relation(fields: [actorId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
+}
+
+enum ScenarioPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ScenarioStatus {
+  DRAFT
+  READY
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Scenario {
+  id             String           @id @default(cuid())
+  projectId      String
+  name           String
+  description    String?
+  preconditions  String?
+  testData       String?
+  steps          String?
+  expectedResult String
+  priority       ScenarioPriority
+  status         ScenarioStatus   @default(DRAFT)
+  tags           String[]         @default([])
+  ownerId        String?
+  deletedAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id])
+  owner   User?   @relation(fields: [ownerId], references: [id])
 }
