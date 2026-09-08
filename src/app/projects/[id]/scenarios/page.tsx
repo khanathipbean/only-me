@@ -2,6 +2,9 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { isScenarioSortField, listScenariosForProject } from "@/lib/scenarios";
+import { getProjectById } from "@/lib/projects";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { nameOr, scenariosListBreadcrumb } from "@/lib/breadcrumb";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
 export default async function ScenariosPage({
@@ -23,6 +26,7 @@ export default async function ScenariosPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
+  const project = await getProjectById(projectId);
   const hasFilters = Boolean(search || status || priority);
   const scenarios = await listScenariosForProject(projectId, {
     search,
@@ -34,6 +38,9 @@ export default async function ScenariosPage({
 
   return (
     <main>
+      <Breadcrumb
+        segments={scenariosListBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
+      />
       <p>
         <Link href={`/projects/${projectId}`}>← Back to Project</Link>
       </p>

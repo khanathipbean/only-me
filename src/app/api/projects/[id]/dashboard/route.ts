@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
 import { withProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES } from "@/lib/rbac";
-import {
-  PRIORITY_VALUES,
-  TEST_RESULT_VALUES,
-  WORKFLOW_STATUS_VALUES,
-  getProjectDashboard,
-  parseUtcDateOnly,
-} from "@/lib/dashboard";
+import { getProjectDashboard, parseUtcDateOnly } from "@/lib/dashboard";
+import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
 import type { Priority, TestResult, WorkflowStatus } from "@/generated/prisma/client";
 
 function asEnumOrUndefined<T extends string>(value: string | null, allowed: T[]): T | undefined {

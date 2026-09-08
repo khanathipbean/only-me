@@ -12,7 +12,10 @@ import {
   restoreTestGroup,
 } from "@/lib/test-groups";
 import { getScenarioById } from "@/lib/scenarios";
+import { getProjectById } from "@/lib/projects";
 import { ConfirmForm } from "@/components/ConfirmForm";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { nameOr, testGroupBreadcrumb } from "@/lib/breadcrumb";
 
 export default async function TestGroupDetailPage({
   params,
@@ -29,6 +32,10 @@ export default async function TestGroupDetailPage({
   const projectId = testGroup.projectId;
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const [project, scenario] = await Promise.all([
+    getProjectById(projectId),
+    getScenarioById(scenarioId),
+  ]);
   const descendantCounts = await getTestGroupDescendantCounts(testGroupId);
   const impact = `${descendantCounts.testCases} Test Case(s)`;
 
@@ -80,6 +87,13 @@ export default async function TestGroupDetailPage({
 
   return (
     <main>
+      <Breadcrumb
+        segments={testGroupBreadcrumb(
+          { id: projectId, name: nameOr(project, projectId) },
+          { id: scenarioId, name: nameOr(scenario, scenarioId) },
+          testGroup,
+        )}
+      />
       <p>
         <Link href={`/projects/${projectId}/scenarios/${scenarioId}/test-groups`}>
           ← Back to Test Groups

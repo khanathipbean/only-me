@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { listProjectsForUser } from "@/lib/projects";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import type { ProjectStatus } from "@/generated/prisma/client";
 
 export default async function ProjectsPage({
@@ -20,6 +21,7 @@ export default async function ProjectsPage({
 
   return (
     <main>
+      <Breadcrumb segments={[{ label: "Projects", href: "/projects" }]} />
       <h1>Projects</h1>
       <form>
         <input type="text" name="search" placeholder="Search by name or code" defaultValue={search} />

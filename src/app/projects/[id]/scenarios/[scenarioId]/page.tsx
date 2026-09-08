@@ -13,6 +13,8 @@ import {
 } from "@/lib/scenarios";
 import { getProjectById } from "@/lib/projects";
 import { ConfirmForm } from "@/components/ConfirmForm";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { nameOr, scenarioBreadcrumb } from "@/lib/breadcrumb";
 
 export default async function ScenarioDetailPage({
   params,
@@ -29,6 +31,7 @@ export default async function ScenarioDetailPage({
   const projectId = scenario.projectId;
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const project = await getProjectById(projectId);
   const descendantCounts = await getScenarioDescendantCounts(scenarioId);
   const impact = `${descendantCounts.testGroups} Test Group(s) and ${descendantCounts.testCases} Test Case(s)`;
 
@@ -80,6 +83,12 @@ export default async function ScenarioDetailPage({
 
   return (
     <main>
+      <Breadcrumb
+        segments={scenarioBreadcrumb(
+          { id: projectId, name: nameOr(project, projectId) },
+          scenario,
+        )}
+      />
       <p>
         <Link href={`/projects/${projectId}/scenarios`}>← Back to Scenarios</Link>
       </p>

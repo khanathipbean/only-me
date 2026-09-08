@@ -1,22 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { PRIORITY_VALUES, TEST_RESULT_VALUES } from "@/lib/enums";
 import type { Priority, TestResult, WorkflowStatus } from "@/generated/prisma/client";
-
-export const TEST_RESULT_VALUES: TestResult[] = [
-  "NOT_RUN",
-  "PASSED",
-  "FAILED",
-  "BLOCKED",
-  "SKIPPED",
-];
-
-export const PRIORITY_VALUES: Priority[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
-
-export const WORKFLOW_STATUS_VALUES: WorkflowStatus[] = [
-  "DRAFT",
-  "READY",
-  "IN_PROGRESS",
-  "COMPLETED",
-];
 
 /** Pure: no divide-by-zero when a project has no Test Cases yet. */
 export function calculateTestProgress(testCasesWithResult: number, totalTestCases: number): number {

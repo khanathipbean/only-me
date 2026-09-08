@@ -2,8 +2,11 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { getScenarioById } from "@/lib/scenarios";
+import { getProjectById } from "@/lib/projects";
 import { listTestGroupsForScenario, reorderTestGroups } from "@/lib/test-groups";
 import { notFound, redirect } from "next/navigation";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { nameOr, testGroupsListBreadcrumb } from "@/lib/breadcrumb";
 
 export default async function TestGroupsPage({
   params,
@@ -20,6 +23,7 @@ export default async function TestGroupsPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
+  const project = await getProjectById(projectId);
   const testGroups = await listTestGroupsForScenario(scenarioId);
 
   async function move(id: string, delta: -1 | 1) {
@@ -50,6 +54,12 @@ export default async function TestGroupsPage({
 
   return (
     <main>
+      <Breadcrumb
+        segments={testGroupsListBreadcrumb(
+          { id: projectId, name: nameOr(project, projectId) },
+          scenario,
+        )}
+      />
       <p>
         <Link href={`/projects/${projectId}/scenarios/${scenarioId}`}>← Back to Scenario</Link>
       </p>

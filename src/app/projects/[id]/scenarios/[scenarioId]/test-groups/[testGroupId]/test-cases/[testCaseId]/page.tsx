@@ -18,8 +18,12 @@ import {
   updateTestResultAndNotes,
 } from "@/lib/test-cases";
 import { getTestGroupWithProjectId } from "@/lib/test-groups";
+import { getScenarioById } from "@/lib/scenarios";
+import { getProjectById } from "@/lib/projects";
 import { saveAttachment } from "@/lib/attachments";
 import { ConfirmForm } from "@/components/ConfirmForm";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
 
 export default async function TestCaseDetailPage({
   params,
@@ -38,6 +42,10 @@ export default async function TestCaseDetailPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
   const membership = await getProjectMembership(session!.user.id, projectId);
   const canEditFully = membership?.role === "ADMIN" || membership?.role === "QA_LEAD";
+  const [project, scenario] = await Promise.all([
+    getProjectById(projectId),
+    getScenarioById(scenarioId),
+  ]);
 
   const basePath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}/test-cases`;
 
@@ -131,6 +139,14 @@ export default async function TestCaseDetailPage({
 
   return (
     <main>
+      <Breadcrumb
+        segments={testCaseBreadcrumb(
+          { id: projectId, name: nameOr(project, projectId) },
+          { id: scenarioId, name: nameOr(scenario, scenarioId) },
+          testCase.testGroup,
+          testCase,
+        )}
+      />
       <p>
         <Link href={basePath}>← Back to Test Cases</Link>
       </p>

@@ -4,6 +4,8 @@ import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { archiveProject, getProjectById, restoreProject } from "@/lib/projects";
 import { ConfirmForm } from "@/components/ConfirmForm";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { projectBreadcrumb } from "@/lib/breadcrumb";
 
 export default async function ProjectDetailPage({
   params,
@@ -38,6 +40,7 @@ export default async function ProjectDetailPage({
 
   return (
     <main>
+      <Breadcrumb segments={projectBreadcrumb(project)} />
       <h1>
         {project.name} <small>({project.code})</small>
       </h1>

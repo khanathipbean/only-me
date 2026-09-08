@@ -3,7 +3,11 @@ import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { getTestGroupWithProjectId } from "@/lib/test-groups";
 import { listTestCasesForTestGroup } from "@/lib/test-cases";
+import { getScenarioById } from "@/lib/scenarios";
+import { getProjectById } from "@/lib/projects";
 import { notFound } from "next/navigation";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { nameOr, testCasesListBreadcrumb } from "@/lib/breadcrumb";
 
 export default async function TestCasesPage({
   params,
@@ -20,10 +24,21 @@ export default async function TestCasesPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
-  const testCases = await listTestCasesForTestGroup(testGroupId);
+  const [project, scenario, testCases] = await Promise.all([
+    getProjectById(projectId),
+    getScenarioById(scenarioId),
+    listTestCasesForTestGroup(testGroupId),
+  ]);
 
   return (
     <main>
+      <Breadcrumb
+        segments={testCasesListBreadcrumb(
+          { id: projectId, name: nameOr(project, projectId) },
+          { id: scenarioId, name: nameOr(scenario, scenarioId) },
+          testGroup,
+        )}
+      />
       <p>
         <Link href={`/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}`}>
           ← Back to Test Group
