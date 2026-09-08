@@ -19,4 +19,70 @@ model User {
   name         String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  ownedProjects   Project[]       @relation("ProjectOwner")
+  updatedProjects Project[]       @relation("ProjectUpdatedBy")
+  memberships     ProjectMember[]
+  auditLogs       AuditLog[]
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+enum ProjectRole {
+  ADMIN
+  QA_LEAD
+  TESTER
+  VIEWER
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  name          String
+  description   String?
+  status        ProjectStatus @default(DRAFT)
+  startDate     DateTime?
+  endDate       DateTime?
+  ownerId       String
+  updatedById   String?
+  deletedAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id])
+  updatedBy     User?           @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
+  members       ProjectMember[]
+  auditLogs     AuditLog[]
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole
+  createdAt DateTime    @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  actorId    String
+  projectId  String
+  occurredAt DateTime @default(now())
+  oldValue   Json?
+  newValue   Json?
+
+  actor   User    @relation(fields: [actorId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
 }

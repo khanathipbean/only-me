@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth, signOut } from "@/auth";
 
 export default async function Home() {
@@ -12,6 +13,9 @@ export default async function Home() {
     <main>
       <h1>Test Management System</h1>
       <p>Logged in as {session?.user?.email}</p>
+      <p>
+        <Link href="/projects">Go to Projects</Link>
+      </p>
       <form action={logout}>
         <button type="submit">Log out</button>
       </form>
