@@ -17,8 +17,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestGroupForm } from "@/components/forms/TestGroupForm";
 import { Badge, workflowStatusTone } from "@/components/ui/Badge";
-import { IconLinkButton } from "@/components/ui/Button";
-import { ChevronRightIcon, EditIcon } from "@/components/icons";
+import { LinkButton } from "@/components/ui/Button";
+import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
+import { EditIcon } from "@/components/icons";
 import {
   mutedTextClass,
   pageClass,
@@ -26,7 +27,6 @@ import {
   tableWrapClass,
   tdClass,
   thClass,
-  trHoverClass,
 } from "@/lib/ui";
 
 export default async function TestGroupsPage({
@@ -194,76 +194,95 @@ export default async function TestGroupsPage({
             </thead>
             <tbody>
               {testGroups.map((testGroup) => (
-                <tr key={testGroup.id} className={trHoverClass}>
-                  <td className={`${tdClass} text-muted`}>{testGroup.sequence}</td>
-                  <td className={tdClass}>
-                    {/* Straight to the children, not this Test Group's own
-                        detail page: drilling down is the common move, and the
-                        detail page is one click away via the arrow on the
-                        right. */}
-                    <Link
-                      href={`${listPath}/${testGroup.id}/test-cases`}
-                      className="font-medium text-foreground hover:text-brand hover:underline"
+                <ExpandableRow
+                  key={testGroup.id}
+                  colSpan={5}
+                  detailLabel={testGroup.name}
+                  cells={
+                    <>
+                      <td className={`${tdClass} text-muted`}>{testGroup.sequence}</td>
+                      <td className={tdClass}>
+                        {/* Straight to the children, not this Test Group's own
+                            detail page: drilling down is the common move, and
+                            the panel below covers a quick look. */}
+                        <Link
+                          href={`${listPath}/${testGroup.id}/test-cases`}
+                          className="font-medium text-foreground hover:text-brand hover:underline"
+                        >
+                          {testGroup.name}
+                        </Link>
+                      </td>
+                      <td className={tdClass}>
+                        <Badge tone={workflowStatusTone(testGroup.status)}>
+                          {testGroup.status}
+                        </Badge>
+                      </td>
+                      <td className={tdClass}>
+                        <div className="flex items-center gap-1">
+                          <form action={moveUp}>
+                            <input type="hidden" name="id" value={testGroup.id} />
+                            <button
+                              type="submit"
+                              className="rounded-md border border-border px-2 py-1 text-sm text-muted hover:text-foreground"
+                            >
+                              ↑
+                            </button>
+                          </form>
+                          <form action={moveDown}>
+                            <input type="hidden" name="id" value={testGroup.id} />
+                            <button
+                              type="submit"
+                              className="rounded-md border border-border px-2 py-1 text-sm text-muted hover:text-foreground"
+                            >
+                              ↓
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </>
+                  }
+                  actions={
+                    <Modal
+                      triggerLabel="Edit"
+                      triggerVariant="ghost"
+                      triggerIcon={<EditIcon />}
+                      title="Edit Test Group"
+                      openOnMount={!!error && editId === testGroup.id}
                     >
-                      {testGroup.name}
-                    </Link>
-                  </td>
-                  <td className={tdClass}>
-                    <Badge tone={workflowStatusTone(testGroup.status)}>{testGroup.status}</Badge>
-                  </td>
-                  <td className={tdClass}>
-                    <div className="flex items-center gap-1">
-                      <form action={moveUp}>
-                        <input type="hidden" name="id" value={testGroup.id} />
-                        <button
-                          type="submit"
-                          className="rounded-md border border-border px-2 py-1 text-sm text-muted hover:text-foreground"
-                        >
-                          ↑
-                        </button>
-                      </form>
-                      <form action={moveDown}>
-                        <input type="hidden" name="id" value={testGroup.id} />
-                        <button
-                          type="submit"
-                          className="rounded-md border border-border px-2 py-1 text-sm text-muted hover:text-foreground"
-                        >
-                          ↓
-                        </button>
-                      </form>
+                      <TestGroupForm
+                        action={updateAction(testGroup.id)}
+                        submitLabel="Save"
+                        error={editId === testGroup.id ? error : undefined}
+                        defaults={{
+                          name: testGroup.name,
+                          description: testGroup.description,
+                          testObjective: testGroup.testObjective,
+                          status: testGroup.status,
+                        }}
+                      />
+                    </Modal>
+                  }
+                  detail={
+                    <div className="flex flex-col gap-4">
+                      <DetailFields>
+                        <DetailField label="Test Objective" wide>
+                          {testGroup.testObjective}
+                        </DetailField>
+                        <DetailField label="Description" wide>
+                          {testGroup.description}
+                        </DetailField>
+                        <DetailField label="Sequence">{testGroup.sequence}</DetailField>
+                      </DetailFields>
+                      {/* The detail page still owns Manage (move / duplicate /
+                          archive / delete), so keep a way through to it. */}
+                      <div>
+                        <LinkButton href={`${listPath}/${testGroup.id}`} variant="secondary">
+                          Open full page
+                        </LinkButton>
+                      </div>
                     </div>
-                  </td>
-                  <td className={tdClass}>
-                    <div className="flex items-center justify-end gap-1">
-                      <Modal
-                        triggerLabel="Edit"
-                        triggerVariant="ghost"
-                        triggerIcon={<EditIcon />}
-                        title="Edit Test Group"
-                        openOnMount={!!error && editId === testGroup.id}
-                      >
-                        <TestGroupForm
-                          action={updateAction(testGroup.id)}
-                          submitLabel="Save"
-                          error={editId === testGroup.id ? error : undefined}
-                          defaults={{
-                            name: testGroup.name,
-                            description: testGroup.description,
-                            testObjective: testGroup.testObjective,
-                            status: testGroup.status,
-                          }}
-                        />
-                      </Modal>
-                      <IconLinkButton
-                        href={`${listPath}/${testGroup.id}`}
-                        aria-label={`View details for ${testGroup.name}`}
-                        title="View details"
-                      >
-                        <ChevronRightIcon />
-                      </IconLinkButton>
-                    </div>
-                  </td>
-                </tr>
+                  }
+                />
               ))}
             </tbody>
           </table>

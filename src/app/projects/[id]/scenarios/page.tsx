@@ -18,8 +18,9 @@ import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { ScenarioForm } from "@/components/forms/ScenarioForm";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
-import { IconLinkButton } from "@/components/ui/Button";
-import { ChevronRightIcon, EditIcon } from "@/components/icons";
+import { LinkButton } from "@/components/ui/Button";
+import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
+import { EditIcon } from "@/components/icons";
 import {
   labelClass,
   mutedTextClass,
@@ -29,7 +30,6 @@ import {
   tableWrapClass,
   tdClass,
   thClass,
-  trHoverClass,
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
@@ -295,60 +295,84 @@ export default async function ScenariosPage({
             </thead>
             <tbody>
               {scenarios.map((scenario) => (
-                <tr key={scenario.id} className={trHoverClass}>
-                  <td className={tdClass}>
-                    {/* Straight to the children, not this Scenario's own detail
-                        page: drilling down is the common move, and the detail
-                        page is one click away via the arrow on the right. */}
-                    <Link
-                      href={`/projects/${projectId}/scenarios/${scenario.id}/test-groups`}
-                      className="font-medium text-foreground hover:text-brand hover:underline"
+                <ExpandableRow
+                  key={scenario.id}
+                  colSpan={4}
+                  detailLabel={scenario.name}
+                  cells={
+                    <>
+                      <td className={tdClass}>
+                        {/* Straight to the children, not this Scenario's own
+                            detail page: drilling down is the common move, and
+                            the panel below covers a quick look. */}
+                        <Link
+                          href={`/projects/${projectId}/scenarios/${scenario.id}/test-groups`}
+                          className="font-medium text-foreground hover:text-brand hover:underline"
+                        >
+                          {scenario.name}
+                        </Link>
+                      </td>
+                      <td className={tdClass}>
+                        <Badge tone={priorityTone(scenario.priority)}>{scenario.priority}</Badge>
+                      </td>
+                      <td className={tdClass}>
+                        <Badge tone={workflowStatusTone(scenario.status)}>{scenario.status}</Badge>
+                      </td>
+                    </>
+                  }
+                  actions={
+                    <Modal
+                      triggerLabel="Edit"
+                      triggerVariant="ghost"
+                      triggerIcon={<EditIcon />}
+                      title="Edit Scenario"
+                      openOnMount={!!error && editId === scenario.id}
                     >
-                      {scenario.name}
-                    </Link>
-                  </td>
-                  <td className={tdClass}>
-                    <Badge tone={priorityTone(scenario.priority)}>{scenario.priority}</Badge>
-                  </td>
-                  <td className={tdClass}>
-                    <Badge tone={workflowStatusTone(scenario.status)}>{scenario.status}</Badge>
-                  </td>
-                  <td className={tdClass}>
-                    <div className="flex items-center justify-end gap-1">
-                      <Modal
-                        triggerLabel="Edit"
-                        triggerVariant="ghost"
-                        triggerIcon={<EditIcon />}
-                        title="Edit Scenario"
-                        openOnMount={!!error && editId === scenario.id}
-                      >
-                        <ScenarioForm
-                          action={updateAction(scenario.id)}
-                          submitLabel="Save"
-                          error={editId === scenario.id ? error : undefined}
-                          defaults={{
-                            name: scenario.name,
-                            description: scenario.description,
-                            preconditions: scenario.preconditions,
-                            testData: scenario.testData,
-                            steps: scenario.steps,
-                            expectedResult: scenario.expectedResult,
-                            priority: scenario.priority,
-                            status: scenario.status,
-                            tags: scenario.tags.join(", "),
-                          }}
-                        />
-                      </Modal>
-                      <IconLinkButton
-                        href={`/projects/${projectId}/scenarios/${scenario.id}`}
-                        aria-label={`View details for ${scenario.name}`}
-                        title="View details"
-                      >
-                        <ChevronRightIcon />
-                      </IconLinkButton>
+                      <ScenarioForm
+                        action={updateAction(scenario.id)}
+                        submitLabel="Save"
+                        error={editId === scenario.id ? error : undefined}
+                        defaults={{
+                          name: scenario.name,
+                          description: scenario.description,
+                          preconditions: scenario.preconditions,
+                          testData: scenario.testData,
+                          steps: scenario.steps,
+                          expectedResult: scenario.expectedResult,
+                          priority: scenario.priority,
+                          status: scenario.status,
+                          tags: scenario.tags.join(", "),
+                        }}
+                      />
+                    </Modal>
+                  }
+                  detail={
+                    <div className="flex flex-col gap-4">
+                      <DetailFields>
+                        <DetailField label="Expected Result" wide>
+                          {scenario.expectedResult}
+                        </DetailField>
+                        <DetailField label="Description">{scenario.description}</DetailField>
+                        <DetailField label="Preconditions">{scenario.preconditions}</DetailField>
+                        <DetailField label="Test Data">{scenario.testData}</DetailField>
+                        <DetailField label="Steps">{scenario.steps}</DetailField>
+                        <DetailField label="Tags">
+                          {scenario.tags.length > 0 ? scenario.tags.join(", ") : null}
+                        </DetailField>
+                      </DetailFields>
+                      {/* The detail page still owns Manage (move / duplicate /
+                          archive / delete), so keep a way through to it. */}
+                      <div>
+                        <LinkButton
+                          href={`/projects/${projectId}/scenarios/${scenario.id}`}
+                          variant="secondary"
+                        >
+                          Open full page
+                        </LinkButton>
+                      </div>
                     </div>
-                  </td>
-                </tr>
+                  }
+                />
               ))}
             </tbody>
           </table>

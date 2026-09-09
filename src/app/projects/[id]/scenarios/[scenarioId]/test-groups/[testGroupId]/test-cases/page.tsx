@@ -18,8 +18,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
-import { IconLinkButton } from "@/components/ui/Button";
-import { ChevronRightIcon, EditIcon } from "@/components/icons";
+import { LinkButton } from "@/components/ui/Button";
+import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
+import { EditIcon } from "@/components/icons";
 import {
   mutedTextClass,
   pageClass,
@@ -27,7 +28,6 @@ import {
   tableWrapClass,
   tdClass,
   thClass,
-  trHoverClass,
 } from "@/lib/ui";
 
 export default async function TestCasesPage({
@@ -181,68 +181,108 @@ export default async function TestCasesPage({
             </thead>
             <tbody>
               {testCases.map((testCase) => (
-                <tr key={testCase.id} className={trHoverClass}>
-                  <td className={tdClass}>
-                    {/* A Test Case is the leaf of the hierarchy — nothing to
-                        drill into — so the name keeps going to its own detail
-                        page, unlike the Scenario and Test Group lists. */}
-                    <Link
-                      href={`${basePath}/${testCase.id}`}
-                      className="font-medium text-foreground hover:text-brand hover:underline"
+                <ExpandableRow
+                  key={testCase.id}
+                  colSpan={5}
+                  detailLabel={testCase.name}
+                  cells={
+                    <>
+                      <td className={tdClass}>
+                        {/* A Test Case is the leaf of the hierarchy — nothing to
+                            drill into — so the name keeps going to its own
+                            detail page, unlike the two lists above it. */}
+                        <Link
+                          href={`${basePath}/${testCase.id}`}
+                          className="font-medium text-foreground hover:text-brand hover:underline"
+                        >
+                          {testCase.name}
+                        </Link>
+                      </td>
+                      <td className={tdClass}>
+                        <Badge tone={priorityTone(testCase.priority)}>{testCase.priority}</Badge>
+                      </td>
+                      <td className={tdClass}>
+                        <Badge tone={testResultTone(testCase.testResult)}>
+                          {testCase.testResult.replace(/_/g, " ")}
+                        </Badge>
+                      </td>
+                      <td className={tdClass}>
+                        <Badge tone={workflowStatusTone(testCase.status)}>{testCase.status}</Badge>
+                      </td>
+                    </>
+                  }
+                  actions={
+                    <Modal
+                      triggerLabel="Edit"
+                      triggerVariant="ghost"
+                      triggerIcon={<EditIcon />}
+                      title="Edit Test Case"
+                      openOnMount={!!error && editId === testCase.id}
                     >
-                      {testCase.name}
-                    </Link>
-                  </td>
-                  <td className={tdClass}>
-                    <Badge tone={priorityTone(testCase.priority)}>{testCase.priority}</Badge>
-                  </td>
-                  <td className={tdClass}>
-                    <Badge tone={testResultTone(testCase.testResult)}>
-                      {testCase.testResult.replace(/_/g, " ")}
-                    </Badge>
-                  </td>
-                  <td className={tdClass}>
-                    <Badge tone={workflowStatusTone(testCase.status)}>{testCase.status}</Badge>
-                  </td>
-                  <td className={tdClass}>
-                    <div className="flex items-center justify-end gap-1">
-                      <Modal
-                        triggerLabel="Edit"
-                        triggerVariant="ghost"
-                        triggerIcon={<EditIcon />}
-                        title="Edit Test Case"
-                        openOnMount={!!error && editId === testCase.id}
-                      >
-                        <TestCaseForm
-                          action={updateAction(testCase.id)}
-                          submitLabel="Save"
-                          error={editId === testCase.id ? error : undefined}
-                          defaults={{
-                            name: testCase.name,
-                            condition: testCase.condition,
-                            preconditions: testCase.preconditions,
-                            testData: testCase.testData,
-                            expectedResult: testCase.expectedResult,
-                            priority: testCase.priority,
-                            testType: testCase.testType,
-                            status: testCase.status,
-                            steps: testCase.steps.map((step) => ({
-                              step: step.step,
-                              expectedResult: step.expectedResult,
-                            })),
-                          }}
-                        />
-                      </Modal>
-                      <IconLinkButton
-                        href={`${basePath}/${testCase.id}`}
-                        aria-label={`View details for ${testCase.name}`}
-                        title="View details"
-                      >
-                        <ChevronRightIcon />
-                      </IconLinkButton>
+                      <TestCaseForm
+                        action={updateAction(testCase.id)}
+                        submitLabel="Save"
+                        error={editId === testCase.id ? error : undefined}
+                        defaults={{
+                          name: testCase.name,
+                          condition: testCase.condition,
+                          preconditions: testCase.preconditions,
+                          testData: testCase.testData,
+                          expectedResult: testCase.expectedResult,
+                          priority: testCase.priority,
+                          testType: testCase.testType,
+                          status: testCase.status,
+                          steps: testCase.steps.map((step) => ({
+                            step: step.step,
+                            expectedResult: step.expectedResult,
+                          })),
+                        }}
+                      />
+                    </Modal>
+                  }
+                  detail={
+                    <div className="flex flex-col gap-4">
+                      <DetailFields>
+                        <DetailField label="Expected Result" wide>
+                          {testCase.expectedResult}
+                        </DetailField>
+                        <DetailField label="Condition">{testCase.condition}</DetailField>
+                        <DetailField label="Preconditions">{testCase.preconditions}</DetailField>
+                        <DetailField label="Test Data">{testCase.testData}</DetailField>
+                        <DetailField label="Test Type">{testCase.testType}</DetailField>
+                        <DetailField label="Assignee">
+                          {testCase.assigneeId ?? "Unassigned"}
+                        </DetailField>
+                        <DetailField label="Notes">{testCase.notes}</DetailField>
+                        <DetailField label="Test Steps" wide>
+                          {testCase.steps.length === 0 ? null : (
+                            <ol className="flex flex-col gap-1.5">
+                              {testCase.steps.map((step, index) => (
+                                <li key={step.id} className="flex gap-2">
+                                  <span className="w-5 shrink-0 text-muted">{index + 1}.</span>
+                                  <span>
+                                    <span className="whitespace-pre-wrap">{step.step}</span>{" "}
+                                    <span className="text-muted">→</span>{" "}
+                                    <span className="whitespace-pre-wrap italic">
+                                      {step.expectedResult}
+                                    </span>
+                                  </span>
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </DetailField>
+                      </DetailFields>
+                      {/* The detail page still owns Manage, attachments and the
+                          Test Result form, so keep a way through to it. */}
+                      <div>
+                        <LinkButton href={`${basePath}/${testCase.id}`} variant="secondary">
+                          Open full page
+                        </LinkButton>
+                      </div>
                     </div>
-                  </td>
-                </tr>
+                  }
+                />
               ))}
             </tbody>
           </table>
