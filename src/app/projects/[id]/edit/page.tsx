@@ -7,6 +7,10 @@ import {
   getProjectById,
   updateProject,
 } from "@/lib/projects";
+import { Card } from "@/components/ui/Card";
+import { ProjectForm } from "@/components/forms/ProjectForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { pageClass } from "@/lib/ui";
 
 export default async function EditProjectPage({
   params,
@@ -59,48 +63,24 @@ export default async function EditProjectPage({
   }
 
   return (
-    <main>
-      <h1>Edit Project</h1>
-      {error && <p role="alert">{error}</p>}
-      <form action={update}>
-        <label>
-          Project Code
-          <input name="code" defaultValue={project.code} required />
-        </label>
-        <label>
-          Project Name
-          <input name="name" defaultValue={project.name} required />
-        </label>
-        <label>
-          Description
-          <textarea name="description" defaultValue={project.description ?? ""} />
-        </label>
-        <label>
-          Start Date
-          <input
-            name="startDate"
-            type="date"
-            defaultValue={project.startDate?.toISOString().slice(0, 10) ?? ""}
-          />
-        </label>
-        <label>
-          End Date
-          <input
-            name="endDate"
-            type="date"
-            defaultValue={project.endDate?.toISOString().slice(0, 10) ?? ""}
-          />
-        </label>
-        <label>
-          Status
-          <select name="status" defaultValue={project.status} required>
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
-        </label>
-        <button type="submit">Save</button>
-      </form>
+    <main className={pageClass}>
+      <PageHeader title="Edit Project" />
+
+      <Card className="max-w-4xl">
+        <ProjectForm
+          action={update}
+          submitLabel="Save"
+          error={error}
+          defaults={{
+            code: project.code,
+            name: project.name,
+            description: project.description,
+            status: project.status,
+            startDate: project.startDate?.toISOString().slice(0, 10),
+            endDate: project.endDate?.toISOString().slice(0, 10),
+          }}
+        />
+      </Card>
     </main>
   );
 }

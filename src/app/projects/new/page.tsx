@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { DuplicateCodeError, ValidationError, createProject } from "@/lib/projects";
+import { Card } from "@/components/ui/Card";
+import { ProjectForm } from "@/components/forms/ProjectForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { pageClass } from "@/lib/ui";
 
 export default async function NewProjectPage({
   searchParams,
@@ -40,40 +44,12 @@ export default async function NewProjectPage({
   }
 
   return (
-    <main>
-      <h1>New Project</h1>
-      {error && <p role="alert">{error}</p>}
-      <form action={create}>
-        <label>
-          Project Code
-          <input name="code" required />
-        </label>
-        <label>
-          Project Name
-          <input name="name" required />
-        </label>
-        <label>
-          Description
-          <textarea name="description" />
-        </label>
-        <label>
-          Start Date
-          <input name="startDate" type="date" />
-        </label>
-        <label>
-          End Date
-          <input name="endDate" type="date" />
-        </label>
-        <label>
-          Status
-          <select name="status" defaultValue="DRAFT" required>
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
-        </label>
-        <button type="submit">Create Project</button>
-      </form>
+    <main className={pageClass}>
+      <PageHeader title="New Project" />
+
+      <Card className="max-w-4xl">
+        <ProjectForm action={create} submitLabel="Create Project" error={error} />
+      </Card>
     </main>
   );
 }

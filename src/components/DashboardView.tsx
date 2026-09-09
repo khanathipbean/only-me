@@ -1,8 +1,19 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
+import { inputClass, labelClass, selectClass } from "@/lib/ui";
+import { Card } from "@/components/ui/Card";
+import {
+  Badge,
+  type Tone,
+  priorityTone,
+  testResultTone,
+  toneBarClass,
+  workflowStatusTone,
+} from "@/components/ui/Badge";
+import { Button, IconButton, LinkButton } from "@/components/ui/Button";
+import { ChevronRightIcon, ClearIcon } from "@/components/icons";
 
 const TEST_RESULT_LABELS: Record<string, string> = {
   NOT_RUN: "Not Run",
@@ -36,6 +47,19 @@ type TreeTestCase = {
 
 type TreeTestGroup = { id: string; name: string; testCaseCount: number; testCases: TreeTestCase[] };
 type TreeScenario = { id: string; name: string; testCaseCount: number; testGroups: TreeTestGroup[] };
+
+type PreviewType = "scenario" | "testGroup" | "testCase";
+
+type PreviewTarget = {
+  type: PreviewType;
+  id: string;
+  href: string;
+  name: string;
+  /** Only ever set for testCase: the dashboard tree API already resolves the
+   * assignee's name, but the plain GET /api/test-cases/:id record only has
+   * assigneeId — reuse the name already in hand instead of showing a raw id. */
+  assigneeName?: string | null;
+};
 
 type DashboardData = {
   hasAnyData: boolean;
@@ -100,6 +124,8 @@ export function DashboardView({ projectId }: { projectId: string }) {
   // Expand/collapse lives in its own state, independent of `data`, so
   // re-fetching after a filter change never resets which nodes are open.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
 
   // Deliberately Promise-chained rather than async/await: the react-hooks
   // "no setState in effect" lint treats an awaited call as still executing
@@ -169,110 +195,166 @@ export function DashboardView({ projectId }: { projectId: string }) {
   const activeFilters = Object.entries(filters).filter(([, value]) => value);
 
   return (
-    <div>
-      <h2>Filters</h2>
-      <form onSubmit={(event) => event.preventDefault()}>
-        <input
-          placeholder="Scenario ID"
-          value={filters.scenarioId}
-          onChange={(event) => updateFilter("scenarioId", event.target.value)}
-        />
-        <input
-          placeholder="Test Group ID"
-          value={filters.testGroupId}
-          onChange={(event) => updateFilter("testGroupId", event.target.value)}
-        />
-        <select
-          aria-label="Test Result"
-          value={filters.testResult}
-          onChange={(event) => updateFilter("testResult", event.target.value)}
+    <div className="flex flex-col gap-6">
+      <Card>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Filters</h2>
+          <IconButton
+            type="button"
+            variant="secondary"
+            onClick={clearAllFilters}
+            aria-label="Clear all filters"
+            title="Clear all filters"
+          >
+            <ClearIcon />
+          </IconButton>
+        </div>
+        <form
+          onSubmit={(event) => event.preventDefault()}
+          className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4"
         >
-          <option value="">All Test Results</option>
-          {TEST_RESULT_VALUES.map((value) => (
-            <option key={value} value={value}>
-              {TEST_RESULT_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Priority"
-          value={filters.priority}
-          onChange={(event) => updateFilter("priority", event.target.value)}
-        >
-          <option value="">All Priorities</option>
-          {PRIORITY_VALUES.map((value) => (
-            <option key={value} value={value}>
-              {PRIORITY_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Status"
-          value={filters.status}
-          onChange={(event) => updateFilter("status", event.target.value)}
-        >
-          <option value="">All Statuses</option>
-          {WORKFLOW_STATUS_VALUES.map((value) => (
-            <option key={value} value={value}>
-              {STATUS_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <input
-          placeholder="Assignee User ID"
-          value={filters.assigneeId}
-          onChange={(event) => updateFilter("assigneeId", event.target.value)}
-        />
-        <input
-          placeholder="Tags (comma-separated)"
-          value={filters.tags}
-          onChange={(event) => updateFilter("tags", event.target.value)}
-        />
-        <label>
-          Created From
-          <input
-            type="date"
-            value={filters.createdFrom}
-            onChange={(event) => updateFilter("createdFrom", event.target.value)}
-          />
-        </label>
-        <label>
-          Created To
-          <input
-            type="date"
-            value={filters.createdTo}
-            onChange={(event) => updateFilter("createdTo", event.target.value)}
-          />
-        </label>
-        <label>
-          Updated From
-          <input
-            type="date"
-            value={filters.updatedFrom}
-            onChange={(event) => updateFilter("updatedFrom", event.target.value)}
-          />
-        </label>
-        <label>
-          Updated To
-          <input
-            type="date"
-            value={filters.updatedTo}
-            onChange={(event) => updateFilter("updatedTo", event.target.value)}
-          />
-        </label>
-        <button type="button" onClick={clearAllFilters}>
-          Clear all filters
-        </button>
-      </form>
+          <label className={labelClass}>
+            Test Result
+            <select
+              value={filters.testResult}
+              onChange={(event) => updateFilter("testResult", event.target.value)}
+              className={selectClass}
+            >
+              <option value="">All</option>
+              {TEST_RESULT_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {TEST_RESULT_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            Priority
+            <select
+              value={filters.priority}
+              onChange={(event) => updateFilter("priority", event.target.value)}
+              className={selectClass}
+            >
+              <option value="">All</option>
+              {PRIORITY_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {PRIORITY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            Status
+            <select
+              value={filters.status}
+              onChange={(event) => updateFilter("status", event.target.value)}
+              className={selectClass}
+            >
+              <option value="">All</option>
+              {WORKFLOW_STATUS_VALUES.map((value) => (
+                <option key={value} value={value}>
+                  {STATUS_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            Assignee User ID
+            <input
+              value={filters.assigneeId}
+              onChange={(event) => updateFilter("assigneeId", event.target.value)}
+              className={inputClass}
+            />
+          </label>
 
-      {activeFilters.length > 0 && (
-        <p>
-          Active filters:{" "}
-          {activeFilters
-            .map(([key, value]) => `${FILTER_LABELS[key as keyof Filters]}=${value}`)
-            .join(", ")}
-        </p>
-      )}
+          {showMoreFilters && (
+            <>
+              <label className={labelClass}>
+                Scenario ID
+                <input
+                  value={filters.scenarioId}
+                  onChange={(event) => updateFilter("scenarioId", event.target.value)}
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Test Group ID
+                <input
+                  value={filters.testGroupId}
+                  onChange={(event) => updateFilter("testGroupId", event.target.value)}
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Tags (comma-separated)
+                <input
+                  value={filters.tags}
+                  onChange={(event) => updateFilter("tags", event.target.value)}
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Created From
+                <input
+                  type="date"
+                  value={filters.createdFrom}
+                  onChange={(event) => updateFilter("createdFrom", event.target.value)}
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Created To
+                <input
+                  type="date"
+                  value={filters.createdTo}
+                  onChange={(event) => updateFilter("createdTo", event.target.value)}
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Updated From
+                <input
+                  type="date"
+                  value={filters.updatedFrom}
+                  onChange={(event) => updateFilter("updatedFrom", event.target.value)}
+                  className={inputClass}
+                />
+              </label>
+              <label className={labelClass}>
+                Updated To
+                <input
+                  type="date"
+                  value={filters.updatedTo}
+                  onChange={(event) => updateFilter("updatedTo", event.target.value)}
+                  className={inputClass}
+                />
+              </label>
+            </>
+          )}
+        </form>
+
+        <button
+          type="button"
+          onClick={() => setShowMoreFilters((value) => !value)}
+          className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground"
+        >
+          <ChevronRightIcon
+            className={`size-3.5 transition-transform ${showMoreFilters ? "rotate-90" : ""}`}
+          />
+          {showMoreFilters ? "Fewer filters" : "More filters"}
+        </button>
+
+        {activeFilters.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted">Active:</span>
+            {activeFilters.map(([key, value]) => (
+              <Badge key={key} tone="blue">
+                {FILTER_LABELS[key as keyof Filters]}: {value}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <SummaryWidget
         loading={loading}
@@ -290,8 +372,19 @@ export function DashboardView({ projectId }: { projectId: string }) {
         projectId={projectId}
         expanded={expanded}
         onToggle={toggleExpanded}
+        onPreview={setPreview}
       />
+      <PreviewModal target={preview} onClose={() => setPreview(null)} />
     </div>
+  );
+}
+
+function WidgetShell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Card aria-label={label}>
+      <h2 className="text-sm font-semibold text-foreground">{label}</h2>
+      <div className="mt-3">{children}</div>
+    </Card>
   );
 }
 
@@ -312,22 +405,22 @@ function SummaryWidget({
 }) {
   if (loading) {
     return (
-      <section aria-label="Overview">
-        <h2>Overview</h2>
-        <p>Loading…</p>
-      </section>
+      <WidgetShell label="Overview">
+        <p className="text-sm text-muted">Loading…</p>
+      </WidgetShell>
     );
   }
 
   if (error) {
     return (
-      <section aria-label="Overview">
-        <h2>Overview</h2>
-        <p role="alert">{error}</p>
-        <button type="button" onClick={onRetry}>
+      <WidgetShell label="Overview">
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+        <Button type="button" variant="secondary" onClick={onRetry} className="mt-3">
           Retry
-        </button>
-      </section>
+        </Button>
+      </WidgetShell>
     );
   }
 
@@ -337,71 +430,164 @@ function SummaryWidget({
 
   if (!data.hasAnyData) {
     return (
-      <section aria-label="Overview">
-        <h2>Overview</h2>
-        <p>This project has no Scenarios yet.</p>
-        <Link href={`/projects/${projectId}/scenarios/new`}>Create a Scenario</Link>{" "}
-        <Link href={`/projects/${projectId}/import`}>Import Data</Link>
-      </section>
+      <WidgetShell label="Overview">
+        <p className="text-sm text-muted">This project has no Scenarios yet.</p>
+        <div className="mt-3 flex gap-2">
+          <LinkButton href={`/projects/${projectId}/scenarios?new=1`} variant="primary">
+            Create a Scenario
+          </LinkButton>
+          <LinkButton href={`/projects/${projectId}/import`} variant="secondary">
+            Import Data
+          </LinkButton>
+        </div>
+      </WidgetShell>
     );
   }
 
   if (data.counts.testCases === 0) {
     return (
-      <section aria-label="Overview">
-        <h2>Overview</h2>
-        <p>No results match the current filters.</p>
-      </section>
+      <WidgetShell label="Overview">
+        <p className="text-sm text-muted">No results match the current filters.</p>
+      </WidgetShell>
     );
   }
 
   return (
-    <section aria-label="Overview">
-      <h2>Overview</h2>
-      <p>Scenarios: {data.counts.scenarios}</p>
-      <p>Test Groups: {data.counts.testGroups}</p>
-      <p>Test Cases: {data.counts.testCases}</p>
-      <p>Test Progress: {data.testProgress.toFixed(1)}%</p>
+    <WidgetShell label="Overview">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Stat label="Scenarios" value={data.counts.scenarios} />
+        <Stat label="Test Groups" value={data.counts.testGroups} />
+        <Stat label="Test Cases" value={data.counts.testCases} />
+        <Stat label="Test Progress" value={`${data.testProgress.toFixed(1)}%`} />
+      </div>
 
-      <h3>By Test Result</h3>
-      <ul>
-        {Object.entries(data.testCasesByResult).map(([result, count]) => (
-          <li key={result}>
-            <button type="button" onClick={() => onDrillDown("testResult", result)}>
-              {result}: {count}
-            </button>
+      <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3">
+        <BreakdownList
+          title="By Test Result"
+          entries={Object.entries(data.testCasesByResult)}
+          total={data.counts.testCases}
+          onClick={(key) => onDrillDown("testResult", key)}
+          tone={testResultTone}
+        />
+        <BreakdownList
+          title="By Priority"
+          entries={Object.entries(data.testCasesByPriority)}
+          total={data.counts.testCases}
+          onClick={(key) => onDrillDown("priority", key)}
+          tone={priorityTone}
+        />
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">By Assignee</h3>
+          <ul className="mt-3 flex flex-col gap-2">
+            {data.testCasesByAssignee.map((entry) => (
+              <li key={entry.assigneeId ?? "unassigned"}>
+                <MeterRow
+                  label={entry.assigneeName}
+                  count={entry.count}
+                  total={data.counts.testCases}
+                  tone="gray"
+                  onClick={entry.assigneeId ? () => onDrillDown("assigneeId", entry.assigneeId!) : undefined}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </WidgetShell>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <p className="text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+      <p className="text-xs text-muted">{label}</p>
+    </div>
+  );
+}
+
+function BreakdownList({
+  title,
+  entries,
+  total,
+  onClick,
+  tone,
+}: {
+  title: string;
+  entries: [string, number][];
+  total: number;
+  onClick: (key: string) => void;
+  tone: (value: string) => Tone;
+}) {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
+      <ul className="mt-3 flex flex-col gap-2">
+        {entries.map(([key, count]) => (
+          <li key={key}>
+            <MeterRow
+              label={key.replace(/_/g, " ")}
+              count={count}
+              total={total}
+              tone={tone(key)}
+              onClick={() => onClick(key)}
+            />
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
 
-      <h3>By Priority</h3>
-      <ul>
-        {Object.entries(data.testCasesByPriority).map(([priority, count]) => (
-          <li key={priority}>
-            <button type="button" onClick={() => onDrillDown("priority", priority)}>
-              {priority}: {count}
-            </button>
-          </li>
-        ))}
-      </ul>
+/** A single proportional bar row — the shared building block for every Overview breakdown list. */
+function MeterRow({
+  label,
+  count,
+  total,
+  tone,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  total: number;
+  tone: Tone;
+  onClick?: () => void;
+}) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  const content = (
+    <>
+      <span className="w-24 shrink-0 truncate text-xs font-medium text-muted capitalize">
+        {label.toLowerCase()}
+      </span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
+        <span
+          className={`block h-full rounded-full ${toneBarClass(tone)}`}
+          style={{ width: `${Math.max(pct, count > 0 ? 4 : 0)}%` }}
+        />
+      </span>
+      <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-foreground">
+        {count}
+      </span>
+    </>
+  );
 
-      <h3>By Assignee</h3>
-      <ul>
-        {data.testCasesByAssignee.map((entry) => (
-          <li key={entry.assigneeId ?? "unassigned"}>
-            {entry.assigneeId ? (
-              <button type="button" onClick={() => onDrillDown("assigneeId", entry.assigneeId!)}>
-                {entry.assigneeName}: {entry.count}
-              </button>
-            ) : (
-              <span>
-                {entry.assigneeName}: {entry.count}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
+  if (!onClick) {
+    return (
+      <div title={`${label}: ${count} (${pct}%)`} className="flex items-center gap-2.5">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${label}: ${count} (${pct}%)`}
+      className="flex w-full items-center gap-2.5 rounded-md py-0.5 text-left hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+    >
+      {content}
+    </button>
   );
 }
 
@@ -413,6 +599,7 @@ function TreeWidget({
   projectId,
   expanded,
   onToggle,
+  onPreview,
 }: {
   loading: boolean;
   error: string | null;
@@ -421,25 +608,26 @@ function TreeWidget({
   projectId: string;
   expanded: Set<string>;
   onToggle: (id: string) => void;
+  onPreview: (target: PreviewTarget) => void;
 }) {
   if (loading) {
     return (
-      <section aria-label="Hierarchy">
-        <h2>Hierarchy</h2>
-        <p>Loading…</p>
-      </section>
+      <WidgetShell label="Hierarchy">
+        <p className="text-sm text-muted">Loading…</p>
+      </WidgetShell>
     );
   }
 
   if (error) {
     return (
-      <section aria-label="Hierarchy">
-        <h2>Hierarchy</h2>
-        <p role="alert">{error}</p>
-        <button type="button" onClick={onRetry}>
+      <WidgetShell label="Hierarchy">
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+        <Button type="button" variant="secondary" onClick={onRetry} className="mt-3">
           Retry
-        </button>
-      </section>
+        </Button>
+      </WidgetShell>
     );
   }
 
@@ -449,55 +637,88 @@ function TreeWidget({
 
   if (!data.hasAnyData) {
     return (
-      <section aria-label="Hierarchy">
-        <h2>Hierarchy</h2>
-        <p>This project has no Scenarios yet.</p>
-        <Link href={`/projects/${projectId}/scenarios/new`}>Create a Scenario</Link>
-      </section>
+      <WidgetShell label="Hierarchy">
+        <p className="text-sm text-muted">This project has no Scenarios yet.</p>
+        <LinkButton href={`/projects/${projectId}/scenarios?new=1`} variant="primary" className="mt-3">
+          Create a Scenario
+        </LinkButton>
+      </WidgetShell>
     );
   }
 
   if (data.tree.length === 0) {
     return (
-      <section aria-label="Hierarchy">
-        <h2>Hierarchy</h2>
-        <p>No results match the current filters.</p>
-      </section>
+      <WidgetShell label="Hierarchy">
+        <p className="text-sm text-muted">No results match the current filters.</p>
+      </WidgetShell>
     );
   }
 
   return (
-    <section aria-label="Hierarchy">
-      <h2>Hierarchy</h2>
-      <ul>
+    <WidgetShell label="Hierarchy">
+      <ul className="flex flex-col gap-0.5">
         {data.tree.map((scenario) => (
           <li key={scenario.id}>
-            <button type="button" onClick={() => onToggle(scenario.id)}>
-              {expanded.has(scenario.id) ? "▾" : "▸"}
-            </button>{" "}
-            <Link href={`/projects/${projectId}/scenarios/${scenario.id}`}>{scenario.name}</Link> (
-            {scenario.testCaseCount})
+            <TreeRow
+              expanded={expanded.has(scenario.id)}
+              onToggle={() => onToggle(scenario.id)}
+              onPreview={() =>
+                onPreview({
+                  type: "scenario",
+                  id: scenario.id,
+                  href: `/projects/${projectId}/scenarios/${scenario.id}`,
+                  name: scenario.name,
+                })
+              }
+              label={scenario.name}
+              count={scenario.testCaseCount}
+              level="Scenario"
+              levelTone="blue"
+              bold
+            />
             {expanded.has(scenario.id) && (
-              <ul>
+              <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
                 {scenario.testGroups.map((group) => (
                   <li key={group.id}>
-                    <button type="button" onClick={() => onToggle(group.id)}>
-                      {expanded.has(group.id) ? "▾" : "▸"}
-                    </button>{" "}
-                    <Link href={`/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}`}>
-                      {group.name}
-                    </Link>{" "}
-                    ({group.testCaseCount})
+                    <TreeRow
+                      expanded={expanded.has(group.id)}
+                      onToggle={() => onToggle(group.id)}
+                      onPreview={() =>
+                        onPreview({
+                          type: "testGroup",
+                          id: group.id,
+                          href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}`,
+                          name: group.name,
+                        })
+                      }
+                      label={group.name}
+                      count={group.testCaseCount}
+                      level="Test Group"
+                      levelTone="purple"
+                    />
                     {expanded.has(group.id) && (
-                      <ul>
+                      <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
                         {group.testCases.map((testCase) => (
                           <li key={testCase.id}>
-                            <Link
-                              href={`/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}/test-cases/${testCase.id}`}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onPreview({
+                                  type: "testCase",
+                                  id: testCase.id,
+                                  href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}/test-cases/${testCase.id}`,
+                                  name: testCase.name,
+                                  assigneeName: testCase.assigneeName,
+                                })
+                              }
+                              className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-[26px] text-left text-sm text-foreground hover:bg-black/[.03] hover:text-brand hover:underline dark:hover:bg-white/[.05]"
                             >
-                              {testCase.name}
-                            </Link>{" "}
-                            [{testCase.testResult}]
+                              <Badge tone="gray">Test Case</Badge>
+                              <span className="min-w-0 flex-1 truncate">{testCase.name}</span>
+                              <Badge tone={testResultTone(testCase.testResult)}>
+                                {testCase.testResult.replace(/_/g, " ")}
+                              </Badge>
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -509,6 +730,251 @@ function TreeWidget({
           </li>
         ))}
       </ul>
-    </section>
+    </WidgetShell>
+  );
+}
+
+function TreeRow({
+  expanded,
+  onToggle,
+  onPreview,
+  label,
+  count,
+  level,
+  levelTone,
+  bold = false,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  onPreview: () => void;
+  label: string;
+  count: number;
+  level: string;
+  levelTone: Tone;
+  bold?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm hover:bg-black/[.03] dark:hover:bg-white/[.05]">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex size-5 shrink-0 items-center justify-center rounded text-muted hover:text-foreground"
+        aria-label={expanded ? "Collapse" : "Expand"}
+      >
+        <ChevronRightIcon className={`size-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
+      </button>
+      <Badge tone={levelTone}>{level}</Badge>
+      <button
+        type="button"
+        onClick={onPreview}
+        className={`min-w-0 flex-1 truncate text-left text-foreground hover:text-brand hover:underline ${bold ? "font-medium" : ""}`}
+      >
+        {label}
+      </button>
+      <Badge tone="gray">{count}</Badge>
+    </div>
+  );
+}
+
+const PREVIEW_ENDPOINT: Record<PreviewType, string> = {
+  scenario: "/api/scenarios",
+  testGroup: "/api/test-groups",
+  testCase: "/api/test-cases",
+};
+
+const PREVIEW_LABEL: Record<PreviewType, string> = {
+  scenario: "Scenario",
+  testGroup: "Test Group",
+  testCase: "Test Case",
+};
+
+const PREVIEW_TONE: Record<PreviewType, Tone> = {
+  scenario: "blue",
+  testGroup: "purple",
+  testCase: "gray",
+};
+
+/**
+ * A single shared, externally-controlled dialog — opened by clicking any
+ * Scenario/Test Group/Test Case name in the Hierarchy tree, rather than each
+ * row navigating immediately. Fetches the item's full record on open (the
+ * tree API only carries name+count, not enough for a useful preview) from
+ * the same GET routes the standalone detail pages already use.
+ */
+function PreviewModal({ target, onClose }: { target: PreviewTarget | null; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    if (target) {
+      dialogRef.current?.showModal();
+    } else {
+      dialogRef.current?.close();
+    }
+  }, [target]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      onClose={onClose}
+      className="m-auto w-full max-w-2xl rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+    >
+      {target && (
+        <div className="max-h-[85vh] overflow-y-auto p-6">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <Badge tone={PREVIEW_TONE[target.type]}>{PREVIEW_LABEL[target.type]}</Badge>
+              <h2 className="truncate text-lg font-semibold text-foreground">{target.name}</h2>
+            </div>
+            <IconButton type="button" onClick={onClose} aria-label="Close" title="Close">
+              <ClearIcon />
+            </IconButton>
+          </div>
+
+          {/* Keyed on the target's id: a fresh instance per distinct target means
+              its data/loading/error state always starts correct for THIS target,
+              with no "reset stale state from the previous target" effect needed. */}
+          <PreviewContent key={target.id} target={target} />
+
+          <div className="mt-6 flex items-center gap-2">
+            <LinkButton href={target.href} variant="primary">
+              View full page
+            </LinkButton>
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+    </dialog>
+  );
+}
+
+function PreviewContent({ target }: { target: PreviewTarget }) {
+  const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${PREVIEW_ENDPOINT[target.type]}/${target.id}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load preview");
+        }
+        return response.json();
+      })
+      .then((body) => setData(body))
+      .catch(() => setError("Failed to load preview"))
+      .finally(() => setLoading(false));
+  }, [target]);
+
+  if (loading) {
+    return <p className="text-sm text-muted">Loading…</p>;
+  }
+  if (error) {
+    return (
+      <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        {error}
+      </p>
+    );
+  }
+  if (!data) {
+    return null;
+  }
+  return <PreviewBody target={target} data={data} />;
+}
+
+function PreviewBody({ target, data }: { target: PreviewTarget; data: Record<string, unknown> }) {
+  if (target.type === "scenario") {
+    const d = data as {
+      description: string | null;
+      preconditions: string | null;
+      expectedResult: string;
+      priority: string;
+      status: string;
+      tags: string[];
+    };
+    return (
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge tone={priorityTone(d.priority)}>{d.priority}</Badge>
+          <Badge tone={workflowStatusTone(d.status)}>{d.status.replace(/_/g, " ")}</Badge>
+        </div>
+        <PreviewField label="Description" value={d.description} />
+        <PreviewField label="Preconditions" value={d.preconditions} />
+        <PreviewField label="Expected Result" value={d.expectedResult} />
+        {d.tags.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Tags</p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {d.tags.map((tag) => (
+                <Badge key={tag} tone="blue">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (target.type === "testGroup") {
+    const d = data as { description: string | null; testObjective: string | null; status: string };
+    return (
+      <div className="flex flex-col gap-3 text-sm">
+        <Badge tone={workflowStatusTone(d.status)}>{d.status.replace(/_/g, " ")}</Badge>
+        <PreviewField label="Objective" value={d.testObjective} />
+        <PreviewField label="Description" value={d.description} />
+      </div>
+    );
+  }
+
+  const d = data as {
+    preconditions: string | null;
+    testData: string | null;
+    expectedResult: string;
+    priority: string;
+    status: string;
+    testResult: string;
+    assigneeId: string | null;
+    steps: { id: string; step: string; expectedResult: string }[];
+  };
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <div className="flex flex-wrap gap-1.5">
+        <Badge tone={priorityTone(d.priority)}>{d.priority}</Badge>
+        <Badge tone={workflowStatusTone(d.status)}>{d.status.replace(/_/g, " ")}</Badge>
+        <Badge tone={testResultTone(d.testResult)}>{d.testResult.replace(/_/g, " ")}</Badge>
+      </div>
+      <PreviewField label="Assignee" value={target.assigneeName ?? d.assigneeId} />
+      <PreviewField label="Preconditions" value={d.preconditions} />
+      <PreviewField label="Test Data" value={d.testData} />
+      <PreviewField label="Expected Result" value={d.expectedResult} />
+      {d.steps.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Test Steps</p>
+          <ol className="mt-1 flex flex-col gap-2 pl-5 list-decimal">
+            {d.steps.map((step) => (
+              <li key={step.id}>
+                <p className="text-foreground">{step.step}</p>
+                <p className="text-xs text-muted">Expected: {step.expectedResult}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewField({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) {
+    return null;
+  }
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-0.5 whitespace-pre-wrap text-foreground">{value}</p>
+    </div>
   );
 }

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import {
@@ -8,6 +7,7 @@ import {
   requireProjectRoleOrNotFound,
 } from "@/lib/rbac";
 import {
+  ValidationError,
   archiveTestCase,
   deleteTestCase,
   duplicateTestCase,
@@ -15,22 +15,35 @@ import {
   moveTestCase,
   restoreTestCase,
   updateAssignee,
+  updateTestCase,
   updateTestResultAndNotes,
 } from "@/lib/test-cases";
-import { getTestGroupWithProjectId } from "@/lib/test-groups";
+import { parseStepsJson } from "@/lib/test-case-form";
+import { getTestGroupWithProjectId, listTestGroupsForProject } from "@/lib/test-groups";
 import { getScenarioById } from "@/lib/scenarios";
 import { getProjectById } from "@/lib/projects";
 import { saveAttachment } from "@/lib/attachments";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
+import { Button, IconButton } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { TestCaseForm } from "@/components/forms/TestCaseForm";
+import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
+import { EditIcon, TrashIcon } from "@/components/icons";
+import { inputClass, labelClass, pageClass, selectClass, textareaClass } from "@/lib/ui";
 
 export default async function TestCaseDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; scenarioId: string; testGroupId: string; testCaseId: string }>;
+  searchParams: Promise<{ error?: string; moveError?: string }>;
 }) {
   const { scenarioId, testGroupId, testCaseId } = await params;
+  const { error, moveError } = await searchParams;
   const session = await auth();
 
   const testCase = await getTestCaseWithProjectId(testCaseId);
@@ -42,12 +55,46 @@ export default async function TestCaseDetailPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
   const membership = await getProjectMembership(session!.user.id, projectId);
   const canEditFully = membership?.role === "ADMIN" || membership?.role === "QA_LEAD";
-  const [project, scenario] = await Promise.all([
+  const [project, scenario, allTestGroups] = await Promise.all([
     getProjectById(projectId),
     getScenarioById(scenarioId),
+    listTestGroupsForProject(projectId),
   ]);
+  const moveTargets = allTestGroups.filter((tg) => tg.id !== testGroupId);
 
   const basePath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}/test-cases`;
+
+  async function update(formData: FormData) {
+    "use server";
+
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+
+    try {
+      await updateTestCase(
+        testCaseId,
+        {
+          name: formData.get("name") as string,
+          condition: (formData.get("condition") as string) || null,
+          preconditions: (formData.get("preconditions") as string) || null,
+          testData: (formData.get("testData") as string) || null,
+          expectedResult: formData.get("expectedResult") as string,
+          priority: formData.get("priority") as never,
+          testType: ((formData.get("testType") as string) || null) as never,
+          status: formData.get("status") as never,
+          steps: parseStepsJson(formData.get("stepsJson") as string),
+        },
+        session!.user.id,
+      );
+    } catch (err) {
+      if (err instanceof ValidationError) {
+        redirect(`${basePath}/${testCaseId}?error=${encodeURIComponent(err.message)}`);
+      }
+      throw err;
+    }
+
+    redirect(`${basePath}/${testCaseId}`);
+  }
 
   async function updateResult(formData: FormData) {
     "use server";
@@ -94,9 +141,11 @@ export default async function TestCaseDetailPage({
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const targetTestGroupId = formData.get("targetTestGroupId") as string;
-    const targetTestGroup = await getTestGroupWithProjectId(targetTestGroupId);
+    const targetTestGroup = targetTestGroupId ? await getTestGroupWithProjectId(targetTestGroupId) : null;
     if (!targetTestGroup || targetTestGroup.deletedAt) {
-      throw new Error("Target Test Group not found or archived");
+      redirect(
+        `${basePath}/${testCaseId}?moveError=${encodeURIComponent("Target Test Group not found or archived")}`,
+      );
     }
     await requireProjectRoleOrNotFound(session!.user.id, targetTestGroup.projectId, EDITOR_ROLES);
     await moveTestCase(testCaseId, targetTestGroupId, session!.user.id);
@@ -138,7 +187,7 @@ export default async function TestCaseDetailPage({
   }
 
   return (
-    <main>
+    <main className={pageClass}>
       <Breadcrumb
         segments={testCaseBreadcrumb(
           { id: projectId, name: nameOr(project, projectId) },
@@ -147,108 +196,207 @@ export default async function TestCaseDetailPage({
           testCase,
         )}
       />
-      <p>
-        <Link href={basePath}>← Back to Test Cases</Link>
-      </p>
-      <h1>{testCase.name}</h1>
-      {testCase.deletedAt && <p role="status">Archived</p>}
-      <p>Priority: {testCase.priority}</p>
-      <p>Test Type: {testCase.testType ?? "—"}</p>
-      <p>Status: {testCase.status}</p>
-      <p>Condition: {testCase.condition ?? "—"}</p>
-      <p>Preconditions: {testCase.preconditions ?? "—"}</p>
-      <p>Test Data: {testCase.testData ?? "—"}</p>
-      <p>Expected Result: {testCase.expectedResult}</p>
-      <p>Assignee: {testCase.assigneeId ?? "Unassigned"}</p>
+      <PageHeader
+        title={testCase.name}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-2">
+            <Badge tone={priorityTone(testCase.priority)}>{testCase.priority}</Badge>
+            <Badge tone={workflowStatusTone(testCase.status)}>{testCase.status}</Badge>
+            {testCase.testType && <Badge tone="gray">{testCase.testType}</Badge>}
+            {testCase.deletedAt && <Badge tone="gray">Archived</Badge>}
+          </span>
+        }
+        actions={
+          canEditFully && (
+            <Modal
+              triggerLabel="Edit"
+              triggerVariant="secondary"
+              triggerIcon={<EditIcon />}
+              title="Edit Test Case"
+              openOnMount={!!error}
+            >
+              <TestCaseForm
+                action={update}
+                submitLabel="Save"
+                error={error}
+                defaults={{
+                  name: testCase.name,
+                  condition: testCase.condition,
+                  preconditions: testCase.preconditions,
+                  testData: testCase.testData,
+                  expectedResult: testCase.expectedResult,
+                  priority: testCase.priority,
+                  testType: testCase.testType,
+                  status: testCase.status,
+                  steps: testCase.steps.map((s) => ({ step: s.step, expectedResult: s.expectedResult })),
+                }}
+              />
+            </Modal>
+          )
+        }
+      />
 
-      <h2>Test Steps</h2>
-      <ol>
-        {testCase.steps.map((step) => (
-          <li key={step.id}>
-            {step.step} — <em>{step.expectedResult}</em>
-          </li>
-        ))}
-      </ol>
+      <Card className="flex flex-col gap-2 text-sm">
+        <p>
+          <span className="text-muted">Condition:</span> {testCase.condition ?? "—"}
+        </p>
+        <p>
+          <span className="text-muted">Preconditions:</span> {testCase.preconditions ?? "—"}
+        </p>
+        <p>
+          <span className="text-muted">Test Data:</span> {testCase.testData ?? "—"}
+        </p>
+        <p>
+          <span className="text-muted">Expected Result:</span> {testCase.expectedResult}
+        </p>
+        <p>
+          <span className="text-muted">Assignee:</span> {testCase.assigneeId ?? "Unassigned"}
+        </p>
+      </Card>
 
-      <h2>Test Result</h2>
-      <p>Current: {testCase.testResult}</p>
-      <form action={updateResult}>
-        <label>
-          Test Result
-          <select name="testResult" defaultValue={testCase.testResult}>
-            <option value="NOT_RUN">Not Run</option>
-            <option value="PASSED">Passed</option>
-            <option value="FAILED">Failed</option>
-            <option value="BLOCKED">Blocked</option>
-            <option value="SKIPPED">Skipped</option>
-          </select>
-        </label>
-        <label>
-          Notes
-          <textarea name="notes" defaultValue={testCase.notes ?? ""} />
-        </label>
-        <button type="submit">Update Result</button>
-      </form>
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground">Test Steps</h2>
+        <ol className="mt-3 flex flex-col gap-2">
+          {testCase.steps.map((step, index) => (
+            <li key={step.id} className="flex gap-3 text-sm">
+              <span className="w-5 shrink-0 text-muted">{index + 1}.</span>
+              <span>
+                <span className="whitespace-pre-wrap">{step.step}</span>{" "}
+                <span className="text-muted">→</span>{" "}
+                <span className="whitespace-pre-wrap italic">{step.expectedResult}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </Card>
 
-      <h2>Attachments</h2>
-      <ul>
-        {testCase.attachments.map((attachment) => (
-          <li key={attachment.id}>{attachment.fileName}</li>
-        ))}
-      </ul>
-      <form action={uploadAttachment} encType="multipart/form-data">
-        <input type="file" name="file" required />
-        <button type="submit">Upload Attachment</button>
-      </form>
+      <Card>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Test Result</h2>
+          <Badge tone={testResultTone(testCase.testResult)}>
+            {testCase.testResult.replace(/_/g, " ")}
+          </Badge>
+        </div>
+        <form action={updateResult} className="mt-3 flex flex-col gap-4">
+          <label className={labelClass}>
+            Test Result
+            <select name="testResult" defaultValue={testCase.testResult} className={selectClass}>
+              <option value="NOT_RUN">Not Run</option>
+              <option value="PASSED">Passed</option>
+              <option value="FAILED">Failed</option>
+              <option value="BLOCKED">Blocked</option>
+              <option value="SKIPPED">Skipped</option>
+            </select>
+          </label>
+          <label className={labelClass}>
+            Notes
+            <textarea name="notes" defaultValue={testCase.notes ?? ""} className={textareaClass} />
+          </label>
+          <Button type="submit" className="self-start">
+            Update Result
+          </Button>
+        </form>
+      </Card>
+
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground">Attachments</h2>
+        {testCase.attachments.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1 text-sm">
+            {testCase.attachments.map((attachment) => (
+              <li key={attachment.id} className="text-foreground">
+                {attachment.fileName}
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={uploadAttachment} encType="multipart/form-data" className="mt-3 flex items-center gap-3">
+          <input
+            type="file"
+            name="file"
+            required
+            className="text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-hover"
+          />
+          <Button type="submit" variant="secondary">
+            Upload Attachment
+          </Button>
+        </form>
+      </Card>
 
       {canEditFully && (
-        <>
-          <h2>Manage</h2>
-          <p>
-            <Link href={`${basePath}/${testCase.id}/edit`}>Edit</Link>
-          </p>
+        <Card className="flex flex-col gap-5">
+          <h2 className="text-sm font-semibold text-foreground">Manage</h2>
 
-          <form action={changeAssignee}>
-            <label>
+          <form action={changeAssignee} className="flex flex-wrap items-end gap-3">
+            <label className={`${labelClass} max-w-xs`}>
               Assignee (User ID)
-              <input name="assigneeId" defaultValue={testCase.assigneeId ?? ""} />
+              <input name="assigneeId" defaultValue={testCase.assigneeId ?? ""} className={inputClass} />
             </label>
-            <button type="submit">Change Assignee</button>
+            <Button type="submit" variant="secondary">
+              Change Assignee
+            </Button>
           </form>
 
-          <h3>Move to another Test Group</h3>
-          <ConfirmForm action={move} confirmMessage="Move this Test Case?">
-            <label>
-              Target Test Group ID
-              <input name="targetTestGroupId" required />
-            </label>
-            <button type="submit">Move</button>
-          </ConfirmForm>
-
-          <ConfirmForm action={duplicate} confirmMessage="Duplicate this Test Case?">
-            <button type="submit">Duplicate</button>
-          </ConfirmForm>
-
-          {testCase.deletedAt ? (
-            <ConfirmForm action={restore} confirmMessage="Restore this Test Case?">
-              <button type="submit">Restore</button>
-            </ConfirmForm>
-          ) : (
-            <ConfirmForm
-              action={archive}
-              confirmMessage="Archive this Test Case? It can be restored later."
-            >
-              <button type="submit">Archive</button>
-            </ConfirmForm>
+          {moveError && (
+            <p role="alert" className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300">
+              {moveError}
+            </p>
           )}
-
-          <ConfirmForm
-            action={removeForever}
-            confirmMessage="Delete this Test Case? This cannot be undone from the UI."
-          >
-            <button type="submit">Delete</button>
+          <ConfirmForm action={move} confirmMessage="Move this Test Case?">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className={`${labelClass} max-w-sm`}>
+                Move to another Test Group
+                <select name="targetTestGroupId" required defaultValue="" className={selectClass}>
+                  <option value="" disabled>
+                    Select a Test Group…
+                  </option>
+                  {moveTargets.map((testGroup) => (
+                    <option key={testGroup.id} value={testGroup.id}>
+                      {testGroup.scenario.name} → {testGroup.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button type="submit" variant="secondary">
+                Move
+              </Button>
+            </div>
           </ConfirmForm>
-        </>
+
+          <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+            <ConfirmForm action={duplicate} confirmMessage="Duplicate this Test Case?">
+              <Button type="submit" variant="secondary">
+                Duplicate
+              </Button>
+            </ConfirmForm>
+
+            {testCase.deletedAt ? (
+              <ConfirmForm action={restore} confirmMessage="Restore this Test Case?">
+                <Button type="submit" variant="secondary">
+                  Restore
+                </Button>
+              </ConfirmForm>
+            ) : (
+              <ConfirmForm
+                action={archive}
+                confirmMessage="Archive this Test Case? It can be restored later."
+              >
+                <Button type="submit" variant="secondary">
+                  Archive
+                </Button>
+              </ConfirmForm>
+            )}
+
+            <ConfirmForm
+              action={removeForever}
+              confirmMessage="Delete this Test Case? This cannot be undone from the UI."
+              variant="danger"
+            >
+              <IconButton type="submit" variant="danger" aria-label="Delete" title="Delete">
+                <TrashIcon />
+              </IconButton>
+            </ConfirmForm>
+          </div>
+        </Card>
       )}
     </main>
   );

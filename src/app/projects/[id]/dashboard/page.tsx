@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { DashboardView } from "@/components/DashboardView";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { pageClass } from "@/lib/ui";
 
 export default async function DashboardPage({
   params,
@@ -14,11 +15,8 @@ export default async function DashboardPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
   return (
-    <main>
-      <p>
-        <Link href={`/projects/${projectId}`}>← Back to Project</Link>
-      </p>
-      <h1>Dashboard</h1>
+    <main className={pageClass}>
+      <PageHeader title="Dashboard" />
       <DashboardView projectId={projectId} />
     </main>
   );

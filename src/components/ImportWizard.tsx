@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { checkboxClass, inputClass, selectClass, textareaClass } from "@/lib/ui";
 
 type PreviewRow = {
   rowNumber: number;
@@ -20,14 +24,54 @@ type RowChoice = { skip: boolean; duplicateResolution?: "skip" | "update" | "cre
 
 type Summary = { succeededCount: number; failedCount: number; skippedCount: number };
 
-const EDITABLE_FIELDS: { key: string; label: string }[] = [
-  { key: "scenarioName", label: "Scenario Name" },
-  { key: "testGroupName", label: "Test Group Name" },
-  { key: "testCaseName", label: "Test Case Name" },
-  { key: "preconditions", label: "Preconditions" },
-  { key: "testSteps", label: "Test Steps" },
-  { key: "expectedResult", label: "Expected Result" },
-  { key: "priority", label: "Priority" },
+type ImportField = {
+  key: string;
+  label: string;
+  /** Rendered as a `<textarea>`: a single-line input can't display embedded
+   * line breaks at all, so a numbered Test Steps list showed as one run-on
+   * line even though the value itself contains newlines. */
+  multiline?: boolean;
+};
+
+/**
+ * Grouped by the level each field belongs to (Scenario → Test Group → Test
+ * Case, mirroring the hierarchy the import builds) instead of one flat grid.
+ * The flat grid put all three levels side by side — "Scenario Name | Test
+ * Group Name | Test Case Name" on one line — so no field read as belonging
+ * to anything, and odd field counts left dangling empty cells.
+ *
+ * Every group is a plain 2-column grid so each row fills completely; the one
+ * long field spans both columns.
+ */
+const FIELD_GROUPS: { title: string; note?: string; fields: ImportField[] }[] = [
+  {
+    title: "Scenario",
+    note: "Name is matched against existing Scenarios — the rest apply only when this row creates a new one.",
+    fields: [
+      { key: "scenarioName", label: "Name" },
+      { key: "scenarioDescription", label: "Description" },
+      { key: "scenarioPreconditions", label: "Preconditions" },
+      { key: "scenarioExpectedResult", label: "Expected Result" },
+    ],
+  },
+  {
+    title: "Test Group",
+    note: "Name is matched against existing Test Groups — the Objective applies only when this row creates a new one.",
+    fields: [
+      { key: "testGroupName", label: "Name" },
+      { key: "testGroupObjective", label: "Objective" },
+    ],
+  },
+  {
+    title: "Test Case",
+    fields: [
+      { key: "testCaseName", label: "Name" },
+      { key: "priority", label: "Priority" },
+      { key: "preconditions", label: "Preconditions" },
+      { key: "expectedResult", label: "Expected Result" },
+      { key: "testSteps", label: "Test Steps", multiline: true },
+    ],
+  },
 ];
 
 export function ImportWizard({ projectId }: { projectId: string }) {
@@ -63,7 +107,12 @@ export function ImportWizard({ projectId }: { projectId: string }) {
       for (const row of (body as Preview).rows) {
         initialChoices[row.rowNumber] = {
           skip: !row.valid,
-          duplicateResolution: row.duplicate ? "skip" : undefined,
+          // Defaults to updating the matched Test Case rather than skipping it —
+          // "create if the name is new, update if it already exists" is exactly
+          // how Scenario/Test Group containers already behave automatically
+          // (found-or-created by name, no choice needed); this makes Test Case
+          // rows behave the same way by default, without an extra click.
+          duplicateResolution: row.duplicate ? "update" : undefined,
         };
         initialData[row.rowNumber] = { ...row.data };
       }
@@ -116,16 +165,31 @@ export function ImportWizard({ projectId }: { projectId: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ rows }),
       });
-      const body = await response.json();
+
+      // Read as text first: an unhandled server error (a 500) comes back with
+      // an empty or non-JSON body, and calling response.json() on that throws
+      // — which previously escaped this function entirely (there was no catch),
+      // leaving the user with no summary, no error, and no idea the import had
+      // failed.
+      const raw = await response.text();
+      let body: { error?: string; rowNumber?: number } & Partial<Summary> = {};
+      try {
+        body = raw ? JSON.parse(raw) : {};
+      } catch {
+        body = {};
+      }
+
       if (!response.ok) {
         setError(
           body.rowNumber
             ? `Row ${body.rowNumber}: ${body.error}`
-            : (body.error ?? "Import failed"),
+            : (body.error ?? `Import failed (server responded ${response.status}).`),
         );
         return;
       }
       setSummary(body as Summary);
+    } catch (err) {
+      setError(err instanceof Error ? `Import failed: ${err.message}` : "Import failed.");
     } finally {
       setLoading(false);
     }
@@ -133,123 +197,216 @@ export function ImportWizard({ projectId }: { projectId: string }) {
 
   if (summary) {
     return (
-      <div>
-        <h2>Import Summary</h2>
-        <p>Succeeded: {summary.succeededCount}</p>
-        <p>Failed: {summary.failedCount}</p>
-        <p>Skipped: {summary.skippedCount}</p>
-      </div>
+      <Card>
+        <h2 className="text-lg font-semibold text-foreground">Import Summary</h2>
+        <div className="mt-4 grid grid-cols-3 gap-4">
+          <div>
+            <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
+              {summary.succeededCount}
+            </p>
+            <p className="text-xs text-muted">Succeeded</p>
+          </div>
+          <div>
+            <p className="text-2xl font-semibold text-red-600 dark:text-red-400">
+              {summary.failedCount}
+            </p>
+            <p className="text-xs text-muted">Failed</p>
+          </div>
+          <div>
+            <p className="text-2xl font-semibold text-muted">{summary.skippedCount}</p>
+            <p className="text-xs text-muted">Skipped</p>
+          </div>
+        </div>
+      </Card>
     );
   }
 
   return (
-    <div>
-      <input
-        type="file"
-        accept=".csv,.xlsx"
-        onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-      />
-      <button type="button" onClick={handlePreview} disabled={!file || loading}>
-        Preview
-      </button>
-      {error && <p role="alert">{error}</p>}
+    <div className="flex flex-col gap-6">
+      <Card>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            className="text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-hover"
+          />
+          <Button type="button" onClick={handlePreview} disabled={!file || loading}>
+            {loading && !preview ? "Loading…" : "Preview"}
+          </Button>
+        </div>
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+      </Card>
 
       {preview && (
         <>
-          <p>
-            Total: {preview.summary.total}, Valid: {preview.summary.valid}, Invalid:{" "}
-            {preview.summary.invalid}, Duplicates: {preview.summary.duplicates}
-          </p>
-
-          {preview.summary.duplicates > 0 && (
-            <div>
-              Apply to all duplicates:{" "}
-              <button type="button" onClick={() => applyToAllDuplicates("skip")}>
-                Skip all
-              </button>
-              <button type="button" onClick={() => applyToAllDuplicates("update")}>
-                Update all
-              </button>
-              <button type="button" onClick={() => applyToAllDuplicates("create_new")}>
-                Create new for all
-              </button>
+          <Card>
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <span>
+                Total: <strong className="font-semibold text-foreground">{preview.summary.total}</strong>
+              </span>
+              <span className="text-emerald-600 dark:text-emerald-400">
+                Valid: {preview.summary.valid}
+              </span>
+              <span className="text-red-600 dark:text-red-400">Invalid: {preview.summary.invalid}</span>
+              <span className="text-amber-600 dark:text-amber-400">
+                Duplicates: {preview.summary.duplicates}
+              </span>
             </div>
-          )}
 
-          {preview.rows.map((row) => {
-            const data = rowData[row.rowNumber] ?? row.data;
-            return (
-              <fieldset key={row.rowNumber}>
-                <legend>
-                  Row {row.rowNumber}
-                  {row.valid && row.duplicate && " — Duplicate"}
-                  {row.valid && !row.duplicate && " — New"}
-                  {!row.valid && " — Invalid (fix below or skip)"}
-                </legend>
+            {preview.summary.duplicates > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted">Apply to all duplicates:</span>
+                <Button type="button" variant="secondary" onClick={() => applyToAllDuplicates("skip")}>
+                  Skip all
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => applyToAllDuplicates("update")}>
+                  Update all
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => applyToAllDuplicates("create_new")}
+                >
+                  Create new for all
+                </Button>
+              </div>
+            )}
+          </Card>
 
-                {row.errors.length > 0 && (
-                  <ul>
-                    {row.errors.map((rowError, index) => (
-                      <li key={index}>
-                        {rowError.field}: {rowError.reason}
-                      </li>
+          <div className="flex flex-col gap-3">
+            {preview.rows.map((row) => {
+              const data = rowData[row.rowNumber] ?? row.data;
+              return (
+                <Card key={row.rowNumber}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-foreground">Row {row.rowNumber}</span>
+                    {row.valid && row.duplicate && <Badge tone="amber">Duplicate</Badge>}
+                    {row.valid && !row.duplicate && <Badge tone="green">New</Badge>}
+                    {!row.valid && <Badge tone="red">Invalid — fix below or skip</Badge>}
+                  </div>
+
+                  {row.errors.length > 0 && (
+                    <ul className="mt-2 list-inside list-disc text-sm text-red-600 dark:text-red-400">
+                      {row.errors.map((rowError, index) => (
+                        <li key={index}>
+                          {rowError.field}: {rowError.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div className="mt-4 flex flex-col gap-4">
+                    {FIELD_GROUPS.map((group) => (
+                      <div key={group.title}>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                          {group.title}
+                        </p>
+                        {group.note && <p className="mt-0.5 text-xs text-muted">{group.note}</p>}
+                        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          {group.fields.map(({ key, label, multiline }) => (
+                            <label
+                              key={key}
+                              className={`flex flex-col gap-1 text-xs font-medium text-muted ${
+                                multiline ? "sm:col-span-2" : ""
+                              }`}
+                            >
+                              {label}
+                              {multiline ? (
+                                <textarea
+                                  value={data[key] ?? ""}
+                                  onChange={(event) =>
+                                    updateRowField(row.rowNumber, key, event.target.value)
+                                  }
+                                  className={textareaClass}
+                                />
+                              ) : (
+                                <input
+                                  value={data[key] ?? ""}
+                                  onChange={(event) =>
+                                    updateRowField(row.rowNumber, key, event.target.value)
+                                  }
+                                  className={inputClass}
+                                />
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     ))}
-                  </ul>
-                )}
+                  </div>
 
-                {EDITABLE_FIELDS.map(({ key, label }) => (
-                  <label key={key}>
-                    {label}
-                    <input
-                      value={data[key] ?? ""}
-                      onChange={(event) => updateRowField(row.rowNumber, key, event.target.value)}
-                    />
-                  </label>
-                ))}
+                  <div className="mt-3">
+                    {row.duplicate ? (
+                      <label className="flex flex-col gap-1 text-xs font-medium text-muted sm:max-w-xs">
+                        Duplicate resolution
+                        <select
+                          value={rowChoices[row.rowNumber]?.duplicateResolution ?? "skip"}
+                          onChange={(event) =>
+                            setRowChoices((prev) => ({
+                              ...prev,
+                              [row.rowNumber]: {
+                                ...prev[row.rowNumber],
+                                duplicateResolution: event.target
+                                  .value as RowChoice["duplicateResolution"],
+                              },
+                            }))
+                          }
+                          className={selectClass}
+                        >
+                          <option value="skip">Skip</option>
+                          <option value="update">Update</option>
+                          <option value="create_new">Create as New</option>
+                        </select>
+                      </label>
+                    ) : (
+                      <label className="flex items-center gap-2 text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={rowChoices[row.rowNumber]?.skip ?? false}
+                          onChange={(event) =>
+                            setRowChoices((prev) => ({
+                              ...prev,
+                              [row.rowNumber]: { ...prev[row.rowNumber], skip: event.target.checked },
+                            }))
+                          }
+                          className={checkboxClass}
+                        />
+                        Skip this row
+                      </label>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
 
-                {row.duplicate ? (
-                  <label>
-                    Duplicate resolution
-                    <select
-                      value={rowChoices[row.rowNumber]?.duplicateResolution ?? "skip"}
-                      onChange={(event) =>
-                        setRowChoices((prev) => ({
-                          ...prev,
-                          [row.rowNumber]: {
-                            ...prev[row.rowNumber],
-                            duplicateResolution: event.target
-                              .value as RowChoice["duplicateResolution"],
-                          },
-                        }))
-                      }
-                    >
-                      <option value="skip">Skip</option>
-                      <option value="update">Update</option>
-                      <option value="create_new">Create as New</option>
-                    </select>
-                  </label>
-                ) : (
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={rowChoices[row.rowNumber]?.skip ?? false}
-                      onChange={(event) =>
-                        setRowChoices((prev) => ({
-                          ...prev,
-                          [row.rowNumber]: { ...prev[row.rowNumber], skip: event.target.checked },
-                        }))
-                      }
-                    />
-                    Skip this row
-                  </label>
-                )}
-              </fieldset>
-            );
-          })}
-
-          <button type="button" onClick={handleConfirm} disabled={loading}>
-            Confirm Import
-          </button>
+          <div className="flex flex-col gap-3">
+            {/* Repeated next to the button on purpose: the other copy of this
+                error sits in the upload card at the very top of the page,
+                which is far off-screen once a file's rows are listed — a
+                failed confirm looked like nothing had happened at all. */}
+            {error && (
+              <p
+                role="alert"
+                className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300"
+              >
+                {error}
+              </p>
+            )}
+            <Button
+              type="button"
+              onClick={handleConfirm}
+              disabled={loading}
+              className="self-start"
+            >
+              {loading ? "Importing…" : "Confirm Import"}
+            </Button>
+          </div>
         </>
       )}
     </div>

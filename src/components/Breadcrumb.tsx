@@ -57,16 +57,25 @@ export function Breadcrumb({ segments }: { segments: BreadcrumbSegment[] }) {
   }, [pathname, searchParams, segments]);
 
   return (
-    <nav aria-label="Breadcrumb">
+    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-muted">
       {segments.map((segment, index) => {
         const isCurrent = index === segments.length - 1;
         return (
-          <span key={segment.href}>
-            {index > 0 && " > "}
+          <span key={segment.href} className="flex items-center gap-1">
+            {index > 0 && <span className="text-muted/60">/</span>}
             {isCurrent ? (
+              // Deliberately not text-foreground/font-medium: this segment
+              // just repeats the page's own <h1> title right below it, so
+              // giving it the same strong color/weight made the two read as
+              // a duplicated heading rather than a breadcrumb trail.
               <span aria-current="page">{segment.label}</span>
             ) : (
-              <Link href={restoredHrefs[segment.href] ?? segment.href}>{segment.label}</Link>
+              <Link
+                href={restoredHrefs[segment.href] ?? segment.href}
+                className="hover:text-brand hover:underline"
+              >
+                {segment.label}
+              </Link>
             )}
           </span>
         );

@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { ValidationError, createScenario } from "@/lib/scenarios";
+import { Card } from "@/components/ui/Card";
+import { ScenarioForm } from "@/components/forms/ScenarioForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { pageClass } from "@/lib/ui";
 
 export default async function NewScenarioPage({
   params,
@@ -57,58 +61,12 @@ export default async function NewScenarioPage({
   }
 
   return (
-    <main>
-      <h1>New Scenario</h1>
-      {error && <p role="alert">{error}</p>}
-      <form action={create}>
-        <label>
-          Scenario Name
-          <input name="name" required />
-        </label>
-        <label>
-          Description
-          <textarea name="description" />
-        </label>
-        <label>
-          Preconditions
-          <textarea name="preconditions" />
-        </label>
-        <label>
-          Test Data
-          <textarea name="testData" />
-        </label>
-        <label>
-          Scenario Steps
-          <textarea name="steps" />
-        </label>
-        <label>
-          Expected Result
-          <textarea name="expectedResult" required />
-        </label>
-        <label>
-          Priority
-          <select name="priority" required defaultValue="MEDIUM">
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
-        </label>
-        <label>
-          Status
-          <select name="status" defaultValue="DRAFT">
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
-        </label>
-        <label>
-          Tags (comma-separated)
-          <input name="tags" />
-        </label>
-        <button type="submit">Create Scenario</button>
-      </form>
+    <main className={pageClass}>
+      <PageHeader title="New Scenario" />
+
+      <Card className="max-w-4xl">
+        <ScenarioForm action={create} submitLabel="Create Scenario" error={error} />
+      </Card>
     </main>
   );
 }

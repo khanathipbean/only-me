@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { ValidationError, createTestGroup } from "@/lib/test-groups";
+import { Card } from "@/components/ui/Card";
+import { TestGroupForm } from "@/components/forms/TestGroupForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { pageClass } from "@/lib/ui";
 
 export default async function NewTestGroupPage({
   params,
@@ -47,33 +51,12 @@ export default async function NewTestGroupPage({
   }
 
   return (
-    <main>
-      <h1>New Test Group</h1>
-      {error && <p role="alert">{error}</p>}
-      <form action={create}>
-        <label>
-          Test Group Name
-          <input name="name" required />
-        </label>
-        <label>
-          Description
-          <textarea name="description" />
-        </label>
-        <label>
-          Test Objective
-          <textarea name="testObjective" />
-        </label>
-        <label>
-          Status
-          <select name="status" defaultValue="DRAFT">
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
-        </label>
-        <button type="submit">Create Test Group</button>
-      </form>
+    <main className={pageClass}>
+      <PageHeader title="New Test Group" />
+
+      <Card className="max-w-3xl">
+        <TestGroupForm action={create} submitLabel="Create Test Group" error={error} />
+      </Card>
     </main>
   );
 }

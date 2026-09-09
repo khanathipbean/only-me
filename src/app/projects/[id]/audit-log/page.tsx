@@ -1,7 +1,20 @@
-import Link from "next/link";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { listAuditLogForProject, parseUtcDateTimeLocal } from "@/lib/audit-log";
+import { FilterForm } from "@/components/FilterForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  inputClass,
+  labelClass,
+  mutedTextClass,
+  pageClass,
+  selectClass,
+  tableClass,
+  tableWrapClass,
+  tdClass,
+  thClass,
+  trHoverClass,
+} from "@/lib/ui";
 
 export default async function AuditLogPage({
   params,
@@ -33,75 +46,89 @@ export default async function AuditLogPage({
   });
 
   return (
-    <main>
-      <p>
-        <Link href={`/projects/${projectId}`}>← Back to Project</Link>
-      </p>
-      <h1>Audit Trail</h1>
-      <p>All timestamps are shown in UTC.</p>
+    <main className={pageClass}>
+      <PageHeader title="Audit Trail" subtitle="All timestamps are shown in UTC." />
 
-      <form>
-        <input type="text" name="actorId" placeholder="Actor User ID" defaultValue={actorId} />
-        <input type="text" name="action" placeholder="Action (e.g. create, update, move)" defaultValue={action} />
-        <select name="entityType" defaultValue={entityType ?? ""}>
-          <option value="">All entity types</option>
-          <option value="Project">Project</option>
-          <option value="Scenario">Scenario</option>
-          <option value="TestGroup">Test Group</option>
-          <option value="TestCase">Test Case</option>
-        </select>
-        <label>
+      <FilterForm>
+        <label className={labelClass}>
+          Actor User ID
+          <input type="text" name="actorId" defaultValue={actorId} className={inputClass} />
+        </label>
+        <label className={labelClass}>
+          Action
+          <input
+            type="text"
+            name="action"
+            placeholder="create, update, move…"
+            defaultValue={action}
+            className={inputClass}
+          />
+        </label>
+        <label className={labelClass}>
+          Entity Type
+          <select name="entityType" defaultValue={entityType ?? ""} className={`${selectClass} min-w-40`}>
+            <option value="">All</option>
+            <option value="Project">Project</option>
+            <option value="Scenario">Scenario</option>
+            <option value="TestGroup">Test Group</option>
+            <option value="TestCase">Test Case</option>
+          </select>
+        </label>
+        <label className={labelClass}>
           From
-          <input type="datetime-local" name="from" defaultValue={from} />
+          <input type="datetime-local" name="from" defaultValue={from} className={inputClass} />
         </label>
-        <label>
+        <label className={labelClass}>
           To
-          <input type="datetime-local" name="to" defaultValue={to} />
+          <input type="datetime-local" name="to" defaultValue={to} className={inputClass} />
         </label>
-        <button type="submit">Filter</button>
-      </form>
+      </FilterForm>
 
       {result.entries.length === 0 ? (
-        <p>No matching audit log entries.</p>
+        <p className={mutedTextClass}>No matching audit log entries.</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>When (UTC)</th>
-              <th>Actor</th>
-              <th>Action</th>
-              <th>Entity</th>
-              <th>Change</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.entries.map((entry) => (
-              <tr key={entry.id}>
-                <td>{entry.occurredAt.toISOString()}</td>
-                <td>{entry.actor.name}</td>
-                <td>{entry.action}</td>
-                <td>
-                  {entry.entityType} ({entry.entityId})
-                </td>
-                <td>
-                  <details>
-                    <summary>Diff</summary>
-                    <pre>
-                      {JSON.stringify(
-                        { old: entry.oldValue, new: entry.newValue },
-                        null,
-                        2,
-                      )}
-                    </pre>
-                  </details>
-                </td>
+        <div className={tableWrapClass}>
+          <table className={tableClass}>
+            <thead>
+              <tr>
+                <th className={thClass}>When (UTC)</th>
+                <th className={thClass}>Actor</th>
+                <th className={thClass}>Action</th>
+                <th className={thClass}>Entity</th>
+                <th className={thClass}>Change</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {result.entries.map((entry) => (
+                <tr key={entry.id} className={trHoverClass}>
+                  <td className={`${tdClass} whitespace-nowrap font-mono text-xs text-muted`}>
+                    {entry.occurredAt.toISOString()}
+                  </td>
+                  <td className={tdClass}>{entry.actor.name}</td>
+                  <td className={tdClass}>{entry.action}</td>
+                  <td className={`${tdClass} text-muted`}>
+                    {entry.entityType} ({entry.entityId})
+                  </td>
+                  <td className={tdClass}>
+                    <details>
+                      <summary className="cursor-pointer text-brand">Diff</summary>
+                      <pre className="mt-2 max-w-md overflow-x-auto rounded-md bg-black/[.03] p-2 text-xs dark:bg-white/[.05]">
+                        {JSON.stringify(
+                          { old: entry.oldValue, new: entry.newValue },
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </details>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      <p>
+      <p className={mutedTextClass}>
         Page {result.page} of {result.totalPages} ({result.total} total)
       </p>
     </main>

@@ -7,7 +7,10 @@ import {
   updateTestCase,
 } from "@/lib/test-cases";
 import { parseStepsJson } from "@/lib/test-case-form";
-import { TestStepEditor } from "@/components/TestStepEditor";
+import { Card } from "@/components/ui/Card";
+import { TestCaseForm } from "@/components/forms/TestCaseForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { pageClass } from "@/lib/ui";
 
 export default async function EditTestCasePage({
   params,
@@ -63,64 +66,27 @@ export default async function EditTestCasePage({
   }
 
   return (
-    <main>
-      <h1>Edit Test Case</h1>
-      {error && <p role="alert">{error}</p>}
-      <form action={update}>
-        <label>
-          Test Case Name
-          <input name="name" defaultValue={testCase.name} required />
-        </label>
-        <label>
-          Condition
-          <textarea name="condition" defaultValue={testCase.condition ?? ""} />
-        </label>
-        <label>
-          Preconditions
-          <textarea name="preconditions" defaultValue={testCase.preconditions ?? ""} />
-        </label>
-        <label>
-          Test Data
-          <textarea name="testData" defaultValue={testCase.testData ?? ""} />
-        </label>
-        <label>Test Steps</label>
-        <TestStepEditor
-          fieldName="stepsJson"
-          initialSteps={testCase.steps.map((s) => ({ step: s.step, expectedResult: s.expectedResult }))}
+    <main className={pageClass}>
+      <PageHeader title="Edit Test Case" />
+
+      <Card className="max-w-5xl">
+        <TestCaseForm
+          action={update}
+          submitLabel="Save"
+          error={error}
+          defaults={{
+            name: testCase.name,
+            condition: testCase.condition,
+            preconditions: testCase.preconditions,
+            testData: testCase.testData,
+            expectedResult: testCase.expectedResult,
+            priority: testCase.priority,
+            testType: testCase.testType,
+            status: testCase.status,
+            steps: testCase.steps.map((s) => ({ step: s.step, expectedResult: s.expectedResult })),
+          }}
         />
-        <label>
-          Expected Result (overall)
-          <textarea name="expectedResult" defaultValue={testCase.expectedResult} required />
-        </label>
-        <label>
-          Priority
-          <select name="priority" defaultValue={testCase.priority} required>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
-        </label>
-        <label>
-          Test Type
-          <select name="testType" defaultValue={testCase.testType ?? ""}>
-            <option value="">—</option>
-            <option value="POSITIVE">Positive</option>
-            <option value="NEGATIVE">Negative</option>
-            <option value="BOUNDARY">Boundary</option>
-          </select>
-        </label>
-        <label>
-          Status
-          <select name="status" defaultValue={testCase.status}>
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
-        </label>
-        <button type="submit">Save</button>
-      </form>
+      </Card>
     </main>
   );
 }

@@ -107,6 +107,16 @@ export async function listTestGroupsForScenario(scenarioId: string) {
   });
 }
 
+/** Every Test Group across every non-archived Scenario in a Project, with its parent Scenario's
+ * name attached — used to populate "move to another Test Group" pickers. */
+export async function listTestGroupsForProject(projectId: string) {
+  return prisma.testGroup.findMany({
+    where: { deletedAt: null, scenario: { projectId, deletedAt: null } },
+    include: { scenario: { select: { name: true } } },
+    orderBy: [{ scenario: { name: "asc" } }, { sequence: "asc" }],
+  });
+}
+
 export async function getTestGroupById(id: string) {
   return prisma.testGroup.findUnique({ where: { id } });
 }

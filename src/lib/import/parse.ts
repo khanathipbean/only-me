@@ -10,6 +10,10 @@ export const IMPORT_COLUMNS = [
   "Test Steps",
   "Expected Result",
   "Priority",
+  "Scenario Description",
+  "Scenario Preconditions",
+  "Scenario Expected Result",
+  "Test Group Objective",
 ] as const;
 
 export type ImportRow = {
@@ -22,7 +26,30 @@ export type ImportRow = {
   testSteps: string;
   expectedResult: string;
   priority: string;
+  /** Only applied when this row is the one that creates a new Scenario/Test Group
+   * (find-or-create) — ignored once that container already exists, same as
+   * Scenario Name/Test Group Name being redundantly repeated across every row. */
+  scenarioDescription: string;
+  scenarioPreconditions: string;
+  scenarioExpectedResult: string;
+  testGroupObjective: string;
 };
+
+/**
+ * Source spreadsheets often type a numbered list ("1. Do X 2. Do Y 3. Do Z")
+ * into a single cell with no line breaks at all — Excel only inserts a real
+ * newline on Alt+Enter, which most people typing a quick list don't use. Left
+ * as-is, that renders as one run-on line ("...Do X2. Do Y3. Do Z..."). If the
+ * cell has no newlines already, split it into one line per detected "N."
+ * marker; a cell that already has real line breaks is left untouched.
+ */
+function splitNumberedSteps(text: string): string {
+  if (!text || text.includes("\n")) {
+    return text;
+  }
+  const parts = text.split(/(?=\d+\.\s*)/g).filter((part) => part.trim());
+  return parts.length > 1 ? parts.map((part) => part.trim()).join("\n") : text;
+}
 
 function toRow(rowNumber: number, record: Record<string, unknown>): ImportRow {
   const get = (key: string) => String(record[key] ?? "").trim();
@@ -33,9 +60,13 @@ function toRow(rowNumber: number, record: Record<string, unknown>): ImportRow {
     testGroupName: get("Test Group Name"),
     testCaseName: get("Test Case Name"),
     preconditions: get("Preconditions"),
-    testSteps: get("Test Steps"),
+    testSteps: splitNumberedSteps(get("Test Steps")),
     expectedResult: get("Expected Result"),
     priority: get("Priority"),
+    scenarioDescription: get("Scenario Description"),
+    scenarioPreconditions: get("Scenario Preconditions"),
+    scenarioExpectedResult: get("Scenario Expected Result"),
+    testGroupObjective: get("Test Group Objective"),
   };
 }
 
@@ -100,6 +131,10 @@ export function generateImportTemplateCsv(): string {
     "Enter valid credentials and click Login",
     "User is redirected to the dashboard",
     "HIGH",
+    "User can log in and is denied access appropriately when credentials are invalid",
+    "User is on the Login page",
+    "Valid credentials reach the dashboard; invalid or missing credentials are rejected with a clear message",
+    "Covers the Login page's core functional flow",
   ]
     .map((value) => (value.includes(",") ? `"${value}"` : value))
     .join(",");

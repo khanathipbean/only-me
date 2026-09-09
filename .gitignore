@@ -46,6 +46,11 @@ next-env.d.ts
 # storageKey is opaque to the rest of the app either way.
 /uploads
 
+# Persistent embedded-postgres data directory for `npm run db:dev` (local
+# dev only — the test suite uses its own throwaway instance, see
+# tests/global-setup.ts).
+/.dev-postgres-data
+
 # mattpocock/skills: symlinked mirror of .agents/skills for Claude Code.
 # core.symlinks=false on this machine makes `git add` copy file contents
 # instead of storing a symlink, so ignore it and keep .agents/skills as

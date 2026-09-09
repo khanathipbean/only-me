@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
-import type { ProjectStatus } from "@/generated/prisma/client";
+import type { ProjectRole, ProjectStatus } from "@/generated/prisma/client";
 
 export class ValidationError extends Error {}
 export class DuplicateCodeError extends Error {
@@ -86,6 +86,18 @@ export async function listProjectsForUser(
             ],
           }
         : {}),
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+/** Projects where the user holds one of `roles` — used to populate "move to another Project"
+ * pickers, where moving actually requires editor-level membership on the target. */
+export async function listProjectsForUserWithRole(userId: string, roles: ProjectRole[]) {
+  return prisma.project.findMany({
+    where: {
+      deletedAt: null,
+      members: { some: { userId, role: { in: roles } } },
     },
     orderBy: { createdAt: "desc" },
   });

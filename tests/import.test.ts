@@ -324,6 +324,116 @@ describe("import", () => {
     expect(scenario).not.toBeNull();
   });
 
+  it("sets Scenario/Test Group narrative fields from the new columns only when the row creates them", async () => {
+    const owner = await createUser("imp-owner10@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-10");
+
+    const rowData = (testCaseName: string, overrides: Record<string, string> = {}) => ({
+      rowNumber: 1,
+      projectCode: "PRJ-IMP-10",
+      scenarioName: "Scenario",
+      testGroupName: "Group",
+      testCaseName,
+      preconditions: "",
+      testSteps: "Step",
+      expectedResult: "Case-level result",
+      priority: "MEDIUM",
+      scenarioDescription: "Scenario objective",
+      scenarioPreconditions: "Scenario precondition",
+      scenarioExpectedResult: "Scenario-level result",
+      testGroupObjective: "Group objective",
+      ...overrides,
+    });
+
+    // First row creates both the Scenario and the Test Group — narrative fields should be set.
+    await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
+        rows: [{ rowNumber: 1, data: rowData("Case A") }],
+      }),
+      { params: Promise.resolve({ id: project.id }) },
+    );
+
+    const scenario = await prisma.scenario.findFirst({ where: { projectId: project.id, name: "Scenario" } });
+    expect(scenario).toMatchObject({
+      description: "Scenario objective",
+      preconditions: "Scenario precondition",
+      expectedResult: "Scenario-level result",
+    });
+
+    const testGroup = await prisma.testGroup.findFirst({ where: { scenarioId: scenario!.id, name: "Group" } });
+    expect(testGroup).toMatchObject({ testObjective: "Group objective" });
+
+    // Second row reuses the same (already-existing) Scenario/Test Group with
+    // different narrative-field values — those must NOT overwrite the container.
+    await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
+        rows: [
+          {
+            rowNumber: 1,
+            data: rowData("Case B", {
+              scenarioDescription: "Different objective",
+              scenarioPreconditions: "Different precondition",
+              scenarioExpectedResult: "Different result",
+              testGroupObjective: "Different group objective",
+            }),
+          },
+        ],
+      }),
+      { params: Promise.resolve({ id: project.id }) },
+    );
+
+    const scenarioAfter = await prisma.scenario.findFirst({
+      where: { projectId: project.id, name: "Scenario" },
+    });
+    expect(scenarioAfter).toMatchObject({
+      description: "Scenario objective",
+      preconditions: "Scenario precondition",
+      expectedResult: "Scenario-level result",
+    });
+
+    const testGroupAfter = await prisma.testGroup.findFirst({
+      where: { scenarioId: scenario!.id, name: "Group" },
+    });
+    expect(testGroupAfter).toMatchObject({ testObjective: "Group objective" });
+  });
+
+  it("falls back to the row's own Expected Result for a new Scenario when Scenario Expected Result is blank", async () => {
+    const owner = await createUser("imp-owner11@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-11");
+
+    const rowData = {
+      rowNumber: 1,
+      projectCode: "PRJ-IMP-11",
+      scenarioName: "Scenario",
+      testGroupName: "Group",
+      testCaseName: "Case",
+      preconditions: "",
+      testSteps: "Step",
+      expectedResult: "Case-level result",
+      priority: "MEDIUM",
+      scenarioDescription: "",
+      scenarioPreconditions: "",
+      scenarioExpectedResult: "",
+      testGroupObjective: "",
+    };
+
+    await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
+        rows: [{ rowNumber: 1, data: rowData }],
+      }),
+      { params: Promise.resolve({ id: project.id }) },
+    );
+
+    const scenario = await prisma.scenario.findFirst({ where: { projectId: project.id, name: "Scenario" } });
+    expect(scenario).toMatchObject({
+      description: null,
+      preconditions: null,
+      expectedResult: "Case-level result",
+    });
+  });
+
   it("writes an AuditLog entry when a duplicate row is explicitly skipped", async () => {
     const owner = await createUser("imp-owner9@example.com");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);

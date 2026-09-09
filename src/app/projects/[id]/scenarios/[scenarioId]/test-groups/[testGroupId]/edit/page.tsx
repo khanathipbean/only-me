@@ -6,6 +6,10 @@ import {
   getTestGroupWithProjectId,
   updateTestGroup,
 } from "@/lib/test-groups";
+import { Card } from "@/components/ui/Card";
+import { TestGroupForm } from "@/components/forms/TestGroupForm";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { pageClass } from "@/lib/ui";
 
 export default async function EditTestGroupPage({
   params,
@@ -56,33 +60,22 @@ export default async function EditTestGroupPage({
   }
 
   return (
-    <main>
-      <h1>Edit Test Group</h1>
-      {error && <p role="alert">{error}</p>}
-      <form action={update}>
-        <label>
-          Test Group Name
-          <input name="name" defaultValue={testGroup.name} required />
-        </label>
-        <label>
-          Description
-          <textarea name="description" defaultValue={testGroup.description ?? ""} />
-        </label>
-        <label>
-          Test Objective
-          <textarea name="testObjective" defaultValue={testGroup.testObjective ?? ""} />
-        </label>
-        <label>
-          Status
-          <select name="status" defaultValue={testGroup.status}>
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
-        </label>
-        <button type="submit">Save</button>
-      </form>
+    <main className={pageClass}>
+      <PageHeader title="Edit Test Group" />
+
+      <Card className="max-w-3xl">
+        <TestGroupForm
+          action={update}
+          submitLabel="Save"
+          error={error}
+          defaults={{
+            name: testGroup.name,
+            description: testGroup.description,
+            testObjective: testGroup.testObjective,
+            status: testGroup.status,
+          }}
+        />
+      </Card>
     </main>
   );
 }

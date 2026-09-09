@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:dev": "tsx scripts/dev-db.ts",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed-mockup": "tsx scripts/seed-mockup-data.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -23,6 +25,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24",
     "@types/pg": "^8.23.1",
@@ -32,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "prisma": "^7.10.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^5.0.0"
