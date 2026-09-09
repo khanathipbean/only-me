@@ -8,6 +8,7 @@ import {
   createTestGroup,
   listTestGroupsForScenario,
   reorderTestGroups,
+  updateTestGroup,
 } from "@/lib/test-groups";
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -16,6 +17,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestGroupForm } from "@/components/forms/TestGroupForm";
 import { Badge, workflowStatusTone } from "@/components/ui/Badge";
+import { IconLinkButton } from "@/components/ui/Button";
+import { ChevronRightIcon, EditIcon } from "@/components/icons";
 import {
   mutedTextClass,
   pageClass,
@@ -31,10 +34,15 @@ export default async function TestGroupsPage({
   searchParams,
 }: {
   params: Promise<{ id: string; scenarioId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    /** Which row's inline Edit modal to reopen after a failed save — without
+     * it a validation error would reopen every row's modal at once. */
+    editId?: string;
+  }>;
 }) {
   const { id: projectId, scenarioId } = await params;
-  const { error } = await searchParams;
+  const { error, editId } = await searchParams;
   const session = await auth();
 
   const scenario = await getScenarioById(scenarioId);
@@ -46,6 +54,41 @@ export default async function TestGroupsPage({
 
   const project = await getProjectById(projectId);
   const testGroups = await listTestGroupsForScenario(scenarioId);
+
+  const listPath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups`;
+
+  /** Bound per row: an inline Edit modal on a list needs one action per Test
+   * Group, unlike the detail page where a single closed-over id suffices. */
+  function updateAction(testGroupId: string) {
+    return async function update(formData: FormData) {
+      "use server";
+
+      const session = await auth();
+      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+
+      try {
+        await updateTestGroup(
+          testGroupId,
+          {
+            name: formData.get("name") as string,
+            description: (formData.get("description") as string) || null,
+            testObjective: (formData.get("testObjective") as string) || null,
+            status: formData.get("status") as never,
+          },
+          session!.user.id,
+        );
+      } catch (err) {
+        if (err instanceof ValidationError) {
+          redirect(
+            `${listPath}?error=${encodeURIComponent(err.message)}&editId=${testGroupId}`,
+          );
+        }
+        throw err;
+      }
+
+      redirect(listPath);
+    };
+  }
 
   async function create(formData: FormData) {
     "use server";
@@ -114,8 +157,16 @@ export default async function TestGroupsPage({
       <PageHeader
         title={`Test Groups for ${scenario.name}`}
         actions={
-          <Modal triggerLabel="+ New Test Group" title="New Test Group" openOnMount={!!error}>
-            <TestGroupForm action={create} submitLabel="Create Test Group" error={error} />
+          <Modal
+            triggerLabel="+ New Test Group"
+            title="New Test Group"
+            openOnMount={!!error && !editId}
+          >
+            <TestGroupForm
+              action={create}
+              submitLabel="Create Test Group"
+              error={editId ? undefined : error}
+            />
           </Modal>
         }
       />
@@ -126,10 +177,11 @@ export default async function TestGroupsPage({
         <div className={tableWrapClass}>
           <table className={tableClass}>
             <colgroup>
-              <col className="w-[12%]" />
-              <col className="w-[46%]" />
-              <col className="w-[21%]" />
-              <col className="w-[21%]" />
+              <col className="w-[10%]" />
+              <col className="w-[38%]" />
+              <col className="w-[18%]" />
+              <col className="w-[20%]" />
+              <col className="w-[14%]" />
             </colgroup>
             <thead>
               <tr>
@@ -137,6 +189,7 @@ export default async function TestGroupsPage({
                 <th className={thClass}>Name</th>
                 <th className={thClass}>Status</th>
                 <th className={thClass}>Reorder</th>
+                <th className={`${thClass} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -144,8 +197,12 @@ export default async function TestGroupsPage({
                 <tr key={testGroup.id} className={trHoverClass}>
                   <td className={`${tdClass} text-muted`}>{testGroup.sequence}</td>
                   <td className={tdClass}>
+                    {/* Straight to the children, not this Test Group's own
+                        detail page: drilling down is the common move, and the
+                        detail page is one click away via the arrow on the
+                        right. */}
                     <Link
-                      href={`/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroup.id}`}
+                      href={`${listPath}/${testGroup.id}/test-cases`}
                       className="font-medium text-foreground hover:text-brand hover:underline"
                     >
                       {testGroup.name}
@@ -174,6 +231,36 @@ export default async function TestGroupsPage({
                           ↓
                         </button>
                       </form>
+                    </div>
+                  </td>
+                  <td className={tdClass}>
+                    <div className="flex items-center justify-end gap-1">
+                      <Modal
+                        triggerLabel="Edit"
+                        triggerVariant="ghost"
+                        triggerIcon={<EditIcon />}
+                        title="Edit Test Group"
+                        openOnMount={!!error && editId === testGroup.id}
+                      >
+                        <TestGroupForm
+                          action={updateAction(testGroup.id)}
+                          submitLabel="Save"
+                          error={editId === testGroup.id ? error : undefined}
+                          defaults={{
+                            name: testGroup.name,
+                            description: testGroup.description,
+                            testObjective: testGroup.testObjective,
+                            status: testGroup.status,
+                          }}
+                        />
+                      </Modal>
+                      <IconLinkButton
+                        href={`${listPath}/${testGroup.id}`}
+                        aria-label={`View details for ${testGroup.name}`}
+                        title="View details"
+                      >
+                        <ChevronRightIcon />
+                      </IconLinkButton>
                     </div>
                   </td>
                 </tr>

@@ -140,6 +140,22 @@ export async function listTestCasesForTestGroup(testGroupId: string) {
   });
 }
 
+/**
+ * The same list, plus each row's steps — needed by the list page to seed the
+ * inline Edit form's TestStepEditor. Kept separate from
+ * `listTestCasesForTestGroup` rather than added as a flag so
+ * `/api/test-groups/[id]/test-cases`, which shares that function, can't grow a
+ * `steps` array in its response as a side effect, and so the return type is
+ * exact instead of a union the caller has to narrow.
+ */
+export async function listTestCasesWithStepsForTestGroup(testGroupId: string) {
+  return prisma.testCase.findMany({
+    where: { testGroupId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    include: { steps: { orderBy: { sequence: "asc" } } },
+  });
+}
+
 /** Full detail (steps, attachments) plus a synthesized `projectId` for RBAC checks. */
 export async function getTestCaseWithProjectId(id: string) {
   const testCase = await prisma.testCase.findUnique({

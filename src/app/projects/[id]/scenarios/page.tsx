@@ -2,7 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
-import { ValidationError, createScenario, isScenarioSortField, listScenariosForProject } from "@/lib/scenarios";
+import {
+  ValidationError,
+  createScenario,
+  isScenarioSortField,
+  listScenariosForProject,
+  updateScenario,
+} from "@/lib/scenarios";
 import { getProjectById } from "@/lib/projects";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
@@ -12,6 +18,8 @@ import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { ScenarioForm } from "@/components/forms/ScenarioForm";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
+import { IconLinkButton } from "@/components/ui/Button";
+import { ChevronRightIcon, EditIcon } from "@/components/icons";
 import {
   labelClass,
   mutedTextClass,
@@ -37,6 +45,10 @@ export default async function ScenariosPage({
     sortBy?: string;
     sortOrder?: string;
     error?: string;
+    /** Which row's inline Edit modal to reopen after a failed save. Without it
+     * a validation error would reopen every row's modal at once, since each
+     * only knows `?error=` is present. */
+    editId?: string;
     /** `?new=1` opens the New Scenario modal straight away — lets other pages
      * (e.g. the Dashboard's empty state) link to "create a Scenario" without
      * needing a standalone create page. */
@@ -44,7 +56,16 @@ export default async function ScenariosPage({
   }>;
 }) {
   const { id: projectId } = await params;
-  const { search, status, priority, sortBy, sortOrder, error, new: openNew } = await searchParams;
+  const {
+    search,
+    status,
+    priority,
+    sortBy,
+    sortOrder,
+    error,
+    editId,
+    new: openNew,
+  } = await searchParams;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
@@ -58,6 +79,66 @@ export default async function ScenariosPage({
     sortBy: isScenarioSortField(sortBy) ? sortBy : undefined,
     sortOrder: sortOrder === "asc" ? "asc" : undefined,
   });
+
+  /** The list URL with the active filters/sort kept, so an inline save (or a
+   * failed one) returns to the same view the user was looking at. */
+  const listQuery = new URLSearchParams(
+    Object.entries({ search, status, priority, sortBy, sortOrder }).filter(
+      (entry): entry is [string, string] => Boolean(entry[1]),
+    ),
+  );
+  const listPath = `/projects/${projectId}/scenarios`;
+  const listHref = listQuery.size > 0 ? `${listPath}?${listQuery}` : listPath;
+
+  function listHrefWithError(message: string, rowId?: string) {
+    const query = new URLSearchParams(listQuery);
+    query.set("error", message);
+    if (rowId) {
+      query.set("editId", rowId);
+    }
+    return `${listPath}?${query}`;
+  }
+
+  /** Bound per row: an inline Edit modal on a list needs one action per
+   * Scenario, unlike the detail page where a single closed-over id suffices. */
+  function updateAction(scenarioId: string) {
+    return async function update(formData: FormData) {
+      "use server";
+
+      const session = await auth();
+      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+
+      const tags = (formData.get("tags") as string)
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      try {
+        await updateScenario(
+          scenarioId,
+          {
+            name: formData.get("name") as string,
+            description: (formData.get("description") as string) || null,
+            preconditions: (formData.get("preconditions") as string) || null,
+            testData: (formData.get("testData") as string) || null,
+            steps: (formData.get("steps") as string) || null,
+            expectedResult: formData.get("expectedResult") as string,
+            priority: formData.get("priority") as never,
+            status: formData.get("status") as never,
+            tags,
+          },
+          session!.user.id,
+        );
+      } catch (err) {
+        if (err instanceof ValidationError) {
+          redirect(listHrefWithError(err.message, scenarioId));
+        }
+        throw err;
+      }
+
+      redirect(listHref);
+    };
+  }
 
   async function create(formData: FormData) {
     "use server";
@@ -89,9 +170,7 @@ export default async function ScenariosPage({
       );
     } catch (err) {
       if (err instanceof ValidationError) {
-        redirect(
-          `/projects/${projectId}/scenarios?error=${encodeURIComponent(err.message)}`,
-        );
+        redirect(listHrefWithError(err.message));
       }
       throw err;
     }
@@ -110,9 +189,13 @@ export default async function ScenariosPage({
           <Modal
             triggerLabel="+ New Scenario"
             title="New Scenario"
-            openOnMount={!!error || openNew === "1"}
+            openOnMount={(!!error && !editId) || openNew === "1"}
           >
-            <ScenarioForm action={create} submitLabel="Create Scenario" error={error} />
+            <ScenarioForm
+              action={create}
+              submitLabel="Create Scenario"
+              error={editId ? undefined : error}
+            />
           </Modal>
         }
       />
@@ -197,23 +280,28 @@ export default async function ScenariosPage({
         <div className={tableWrapClass}>
           <table className={tableClass}>
             <colgroup>
-              <col className="w-[54%]" />
-              <col className="w-[23%]" />
-              <col className="w-[23%]" />
+              <col className="w-[46%]" />
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+              <col className="w-[14%]" />
             </colgroup>
             <thead>
               <tr>
                 <th className={thClass}>Name</th>
                 <th className={thClass}>Priority</th>
                 <th className={thClass}>Status</th>
+                <th className={`${thClass} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {scenarios.map((scenario) => (
                 <tr key={scenario.id} className={trHoverClass}>
                   <td className={tdClass}>
+                    {/* Straight to the children, not this Scenario's own detail
+                        page: drilling down is the common move, and the detail
+                        page is one click away via the arrow on the right. */}
                     <Link
-                      href={`/projects/${projectId}/scenarios/${scenario.id}`}
+                      href={`/projects/${projectId}/scenarios/${scenario.id}/test-groups`}
                       className="font-medium text-foreground hover:text-brand hover:underline"
                     >
                       {scenario.name}
@@ -224,6 +312,41 @@ export default async function ScenariosPage({
                   </td>
                   <td className={tdClass}>
                     <Badge tone={workflowStatusTone(scenario.status)}>{scenario.status}</Badge>
+                  </td>
+                  <td className={tdClass}>
+                    <div className="flex items-center justify-end gap-1">
+                      <Modal
+                        triggerLabel="Edit"
+                        triggerVariant="ghost"
+                        triggerIcon={<EditIcon />}
+                        title="Edit Scenario"
+                        openOnMount={!!error && editId === scenario.id}
+                      >
+                        <ScenarioForm
+                          action={updateAction(scenario.id)}
+                          submitLabel="Save"
+                          error={editId === scenario.id ? error : undefined}
+                          defaults={{
+                            name: scenario.name,
+                            description: scenario.description,
+                            preconditions: scenario.preconditions,
+                            testData: scenario.testData,
+                            steps: scenario.steps,
+                            expectedResult: scenario.expectedResult,
+                            priority: scenario.priority,
+                            status: scenario.status,
+                            tags: scenario.tags.join(", "),
+                          }}
+                        />
+                      </Modal>
+                      <IconLinkButton
+                        href={`/projects/${projectId}/scenarios/${scenario.id}`}
+                        aria-label={`View details for ${scenario.name}`}
+                        title="View details"
+                      >
+                        <ChevronRightIcon />
+                      </IconLinkButton>
+                    </div>
                   </td>
                 </tr>
               ))}

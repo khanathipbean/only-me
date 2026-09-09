@@ -2,7 +2,12 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { EDITOR_ROLES, ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { getTestGroupWithProjectId } from "@/lib/test-groups";
-import { ValidationError, createTestCase, listTestCasesForTestGroup } from "@/lib/test-cases";
+import {
+  ValidationError,
+  createTestCase,
+  listTestCasesWithStepsForTestGroup,
+  updateTestCase,
+} from "@/lib/test-cases";
 import { parseStepsJson } from "@/lib/test-case-form";
 import { getScenarioById } from "@/lib/scenarios";
 import { getProjectById } from "@/lib/projects";
@@ -13,6 +18,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
+import { IconLinkButton } from "@/components/ui/Button";
+import { ChevronRightIcon, EditIcon } from "@/components/icons";
 import {
   mutedTextClass,
   pageClass,
@@ -28,10 +35,15 @@ export default async function TestCasesPage({
   searchParams,
 }: {
   params: Promise<{ id: string; scenarioId: string; testGroupId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    /** Which row's inline Edit modal to reopen after a failed save — without
+     * it a validation error would reopen every row's modal at once. */
+    editId?: string;
+  }>;
 }) {
   const { id: projectId, scenarioId, testGroupId } = await params;
-  const { error } = await searchParams;
+  const { error, editId } = await searchParams;
   const session = await auth();
 
   const testGroup = await getTestGroupWithProjectId(testGroupId);
@@ -44,10 +56,48 @@ export default async function TestCasesPage({
   const [project, scenario, testCases] = await Promise.all([
     getProjectById(projectId),
     getScenarioById(scenarioId),
-    listTestCasesForTestGroup(testGroupId),
+    // Steps included: each row's inline Edit modal seeds a TestStepEditor,
+    // which would silently wipe the steps if it mounted with an empty list.
+    listTestCasesWithStepsForTestGroup(testGroupId),
   ]);
 
   const basePath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}/test-cases`;
+
+  /** Bound per row: an inline Edit modal on a list needs one action per Test
+   * Case, unlike the detail page where a single closed-over id suffices. */
+  function updateAction(testCaseId: string) {
+    return async function update(formData: FormData) {
+      "use server";
+
+      const session = await auth();
+      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+
+      try {
+        await updateTestCase(
+          testCaseId,
+          {
+            name: formData.get("name") as string,
+            condition: (formData.get("condition") as string) || null,
+            preconditions: (formData.get("preconditions") as string) || null,
+            testData: (formData.get("testData") as string) || null,
+            expectedResult: formData.get("expectedResult") as string,
+            priority: formData.get("priority") as never,
+            testType: ((formData.get("testType") as string) || null) as never,
+            status: formData.get("status") as never,
+            steps: parseStepsJson(formData.get("stepsJson") as string),
+          },
+          session!.user.id,
+        );
+      } catch (err) {
+        if (err instanceof ValidationError) {
+          redirect(`${basePath}?error=${encodeURIComponent(err.message)}&editId=${testCaseId}`);
+        }
+        throw err;
+      }
+
+      redirect(basePath);
+    };
+  }
 
   async function create(formData: FormData) {
     "use server";
@@ -94,8 +144,16 @@ export default async function TestCasesPage({
       <PageHeader
         title={`Test Cases for ${testGroup.name}`}
         actions={
-          <Modal triggerLabel="+ New Test Case" title="New Test Case" openOnMount={!!error}>
-            <TestCaseForm action={create} submitLabel="Create Test Case" error={error} />
+          <Modal
+            triggerLabel="+ New Test Case"
+            title="New Test Case"
+            openOnMount={!!error && !editId}
+          >
+            <TestCaseForm
+              action={create}
+              submitLabel="Create Test Case"
+              error={editId ? undefined : error}
+            />
           </Modal>
         }
       />
@@ -106,10 +164,11 @@ export default async function TestCasesPage({
         <div className={tableWrapClass}>
           <table className={tableClass}>
             <colgroup>
-              <col className="w-[40%]" />
-              <col className="w-[20%]" />
-              <col className="w-[20%]" />
-              <col className="w-[20%]" />
+              <col className="w-[34%]" />
+              <col className="w-[18%]" />
+              <col className="w-[17%]" />
+              <col className="w-[17%]" />
+              <col className="w-[14%]" />
             </colgroup>
             <thead>
               <tr>
@@ -117,14 +176,18 @@ export default async function TestCasesPage({
                 <th className={thClass}>Priority</th>
                 <th className={thClass}>Test Result</th>
                 <th className={thClass}>Status</th>
+                <th className={`${thClass} text-right`}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {testCases.map((testCase) => (
                 <tr key={testCase.id} className={trHoverClass}>
                   <td className={tdClass}>
+                    {/* A Test Case is the leaf of the hierarchy — nothing to
+                        drill into — so the name keeps going to its own detail
+                        page, unlike the Scenario and Test Group lists. */}
                     <Link
-                      href={`/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}/test-cases/${testCase.id}`}
+                      href={`${basePath}/${testCase.id}`}
                       className="font-medium text-foreground hover:text-brand hover:underline"
                     >
                       {testCase.name}
@@ -140,6 +203,44 @@ export default async function TestCasesPage({
                   </td>
                   <td className={tdClass}>
                     <Badge tone={workflowStatusTone(testCase.status)}>{testCase.status}</Badge>
+                  </td>
+                  <td className={tdClass}>
+                    <div className="flex items-center justify-end gap-1">
+                      <Modal
+                        triggerLabel="Edit"
+                        triggerVariant="ghost"
+                        triggerIcon={<EditIcon />}
+                        title="Edit Test Case"
+                        openOnMount={!!error && editId === testCase.id}
+                      >
+                        <TestCaseForm
+                          action={updateAction(testCase.id)}
+                          submitLabel="Save"
+                          error={editId === testCase.id ? error : undefined}
+                          defaults={{
+                            name: testCase.name,
+                            condition: testCase.condition,
+                            preconditions: testCase.preconditions,
+                            testData: testCase.testData,
+                            expectedResult: testCase.expectedResult,
+                            priority: testCase.priority,
+                            testType: testCase.testType,
+                            status: testCase.status,
+                            steps: testCase.steps.map((step) => ({
+                              step: step.step,
+                              expectedResult: step.expectedResult,
+                            })),
+                          }}
+                        />
+                      </Modal>
+                      <IconLinkButton
+                        href={`${basePath}/${testCase.id}`}
+                        aria-label={`View details for ${testCase.name}`}
+                        title="View details"
+                      >
+                        <ChevronRightIcon />
+                      </IconLinkButton>
+                    </div>
                   </td>
                 </tr>
               ))}

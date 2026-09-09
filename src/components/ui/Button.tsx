@@ -45,3 +45,20 @@ export function IconButton({
     <button className={`${ICON_BUTTON_BASE_CLASS} ${VARIANT_CLASS[variant]} ${className}`} {...props} />
   );
 }
+
+/**
+ * `IconButton` that navigates — the same square as `IconButton` but rendered as
+ * a `Link`, the way `LinkButton` mirrors `Button`. Used for the per-row "open
+ * the detail page" arrow in the list tables, where a real link (middle-click,
+ * open in new tab, prefetch) is the right element and a `<button>` isn't.
+ * Pass an accessible name via `aria-label`: the icon alone leaves none.
+ */
+export function IconLinkButton({
+  variant = "ghost",
+  className = "",
+  ...props
+}: ComponentProps<typeof Link> & { variant?: ButtonVariant }) {
+  return (
+    <Link className={`${ICON_BUTTON_BASE_CLASS} ${VARIANT_CLASS[variant]} ${className}`} {...props} />
+  );
+}
