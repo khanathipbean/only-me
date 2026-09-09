@@ -100,6 +100,29 @@ a {
   color: inherit;
 }
 
+/* A `<button>` shows the plain arrow cursor by default — that's the browser's
+ * own stylesheet, and Tailwind v4's Preflight no longer overrides it the way
+ * v3 did — so every Button / IconButton / Modal trigger / Select combobox /
+ * tree row in the app rendered without a pointer. One base rule brings it back
+ * everywhere instead
+ * of a `cursor-pointer` class on each of them, and covers any future button
+ * for free. `:disabled` is excluded so a disabled control (a Pagination arrow
+ * at the first or last page) doesn't advertise itself as clickable.
+ * `<a>` and `<summary>` already get a pointer from the browser; the checkbox
+ * and the label that wraps it don't, and both toggle it when clicked. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="option"],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  label:has(> input[type="checkbox"]:not(:disabled)),
+  label:has(> input[type="radio"]:not(:disabled)) {
+    cursor: pointer;
+  }
+}
+
 /* An open <select>'s option list is drawn by the OS, not the page: its
  * corners, row height and highlight can't be reached from CSS at all. These
  * two properties are the only part browsers do hand over, and support varies
