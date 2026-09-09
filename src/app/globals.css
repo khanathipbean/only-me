@@ -53,7 +53,26 @@
 
 html {
   height: 100%;
+  /* No-JS fallback; the two rules below take over once data-theme is set. */
   color-scheme: light dark;
+  /* The one standards-blessed knob for the accents the browser paints itself:
+   * checkbox/radio fills, and in current Chromium the highlight on an open
+   * <select>'s option list. Without it those default to the browser's own
+   * blue, which clashes with the indigo brand colour everywhere else. */
+  accent-color: var(--color-brand);
+}
+
+/* Native controls the browser paints itself — the date/datetime picker and its
+ * calendar icon, scrollbars, autofill — take their light/dark rendering from
+ * color-scheme, NOT from our CSS variables. Left at `light dark` they follow
+ * the OS instead of the ThemeToggle, so forcing dark on a light machine gave a
+ * dark page with a stubbornly light date picker. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 html,
@@ -79,6 +98,35 @@ body {
 
 a {
   color: inherit;
+}
+
+/* An open <select>'s option list is drawn by the OS, not the page: its
+ * corners, row height and highlight can't be reached from CSS at all. These
+ * two properties are the only part browsers do hand over, and support varies
+ * (Chromium on Windows honours them; other platforms ignore them and fall
+ * back to the color-scheme rendering, which already matches the theme). */
+option {
+  background-color: var(--color-surface);
+  color: var(--color-foreground);
+}
+
+/* The calendar button inside a date/datetime input. The browser already
+ * inverts it for us via color-scheme, so opacity is the right knob here —
+ * `filter: invert()` would fight that and break in one of the two themes.
+ * Dimmed to sit at the same weight as the muted chevron on a <select>, and
+ * brought to full strength on hover/focus so it reads as clickable. */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]:hover::-webkit-calendar-picker-indicator,
+input[type="date"]:focus::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]:focus::-webkit-calendar-picker-indicator {
+  opacity: 1;
 }
 
 .select-field {

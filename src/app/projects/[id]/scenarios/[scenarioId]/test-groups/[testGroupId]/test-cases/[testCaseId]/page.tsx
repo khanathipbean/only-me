@@ -1,3 +1,4 @@
+import { TEST_RESULT_OPTIONS } from "@/lib/enums";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import {
@@ -27,13 +28,14 @@ import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
 import { EditIcon, TrashIcon } from "@/components/icons";
-import { inputClass, labelClass, pageClass, selectClass, textareaClass } from "@/lib/ui";
+import { inputClass, labelClass, pageClass, textareaClass } from "@/lib/ui";
 
 export default async function TestCaseDetailPage({
   params,
@@ -280,13 +282,12 @@ export default async function TestCaseDetailPage({
         <form action={updateResult} className="mt-3 flex flex-col gap-4">
           <label className={labelClass}>
             Test Result
-            <select name="testResult" defaultValue={testCase.testResult} className={selectClass}>
-              <option value="NOT_RUN">Not Run</option>
-              <option value="PASSED">Passed</option>
-              <option value="FAILED">Failed</option>
-              <option value="BLOCKED">Blocked</option>
-              <option value="SKIPPED">Skipped</option>
-            </select>
+            <Select
+              name="testResult"
+              defaultValue={testCase.testResult}
+              options={TEST_RESULT_OPTIONS}
+              ariaLabel="Test Result"
+            />
           </label>
           <label className={labelClass}>
             Notes
@@ -345,16 +346,19 @@ export default async function TestCaseDetailPage({
             <div className="flex flex-wrap items-end gap-3">
               <label className={`${labelClass} max-w-sm`}>
                 Move to another Test Group
-                <select name="targetTestGroupId" required defaultValue="" className={selectClass}>
-                  <option value="" disabled>
-                    Select a Test Group…
-                  </option>
-                  {moveTargets.map((testGroup) => (
-                    <option key={testGroup.id} value={testGroup.id}>
-                      {testGroup.scenario.name} → {testGroup.name}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  name="targetTestGroupId"
+                  defaultValue=""
+                  required
+                  options={[
+                    { value: "", label: "Select a Test Group…" },
+                    ...moveTargets.map((testGroup) => ({
+                      value: testGroup.id,
+                      label: ` → `,
+                    })),
+                  ]}
+                  ariaLabel="Move to another Test Group"
+                />
               </label>
               <Button type="submit" variant="secondary">
                 Move

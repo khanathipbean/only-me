@@ -18,13 +18,14 @@ import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testGroupBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Button, IconButton, LinkButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { TestGroupForm } from "@/components/forms/TestGroupForm";
 import { Badge, workflowStatusTone } from "@/components/ui/Badge";
 import { EditIcon, TrashIcon } from "@/components/icons";
-import { labelClass, pageClass, selectClass } from "@/lib/ui";
+import { labelClass, pageClass } from "@/lib/ui";
 
 export default async function TestGroupDetailPage({
   params,
@@ -202,16 +203,19 @@ export default async function TestGroupDetailPage({
           <div className="flex flex-wrap items-end gap-3">
             <label className={`${labelClass} max-w-sm`}>
               Move to another Scenario
-              <select name="targetScenarioId" required defaultValue="" className={selectClass}>
-                <option value="" disabled>
-                  Select a Scenario…
-                </option>
-                {moveTargets.map((targetScenario) => (
-                  <option key={targetScenario.id} value={targetScenario.id}>
-                    {targetScenario.name}
-                  </option>
-                ))}
-              </select>
+              <Select
+                name="targetScenarioId"
+                defaultValue=""
+                required
+                options={[
+                  { value: "", label: "Select a Scenario…" },
+                  ...moveTargets.map((targetScenario) => ({
+                    value: targetScenario.id,
+                    label: targetScenario.name,
+                  })),
+                ]}
+                ariaLabel="Move to another Scenario"
+              />
             </label>
             <Button type="submit" variant="secondary">
               Move

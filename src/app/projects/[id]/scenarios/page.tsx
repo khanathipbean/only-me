@@ -8,6 +8,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { nameOr, scenariosListBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { ScenarioForm } from "@/components/forms/ScenarioForm";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
@@ -15,7 +16,6 @@ import {
   labelClass,
   mutedTextClass,
   pageClass,
-  selectClass,
   inputClass,
   tableClass,
   tableWrapClass,
@@ -127,39 +127,63 @@ export default async function ScenariosPage({
         />
         <label className={labelClass}>
           Status
-          <select name="status" defaultValue={status ?? ""} className={`${selectClass} max-w-44`}>
-            <option value="">All</option>
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
+          <Select
+            name="status"
+            defaultValue={status ?? ""}
+            options={[
+              { value: "", label: "All" },
+              { value: "DRAFT", label: "Draft" },
+              { value: "READY", label: "Ready" },
+              { value: "IN_PROGRESS", label: "In Progress" },
+              { value: "COMPLETED", label: "Completed" },
+            ]}
+            ariaLabel="Status"
+            className="max-w-44"
+          />
         </label>
         <label className={labelClass}>
           Priority
-          <select name="priority" defaultValue={priority ?? ""} className={`${selectClass} max-w-40`}>
-            <option value="">All</option>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+          <Select
+            name="priority"
+            defaultValue={priority ?? ""}
+            options={[
+              { value: "", label: "All" },
+              { value: "CRITICAL", label: "Critical" },
+              { value: "HIGH", label: "High" },
+              { value: "MEDIUM", label: "Medium" },
+              { value: "LOW", label: "Low" },
+            ]}
+            ariaLabel="Priority"
+            className="max-w-40"
+          />
         </label>
         <label className={labelClass}>
           Sort By
-          <select name="sortBy" defaultValue={sortBy ?? "createdAt"} className={`${selectClass} max-w-48`}>
-            <option value="createdAt">Created date</option>
-            <option value="name">Name</option>
-            <option value="priority">Priority</option>
-            <option value="status">Status</option>
-          </select>
+          <Select
+            name="sortBy"
+            defaultValue={sortBy ?? "createdAt"}
+            options={[
+              { value: "createdAt", label: "Created date" },
+              { value: "name", label: "Name" },
+              { value: "priority", label: "Priority" },
+              { value: "status", label: "Status" },
+            ]}
+            ariaLabel="Sort By"
+            className="max-w-48"
+          />
         </label>
         <label className={labelClass}>
           Order
-          <select name="sortOrder" defaultValue={sortOrder ?? "desc"} className={`${selectClass} max-w-36`}>
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </select>
+          <Select
+            name="sortOrder"
+            defaultValue={sortOrder ?? "desc"}
+            options={[
+              { value: "desc", label: "Descending" },
+              { value: "asc", label: "Ascending" },
+            ]}
+            ariaLabel="Order"
+            className="max-w-36"
+          />
         </label>
       </FilterForm>
 
@@ -172,6 +196,11 @@ export default async function ScenariosPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            <colgroup>
+              <col className="w-[54%]" />
+              <col className="w-[23%]" />
+              <col className="w-[23%]" />
+            </colgroup>
             <thead>
               <tr>
                 <th className={thClass}>Name</th>

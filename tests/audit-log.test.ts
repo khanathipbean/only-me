@@ -134,6 +134,48 @@ describe("audit log", () => {
     expect(combinedWithNonMatchingTimeRange.total).toBe(0);
   });
 
+  it("filters by a partial, case-insensitive actor name", async () => {
+    const owner = await createUser("al-byname@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+
+    const project = await (
+      await createProjectRoute(
+        jsonRequest("http://test/api/projects", "POST", {
+          code: "PRJ-AL-NAME",
+          name: "Named Actor Project",
+          status: "DRAFT",
+        }),
+      )
+    ).json();
+
+    const params = { params: Promise.resolve({ id: project.id }) };
+
+    // createUser seeds `name` from the email, so a fragment of it matches.
+    const partial = await (
+      await getAuditLog(
+        jsonRequest(`http://test/api/projects/${project.id}/audit-log?actorName=al-byname`, "GET"),
+        params,
+      )
+    ).json();
+    expect(partial.total).toBe(1);
+
+    const differentCase = await (
+      await getAuditLog(
+        jsonRequest(`http://test/api/projects/${project.id}/audit-log?actorName=AL-BYNAME`, "GET"),
+        params,
+      )
+    ).json();
+    expect(differentCase.total).toBe(1);
+
+    const noMatch = await (
+      await getAuditLog(
+        jsonRequest(`http://test/api/projects/${project.id}/audit-log?actorName=nobody`, "GET"),
+        params,
+      )
+    ).json();
+    expect(noMatch.total).toBe(0);
+  });
+
   it("does not leak another project's entries when a legitimate member passes a cross-project actorId filter", async () => {
     const ownerA = await createUser("al-ownerC@example.com");
     const ownerB = await createUser("al-ownerD@example.com");

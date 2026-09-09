@@ -1,5 +1,8 @@
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { PRIORITY_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { inputClass, labelClass, selectClass, textareaClass } from "@/lib/ui";
+import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
 export type ScenarioFormDefaults = {
@@ -68,29 +71,31 @@ export function ScenarioForm({
         </label>
         <label className={labelClass}>
           Priority
-          <select name="priority" required defaultValue={defaults?.priority ?? "MEDIUM"} className={selectClass}>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+          <Select
+            name="priority"
+            defaultValue={defaults?.priority ?? "MEDIUM"}
+            options={PRIORITY_OPTIONS}
+            required
+            ariaLabel="Priority"
+          />
         </label>
         <label className={labelClass}>
           Status
-          <select name="status" defaultValue={defaults?.status ?? "DRAFT"} className={selectClass}>
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
+          <Select
+            name="status"
+            defaultValue={defaults?.status ?? "DRAFT"}
+            options={WORKFLOW_STATUS_OPTIONS}
+            ariaLabel="Status"
+          />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
           Tags (comma-separated)
           <input name="tags" defaultValue={defaults?.tags} className={inputClass} />
         </label>
-        <Button type="submit" className="self-end sm:col-span-2 sm:justify-self-start">
-          {submitLabel}
-        </Button>
+        <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
+          <DialogCloseButton />
+          <Button type="submit">{submitLabel}</Button>
+        </div>
       </form>
     </>
   );

@@ -5,6 +5,7 @@ import { DuplicateCodeError, ValidationError, createProject, listProjectsForUser
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { ProjectForm } from "@/components/forms/ProjectForm";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
@@ -13,7 +14,6 @@ import {
   labelClass,
   mutedTextClass,
   pageClass,
-  selectClass,
   tableClass,
   tableWrapClass,
   tdClass,
@@ -89,12 +89,18 @@ export default async function ProjectsPage({
         />
         <label className={labelClass}>
           Status
-          <select name="status" defaultValue={status ?? ""} className={`${selectClass} max-w-40`}>
-            <option value="">All</option>
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
+          <Select
+            name="status"
+            defaultValue={status ?? ""}
+            options={[
+              { value: "", label: "All" },
+              { value: "DRAFT", label: "Draft" },
+              { value: "ACTIVE", label: "Active" },
+              { value: "COMPLETED", label: "Completed" },
+            ]}
+            ariaLabel="Status"
+            className="max-w-40"
+          />
         </label>
         <label className={labelClass}>
           Owner
@@ -117,6 +123,11 @@ export default async function ProjectsPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            <colgroup>
+              <col className="w-[18%]" />
+              <col className="w-[57%]" />
+              <col className="w-[25%]" />
+            </colgroup>
             <thead>
               <tr>
                 <th className={thClass}>Code</th>

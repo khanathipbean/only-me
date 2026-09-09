@@ -17,13 +17,14 @@ import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, scenarioBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Button, IconButton, LinkButton } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ScenarioForm } from "@/components/forms/ScenarioForm";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
 import { EditIcon, TrashIcon } from "@/components/icons";
-import { labelClass, pageClass, selectClass } from "@/lib/ui";
+import { labelClass, pageClass } from "@/lib/ui";
 
 export default async function ScenarioDetailPage({
   params,
@@ -219,16 +220,19 @@ export default async function ScenarioDetailPage({
           <div className="flex flex-wrap items-end gap-3">
             <label className={`${labelClass} max-w-sm`}>
               Move to another Project
-              <select name="targetProjectId" required defaultValue="" className={selectClass}>
-                <option value="" disabled>
-                  Select a Project…
-                </option>
-                {moveTargets.map((targetProject) => (
-                  <option key={targetProject.id} value={targetProject.id}>
-                    {targetProject.code} — {targetProject.name}
-                  </option>
-                ))}
-              </select>
+              <Select
+                name="targetProjectId"
+                defaultValue=""
+                required
+                options={[
+                  { value: "", label: "Select a Project…" },
+                  ...moveTargets.map((targetProject) => ({
+                    value: targetProject.id,
+                    label: `${targetProject.code} — ${targetProject.name}`,
+                  })),
+                ]}
+                ariaLabel="Move to another Project"
+              />
             </label>
             <Button type="submit" variant="secondary">
               Move

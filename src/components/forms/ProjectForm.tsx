@@ -1,5 +1,8 @@
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { PROJECT_STATUS_OPTIONS } from "@/lib/enums";
+import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { inputClass, labelClass, selectClass, textareaClass } from "@/lib/ui";
+import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { ProjectStatus } from "@/generated/prisma/client";
 
 export type ProjectFormDefaults = {
@@ -52,15 +55,18 @@ export function ProjectForm({
         </label>
         <label className={labelClass}>
           Status
-          <select name="status" defaultValue={defaults?.status ?? "DRAFT"} required className={selectClass}>
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
+          <Select
+            name="status"
+            defaultValue={defaults?.status ?? "DRAFT"}
+            options={PROJECT_STATUS_OPTIONS}
+            required
+            ariaLabel="Status"
+          />
         </label>
-        <Button type="submit" className="self-end sm:col-span-2 sm:justify-self-start">
-          {submitLabel}
-        </Button>
+        <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
+          <DialogCloseButton />
+          <Button type="submit">{submitLabel}</Button>
+        </div>
       </form>
     </>
   );

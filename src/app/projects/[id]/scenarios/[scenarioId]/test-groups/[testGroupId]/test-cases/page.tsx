@@ -105,6 +105,12 @@ export default async function TestCasesPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            <colgroup>
+              <col className="w-[40%]" />
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+              <col className="w-[20%]" />
+            </colgroup>
             <thead>
               <tr>
                 <th className={thClass}>Name</th>

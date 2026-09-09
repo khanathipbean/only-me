@@ -2,7 +2,8 @@
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
-import { inputClass, labelClass, selectClass } from "@/lib/ui";
+import { inputClass, labelClass } from "@/lib/ui";
+import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import {
   Badge,
@@ -36,6 +37,25 @@ const STATUS_LABELS: Record<string, string> = {
   IN_PROGRESS: "In Progress",
   COMPLETED: "Completed",
 };
+
+/** Built once from the shared enum arrays: `Select` takes options as data
+ * rather than <option> children. "All" clears the filter. */
+const ALL_OPTION = { value: "", label: "All" };
+
+const TEST_RESULT_OPTIONS = [
+  ALL_OPTION,
+  ...TEST_RESULT_VALUES.map((value) => ({ value, label: TEST_RESULT_LABELS[value] })),
+];
+
+const PRIORITY_OPTIONS = [
+  ALL_OPTION,
+  ...PRIORITY_VALUES.map((value) => ({ value, label: PRIORITY_LABELS[value] })),
+];
+
+const STATUS_OPTIONS = [
+  ALL_OPTION,
+  ...WORKFLOW_STATUS_VALUES.map((value) => ({ value, label: STATUS_LABELS[value] })),
+];
 
 type TreeTestCase = {
   id: string;
@@ -213,50 +233,35 @@ export function DashboardView({ projectId }: { projectId: string }) {
           onSubmit={(event) => event.preventDefault()}
           className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4"
         >
+          {/* aria-label rather than relying on the wrapping <label>: a label
+              can only be programmatically bound to a real form control, not to
+              a custom combobox, so the visible text is decorative here. */}
           <label className={labelClass}>
             Test Result
-            <select
+            <Select
               value={filters.testResult}
-              onChange={(event) => updateFilter("testResult", event.target.value)}
-              className={selectClass}
-            >
-              <option value="">All</option>
-              {TEST_RESULT_VALUES.map((value) => (
-                <option key={value} value={value}>
-                  {TEST_RESULT_LABELS[value]}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => updateFilter("testResult", next)}
+              options={TEST_RESULT_OPTIONS}
+              ariaLabel="Test Result"
+            />
           </label>
           <label className={labelClass}>
             Priority
-            <select
+            <Select
               value={filters.priority}
-              onChange={(event) => updateFilter("priority", event.target.value)}
-              className={selectClass}
-            >
-              <option value="">All</option>
-              {PRIORITY_VALUES.map((value) => (
-                <option key={value} value={value}>
-                  {PRIORITY_LABELS[value]}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => updateFilter("priority", next)}
+              options={PRIORITY_OPTIONS}
+              ariaLabel="Priority"
+            />
           </label>
           <label className={labelClass}>
             Status
-            <select
+            <Select
               value={filters.status}
-              onChange={(event) => updateFilter("status", event.target.value)}
-              className={selectClass}
-            >
-              <option value="">All</option>
-              {WORKFLOW_STATUS_VALUES.map((value) => (
-                <option key={value} value={value}>
-                  {STATUS_LABELS[value]}
-                </option>
-              ))}
-            </select>
+              onChange={(next) => updateFilter("status", next)}
+              options={STATUS_OPTIONS}
+              ariaLabel="Status"
+            />
           </label>
           <label className={labelClass}>
             Assignee User ID

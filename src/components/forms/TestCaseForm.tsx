@@ -1,6 +1,9 @@
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { PRIORITY_OPTIONS, TEST_TYPE_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import { Select } from "@/components/ui/Select";
 import { TestStepEditor, type StepDraft } from "@/components/TestStepEditor";
 import { Button } from "@/components/ui/Button";
-import { inputClass, labelClass, selectClass, textareaClass } from "@/lib/ui";
+import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { Priority, TestType, WorkflowStatus } from "@/generated/prisma/client";
 
 export type TestCaseFormDefaults = {
@@ -69,34 +72,36 @@ export function TestCaseForm({
         </label>
         <label className={labelClass}>
           Priority
-          <select name="priority" defaultValue={defaults?.priority ?? "MEDIUM"} required className={selectClass}>
-            <option value="CRITICAL">Critical</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </select>
+          <Select
+            name="priority"
+            defaultValue={defaults?.priority ?? "MEDIUM"}
+            options={PRIORITY_OPTIONS}
+            required
+            ariaLabel="Priority"
+          />
         </label>
         <label className={labelClass}>
           Test Type
-          <select name="testType" defaultValue={defaults?.testType ?? ""} className={selectClass}>
-            <option value="">—</option>
-            <option value="POSITIVE">Positive</option>
-            <option value="NEGATIVE">Negative</option>
-            <option value="BOUNDARY">Boundary</option>
-          </select>
+          <Select
+            name="testType"
+            defaultValue={defaults?.testType ?? ""}
+            options={TEST_TYPE_OPTIONS}
+            ariaLabel="Test Type"
+          />
         </label>
         <label className={labelClass}>
           Status
-          <select name="status" defaultValue={defaults?.status ?? "DRAFT"} className={selectClass}>
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
+          <Select
+            name="status"
+            defaultValue={defaults?.status ?? "DRAFT"}
+            options={WORKFLOW_STATUS_OPTIONS}
+            ariaLabel="Status"
+          />
         </label>
-        <Button type="submit" className="self-end sm:col-span-3 sm:justify-self-start">
-          {submitLabel}
-        </Button>
+        <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-3">
+          <DialogCloseButton />
+          <Button type="submit">{submitLabel}</Button>
+        </div>
       </form>
     </>
   );

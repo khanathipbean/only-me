@@ -1,14 +1,15 @@
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
-import { listAuditLogForProject, parseUtcDateTimeLocal } from "@/lib/audit-log";
+import { AUDIT_ACTIONS, listAuditLogForProject, parseUtcDateTimeLocal } from "@/lib/audit-log";
 import { FilterForm } from "@/components/FilterForm";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
+import { Select } from "@/components/ui/Select";
 import {
   inputClass,
   labelClass,
   mutedTextClass,
   pageClass,
-  selectClass,
   tableClass,
   tableWrapClass,
   tdClass,
@@ -22,27 +23,33 @@ export default async function AuditLogPage({
 }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{
+    /** Still accepted (and still exposed by the API route) so an exact-id
+     * link keeps working, even though the filter UI searches by name. */
     actorId?: string;
+    actorName?: string;
     action?: string;
     entityType?: string;
     from?: string;
     to?: string;
     page?: string;
+    pageSize?: string;
   }>;
 }) {
   const { id: projectId } = await params;
-  const { actorId, action, entityType, from, to, page } = await searchParams;
+  const { actorId, actorName, action, entityType, from, to, page, pageSize } = await searchParams;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
   const result = await listAuditLogForProject(projectId, {
     actorId,
+    actorName,
     action,
     entityType,
     from: parseUtcDateTimeLocal(from),
     to: parseUtcDateTimeLocal(to),
     page: page ? Number(page) : undefined,
+    pageSize: pageSize ? Number(pageSize) : undefined,
   });
 
   return (
@@ -51,28 +58,43 @@ export default async function AuditLogPage({
 
       <FilterForm>
         <label className={labelClass}>
-          Actor User ID
-          <input type="text" name="actorId" defaultValue={actorId} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          Action
+          Actor User Name
           <input
             type="text"
-            name="action"
-            placeholder="create, update, move…"
-            defaultValue={action}
+            name="actorName"
+            placeholder="Search by name"
+            defaultValue={actorName}
             className={inputClass}
           />
         </label>
         <label className={labelClass}>
+          Action
+          <Select
+            name="action"
+            defaultValue={action ?? ""}
+            options={[
+              { value: "", label: "All" },
+              ...AUDIT_ACTIONS.map((value) => ({ value, label: value })),
+            ]}
+            ariaLabel="Action"
+            className="min-w-44"
+          />
+        </label>
+        <label className={labelClass}>
           Entity Type
-          <select name="entityType" defaultValue={entityType ?? ""} className={`${selectClass} min-w-40`}>
-            <option value="">All</option>
-            <option value="Project">Project</option>
-            <option value="Scenario">Scenario</option>
-            <option value="TestGroup">Test Group</option>
-            <option value="TestCase">Test Case</option>
-          </select>
+          <Select
+            name="entityType"
+            defaultValue={entityType ?? ""}
+            options={[
+              { value: "", label: "All" },
+              { value: "Project", label: "Project" },
+              { value: "Scenario", label: "Scenario" },
+              { value: "TestGroup", label: "Test Group" },
+              { value: "TestCase", label: "Test Case" },
+            ]}
+            ariaLabel="Entity Type"
+            className="min-w-40"
+          />
         </label>
         <label className={labelClass}>
           From
@@ -89,6 +111,13 @@ export default async function AuditLogPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            <colgroup>
+              <col className="w-[20%]" />
+              <col className="w-[14%]" />
+              <col className="w-[16%]" />
+              <col className="w-[36%]" />
+              <col className="w-[14%]" />
+            </colgroup>
             <thead>
               <tr>
                 <th className={thClass}>When (UTC)</th>
@@ -128,9 +157,12 @@ export default async function AuditLogPage({
         </div>
       )}
 
-      <p className={mutedTextClass}>
-        Page {result.page} of {result.totalPages} ({result.total} total)
-      </p>
+      <Pagination
+        page={result.page}
+        totalPages={result.totalPages}
+        total={result.total}
+        pageSize={result.pageSize}
+      />
     </main>
   );
 }

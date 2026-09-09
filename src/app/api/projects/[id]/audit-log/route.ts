@@ -10,6 +10,7 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
 
   const result = await listAuditLogForProject(projectId, {
     actorId: searchParams.get("actorId") ?? undefined,
+    actorName: searchParams.get("actorName") ?? undefined,
     action: searchParams.get("action") ?? undefined,
     entityType: searchParams.get("entityType") ?? undefined,
     from: parseUtcDateTimeLocal(searchParams.get("from")),

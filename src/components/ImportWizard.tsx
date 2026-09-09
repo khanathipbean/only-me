@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { checkboxClass, inputClass, selectClass, textareaClass } from "@/lib/ui";
+import { checkboxClass, inputClass, textareaClass } from "@/lib/ui";
+import { Select } from "@/components/ui/Select";
 
 type PreviewRow = {
   rowNumber: number;
@@ -21,6 +22,12 @@ type Preview = {
 };
 
 type RowChoice = { skip: boolean; duplicateResolution?: "skip" | "update" | "create_new" };
+
+const DUPLICATE_RESOLUTION_OPTIONS = [
+  { value: "skip", label: "Skip" },
+  { value: "update", label: "Update" },
+  { value: "create_new", label: "Create as New" },
+];
 
 type Summary = { succeededCount: number; failedCount: number; skippedCount: number };
 
@@ -344,24 +351,20 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                     {row.duplicate ? (
                       <label className="flex flex-col gap-1 text-xs font-medium text-muted sm:max-w-xs">
                         Duplicate resolution
-                        <select
+                        <Select
                           value={rowChoices[row.rowNumber]?.duplicateResolution ?? "skip"}
-                          onChange={(event) =>
+                          onChange={(next) =>
                             setRowChoices((prev) => ({
                               ...prev,
                               [row.rowNumber]: {
                                 ...prev[row.rowNumber],
-                                duplicateResolution: event.target
-                                  .value as RowChoice["duplicateResolution"],
+                                duplicateResolution: next as RowChoice["duplicateResolution"],
                               },
                             }))
                           }
-                          className={selectClass}
-                        >
-                          <option value="skip">Skip</option>
-                          <option value="update">Update</option>
-                          <option value="create_new">Create as New</option>
-                        </select>
+                          options={DUPLICATE_RESOLUTION_OPTIONS}
+                          ariaLabel={`Duplicate resolution for row ${row.rowNumber}`}
+                        />
                       </label>
                     ) : (
                       <label className="flex items-center gap-2 text-sm text-foreground">

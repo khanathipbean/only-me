@@ -125,6 +125,12 @@ export default async function TestGroupsPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            <colgroup>
+              <col className="w-[12%]" />
+              <col className="w-[46%]" />
+              <col className="w-[21%]" />
+              <col className="w-[21%]" />
+            </colgroup>
             <thead>
               <tr>
                 <th className={thClass}>Sequence</th>

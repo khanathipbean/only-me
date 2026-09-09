@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-const DEFAULT_PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
 
 /**
@@ -18,8 +18,30 @@ export function parseUtcDateTimeLocal(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+/** Every `action` the app writes to the audit log — the filter's dropdown
+ * options. Kept here next to the query so a newly logged action can't be
+ * added without the filter that has to find it being right beside it. */
+export const AUDIT_ACTIONS = [
+  "create",
+  "update",
+  "delete",
+  "archive",
+  "restore",
+  "duplicate",
+  "move",
+  "update-assignee",
+  "update-result",
+  "reorder-test-groups",
+  "import-create",
+  "import-update",
+  "import-skip",
+] as const;
+
 export type AuditLogFilters = {
+  /** Exact match, for callers that already hold a user id (the API route). */
   actorId?: string;
+  /** Case-insensitive partial match on the actor's name, for the UI's search box. */
+  actorName?: string;
   action?: string;
   entityType?: string;
   from?: Date;
@@ -42,6 +64,9 @@ export async function listAuditLogForProject(projectId: string, filters: AuditLo
   const where = {
     projectId,
     ...(filters.actorId ? { actorId: filters.actorId } : {}),
+    ...(filters.actorName
+      ? { actor: { name: { contains: filters.actorName, mode: "insensitive" as const } } }
+      : {}),
     ...(filters.action ? { action: filters.action } : {}),
     ...(filters.entityType ? { entityType: filters.entityType } : {}),
     ...(filters.from || filters.to

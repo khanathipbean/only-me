@@ -1,5 +1,8 @@
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { inputClass, labelClass, selectClass, textareaClass } from "@/lib/ui";
+import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { WorkflowStatus } from "@/generated/prisma/client";
 
 export type TestGroupFormDefaults = {
@@ -46,16 +49,17 @@ export function TestGroupForm({
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
           Status
-          <select name="status" defaultValue={defaults?.status ?? "DRAFT"} className={selectClass}>
-            <option value="DRAFT">Draft</option>
-            <option value="READY">Ready</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="COMPLETED">Completed</option>
-          </select>
+          <Select
+            name="status"
+            defaultValue={defaults?.status ?? "DRAFT"}
+            options={WORKFLOW_STATUS_OPTIONS}
+            ariaLabel="Status"
+          />
         </label>
-        <Button type="submit" className="self-end sm:col-span-2 sm:justify-self-start">
-          {submitLabel}
-        </Button>
+        <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
+          <DialogCloseButton />
+          <Button type="submit">{submitLabel}</Button>
+        </div>
       </form>
     </>
   );
