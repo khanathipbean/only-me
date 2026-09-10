@@ -94,7 +94,9 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
       projectId: scenario.project.id,
       projectName: scenario.project.name,
       position: "",
-      href: `/projects/${scenario.project.id}/scenarios/${scenario.id}`,
+      // Scenarios and Test Groups have no page of their own any more, so a
+      // result opens the list of what they contain.
+      href: `/projects/${scenario.project.id}/scenarios/${scenario.id}/test-groups`,
     })),
     ...testGroups.map((testGroup) => ({
       type: "TestGroup" as const,
@@ -103,7 +105,7 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
       projectId: testGroup.scenario.project.id,
       projectName: testGroup.scenario.project.name,
       position: testGroup.scenario.name,
-      href: `/projects/${testGroup.scenario.project.id}/scenarios/${testGroup.scenario.id}/test-groups/${testGroup.id}`,
+      href: `/projects/${testGroup.scenario.project.id}/scenarios/${testGroup.scenario.id}/test-groups/${testGroup.id}/test-cases`,
     })),
     ...testCases.map((testCase) => ({
       type: "TestCase" as const,

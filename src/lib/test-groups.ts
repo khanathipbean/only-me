@@ -100,9 +100,17 @@ export async function createTestGroup(
   return testGroup;
 }
 
-export async function listTestGroupsForScenario(scenarioId: string) {
+export async function listTestGroupsForScenario(
+  scenarioId: string,
+  filters: {
+    /** Show archived Test Groups instead of live ones — the only way to reach
+     * one now that archiving is driven from the list rather than a detail
+     * page that could be opened by URL. */
+    archived?: boolean;
+  } = {},
+) {
   return prisma.testGroup.findMany({
-    where: { scenarioId, deletedAt: null },
+    where: { scenarioId, deletedAt: filters.archived ? { not: null } : null },
     orderBy: { sequence: "asc" },
   });
 }
@@ -245,6 +253,28 @@ export async function getTestGroupDescendantCounts(testGroupId: string) {
     where: { testGroupId, deletedAt: null },
   });
   return { testCases };
+}
+
+/** Test Case counts for a whole page of Test Groups in one query, so the list
+ * can word each row's archive/delete confirmation without N round trips. */
+export async function getTestGroupDescendantCountsForMany(testGroupIds: string[]) {
+  const counts = new Map<string, { testCases: number }>(
+    testGroupIds.map((id) => [id, { testCases: 0 }]),
+  );
+  if (testGroupIds.length === 0) {
+    return counts;
+  }
+
+  const rows = await prisma.testCase.groupBy({
+    by: ["testGroupId"],
+    where: { testGroupId: { in: testGroupIds }, deletedAt: null },
+    _count: { _all: true },
+  });
+  for (const row of rows) {
+    counts.get(row.testGroupId)!.testCases = row._count._all;
+  }
+
+  return counts;
 }
 
 export async function archiveTestGroup(id: string, actorId: string) {

@@ -671,7 +671,7 @@ function TreeWidget({
                 onPreview({
                   type: "scenario",
                   id: scenario.id,
-                  href: `/projects/${projectId}/scenarios/${scenario.id}`,
+                  href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups`,
                   name: scenario.name,
                 })
               }
@@ -692,7 +692,7 @@ function TreeWidget({
                         onPreview({
                           type: "testGroup",
                           id: group.id,
-                          href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}`,
+                          href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}/test-cases`,
                           name: group.name,
                         })
                       }

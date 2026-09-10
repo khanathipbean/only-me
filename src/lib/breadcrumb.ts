@@ -39,27 +39,32 @@ export function scenariosListBreadcrumb(project: NamedEntity): BreadcrumbSegment
 }
 
 /**
- * Includes the Scenarios list as a clickable segment (not just the Project)
- * so that navigating up from here can restore the Scenarios list's own
- * search/filter state — the list segment is exactly what a viewer lands on
- * when they click it, and it's the segment Breadcrumb's sessionStorage
- * lookup keys off of.
+ * A Scenario's own segment points at its Test Groups list, because that is
+ * where clicking a Scenario goes now — the Scenario has no page of its own
+ * any more, its Manage lives in the row's Edit dialog. That also makes the
+ * separate "Test Groups" segment redundant, so it's gone: it would have been
+ * a second link to the very same URL.
+ *
+ * The Scenarios list stays as its own segment so navigating up can restore
+ * that list's search/filter state, which Breadcrumb keys off the href.
  */
 export function scenarioBreadcrumb(project: NamedEntity, scenario: NamedEntity): BreadcrumbSegment[] {
   return [
     ...projectBreadcrumb(project),
     scenariosListSegment(project),
-    { label: scenario.name, href: `/projects/${project.id}/scenarios/${scenario.id}` },
+    { label: scenario.name, href: testGroupsListSegment(project, scenario).href },
   ];
 }
 
+/** The Test Groups list is the Scenario's segment — nothing to add. */
 export function testGroupsListBreadcrumb(
   project: NamedEntity,
   scenario: NamedEntity,
 ): BreadcrumbSegment[] {
-  return [...scenarioBreadcrumb(project, scenario), testGroupsListSegment(project, scenario)];
+  return scenarioBreadcrumb(project, scenario);
 }
 
+/** Likewise a Test Group's segment points at its Test Cases list. */
 export function testGroupBreadcrumb(
   project: NamedEntity,
   scenario: NamedEntity,
@@ -67,10 +72,9 @@ export function testGroupBreadcrumb(
 ): BreadcrumbSegment[] {
   return [
     ...scenarioBreadcrumb(project, scenario),
-    testGroupsListSegment(project, scenario),
     {
       label: testGroup.name,
-      href: `/projects/${project.id}/scenarios/${scenario.id}/test-groups/${testGroup.id}`,
+      href: testCasesListSegment(project, scenario, testGroup).href,
     },
   ];
 }
@@ -80,12 +84,10 @@ export function testCasesListBreadcrumb(
   scenario: NamedEntity,
   testGroup: NamedEntity,
 ): BreadcrumbSegment[] {
-  return [
-    ...testGroupBreadcrumb(project, scenario, testGroup),
-    testCasesListSegment(project, scenario, testGroup),
-  ];
+  return testGroupBreadcrumb(project, scenario, testGroup);
 }
 
+/** A Test Case still has a page of its own, so it keeps a real leaf segment. */
 export function testCaseBreadcrumb(
   project: NamedEntity,
   scenario: NamedEntity,
@@ -94,7 +96,6 @@ export function testCaseBreadcrumb(
 ): BreadcrumbSegment[] {
   return [
     ...testGroupBreadcrumb(project, scenario, testGroup),
-    testCasesListSegment(project, scenario, testGroup),
     {
       label: testCase.name,
       href: `/projects/${project.id}/scenarios/${scenario.id}/test-groups/${testGroup.id}/test-cases/${testCase.id}`,

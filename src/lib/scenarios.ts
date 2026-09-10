@@ -105,12 +105,17 @@ export async function listScenariosForProject(
     priority?: Priority;
     sortBy?: ScenarioSortField;
     sortOrder?: "asc" | "desc";
+    /** Show archived Scenarios instead of live ones. Without this the list
+     * can only ever show `deletedAt: null`, which — now that archiving is
+     * driven from the list — would leave an archived Scenario unreachable and
+     * make "restorable later" a lie. */
+    archived?: boolean;
   } = {},
 ) {
   return prisma.scenario.findMany({
     where: {
       projectId,
-      deletedAt: null,
+      deletedAt: filters.archived ? { not: null } : null,
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.priority ? { priority: filters.priority } : {}),
       ...(filters.search
@@ -189,6 +194,42 @@ export async function getScenarioDescendantCounts(scenarioId: string) {
     where: { testGroupId: { in: testGroups.map((tg) => tg.id) }, deletedAt: null },
   });
   return { testGroups: testGroups.length, testCases };
+}
+
+/**
+ * Descendant counts for a whole page of Scenarios in two queries instead of
+ * two per row. The list needs them to word each row's archive/delete
+ * confirmation, and calling `getScenarioDescendantCounts` in a loop would be
+ * 2N round trips to a remote database.
+ */
+export async function getScenarioDescendantCountsForMany(scenarioIds: string[]) {
+  const counts = new Map<string, { testGroups: number; testCases: number }>(
+    scenarioIds.map((id) => [id, { testGroups: 0, testCases: 0 }]),
+  );
+  if (scenarioIds.length === 0) {
+    return counts;
+  }
+
+  const testGroups = await prisma.testGroup.findMany({
+    where: { scenarioId: { in: scenarioIds }, deletedAt: null },
+    select: { id: true, scenarioId: true },
+  });
+  for (const testGroup of testGroups) {
+    counts.get(testGroup.scenarioId)!.testGroups += 1;
+  }
+
+  const perTestGroup = await prisma.testCase.groupBy({
+    by: ["testGroupId"],
+    where: { testGroupId: { in: testGroups.map((tg) => tg.id) }, deletedAt: null },
+    _count: { _all: true },
+  });
+  const scenarioIdByTestGroupId = new Map(testGroups.map((tg) => [tg.id, tg.scenarioId]));
+  for (const row of perTestGroup) {
+    const scenarioId = scenarioIdByTestGroupId.get(row.testGroupId)!;
+    counts.get(scenarioId)!.testCases += row._count._all;
+  }
+
+  return counts;
 }
 
 export async function archiveScenario(id: string, actorId: string) {

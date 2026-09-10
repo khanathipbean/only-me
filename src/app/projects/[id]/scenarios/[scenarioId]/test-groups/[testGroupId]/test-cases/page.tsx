@@ -18,9 +18,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
-import { LinkButton } from "@/components/ui/Button";
 import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
-import { EditIcon } from "@/components/icons";
+import { RowActions } from "@/components/ui/RowActions";
 import {
   mutedTextClass,
   pageClass,
@@ -212,11 +211,14 @@ export default async function TestCasesPage({
                     </>
                   }
                   actions={
-                    <Modal
-                      triggerLabel="Edit"
-                      triggerVariant="ghost"
-                      triggerIcon={<EditIcon />}
+                    <RowActions
+                      /* Keyed on the flag so a redirect that turns it on remounts the
+                         component: `openOnMount` seeds state and is never read again,
+                         so a reused instance would ignore it and stay shut. */
+                      key={`${testCase.id}-${editId === testCase.id}`}
+                      label={testCase.name}
                       title="Edit Test Case"
+                      openHref={`${basePath}/${testCase.id}`}
                       openOnMount={!!error && editId === testCase.id}
                     >
                       <TestCaseForm
@@ -238,49 +240,40 @@ export default async function TestCasesPage({
                           })),
                         }}
                       />
-                    </Modal>
+                    </RowActions>
                   }
                   detail={
-                    <div className="flex flex-col gap-4">
-                      <DetailFields>
-                        <DetailField label="Expected Result" wide>
-                          {testCase.expectedResult}
-                        </DetailField>
-                        <DetailField label="Condition">{testCase.condition}</DetailField>
-                        <DetailField label="Preconditions">{testCase.preconditions}</DetailField>
-                        <DetailField label="Test Data">{testCase.testData}</DetailField>
-                        <DetailField label="Test Type">{testCase.testType}</DetailField>
-                        <DetailField label="Assignee">
-                          {testCase.assigneeId ?? "Unassigned"}
-                        </DetailField>
-                        <DetailField label="Notes">{testCase.notes}</DetailField>
-                        <DetailField label="Test Steps" wide>
-                          {testCase.steps.length === 0 ? null : (
-                            <ol className="flex flex-col gap-1.5">
-                              {testCase.steps.map((step, index) => (
-                                <li key={step.id} className="flex gap-2">
-                                  <span className="w-5 shrink-0 text-muted">{index + 1}.</span>
-                                  <span>
-                                    <span className="whitespace-pre-wrap">{step.step}</span>{" "}
-                                    <span className="text-muted">→</span>{" "}
-                                    <span className="whitespace-pre-wrap italic">
-                                      {step.expectedResult}
-                                    </span>
+                    <DetailFields>
+                      <DetailField label="Expected Result" wide>
+                        {testCase.expectedResult}
+                      </DetailField>
+                      <DetailField label="Condition">{testCase.condition}</DetailField>
+                      <DetailField label="Preconditions">{testCase.preconditions}</DetailField>
+                      <DetailField label="Test Data">{testCase.testData}</DetailField>
+                      <DetailField label="Test Type">{testCase.testType}</DetailField>
+                      <DetailField label="Assignee">
+                        {testCase.assigneeId ?? "Unassigned"}
+                      </DetailField>
+                      <DetailField label="Notes">{testCase.notes}</DetailField>
+                      <DetailField label="Test Steps" wide>
+                        {testCase.steps.length === 0 ? null : (
+                          <ol className="flex flex-col gap-1.5">
+                            {testCase.steps.map((step, index) => (
+                              <li key={step.id} className="flex gap-2">
+                                <span className="w-5 shrink-0 text-muted">{index + 1}.</span>
+                                <span>
+                                  <span className="whitespace-pre-wrap">{step.step}</span>{" "}
+                                  <span className="text-muted">→</span>{" "}
+                                  <span className="whitespace-pre-wrap italic">
+                                    {step.expectedResult}
                                   </span>
-                                </li>
-                              ))}
-                            </ol>
-                          )}
-                        </DetailField>
-                      </DetailFields>
-                      {/* The detail page still owns Manage, attachments and the
-                          Test Result form, so keep a way through to it. */}
-                      <div>
-                        <LinkButton href={`${basePath}/${testCase.id}`} variant="secondary">
-                          Open full page
-                        </LinkButton>
-                      </div>
-                    </div>
+                                </span>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </DetailField>
+                    </DetailFields>
                   }
                 />
               ))}

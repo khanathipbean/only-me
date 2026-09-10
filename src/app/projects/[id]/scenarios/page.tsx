@@ -4,12 +4,21 @@ import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import {
   ValidationError,
+  archiveScenario,
   createScenario,
+  deleteScenario,
+  duplicateScenario,
+  getScenarioDescendantCountsForMany,
   isScenarioSortField,
   listScenariosForProject,
+  moveScenario,
+  restoreScenario,
   updateScenario,
 } from "@/lib/scenarios";
-import { getProjectById } from "@/lib/projects";
+import { getProjectById, listProjectsForUserWithRole } from "@/lib/projects";
+import { Button } from "@/components/ui/Button";
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { EntityManageSection } from "@/components/EntityManageSection";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { nameOr, scenariosListBreadcrumb } from "@/lib/breadcrumb";
@@ -18,9 +27,8 @@ import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { ScenarioForm } from "@/components/forms/ScenarioForm";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
-import { LinkButton } from "@/components/ui/Button";
 import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
-import { EditIcon } from "@/components/icons";
+import { RowActions } from "@/components/ui/RowActions";
 import {
   labelClass,
   mutedTextClass,
@@ -44,7 +52,11 @@ export default async function ScenariosPage({
     priority?: string;
     sortBy?: string;
     sortOrder?: string;
+    /** `?archived=1` lists archived Scenarios so they can be restored. */
+    archived?: string;
     error?: string;
+    /** Surfaced inside the row's Manage section when a Move is rejected. */
+    moveError?: string;
     /** Which row's inline Edit modal to reopen after a failed save. Without it
      * a validation error would reopen every row's modal at once, since each
      * only knows `?error=` is present. */
@@ -62,7 +74,9 @@ export default async function ScenariosPage({
     priority,
     sortBy,
     sortOrder,
+    archived,
     error,
+    moveError,
     editId,
     new: openNew,
   } = await searchParams;
@@ -71,6 +85,7 @@ export default async function ScenariosPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
   const project = await getProjectById(projectId);
+  const showArchived = archived === "1";
   const hasFilters = Boolean(search || status || priority);
   const scenarios = await listScenariosForProject(projectId, {
     search,
@@ -78,25 +93,96 @@ export default async function ScenariosPage({
     priority: priority as Priority | undefined,
     sortBy: isScenarioSortField(sortBy) ? sortBy : undefined,
     sortOrder: sortOrder === "asc" ? "asc" : undefined,
+    archived: showArchived,
   });
+
+  // Batched, not per row: the Manage section needs each Scenario's descendant
+  // counts to word its confirmations, and one query per row would be N round
+  // trips to a remote database.
+  const [descendantCounts, editableProjects] = await Promise.all([
+    getScenarioDescendantCountsForMany(scenarios.map((scenario) => scenario.id)),
+    listProjectsForUserWithRole(session!.user.id, EDITOR_ROLES),
+  ]);
+  const moveTargets = editableProjects
+    .filter((target) => target.id !== projectId)
+    .map((target) => ({ value: target.id, label: `${target.code} — ${target.name}` }));
 
   /** The list URL with the active filters/sort kept, so an inline save (or a
    * failed one) returns to the same view the user was looking at. */
   const listQuery = new URLSearchParams(
-    Object.entries({ search, status, priority, sortBy, sortOrder }).filter(
+    Object.entries({ search, status, priority, sortBy, sortOrder, archived }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   );
   const listPath = `/projects/${projectId}/scenarios`;
   const listHref = listQuery.size > 0 ? `${listPath}?${listQuery}` : listPath;
 
-  function listHrefWithError(message: string, rowId?: string) {
-    const query = new URLSearchParams(listQuery);
-    query.set("error", message);
-    if (rowId) {
-      query.set("editId", rowId);
-    }
-    return `${listPath}?${query}`;
+  /** Plain strings, because a server action may only close over serialisable
+   * values. Capturing a helper *function* here made React give up encoding
+   * these actions and render `action="javascript:throw …"` — the form then
+   * only works once JS has loaded, with no no-JS fallback at all. */
+  const listQueryString = listQuery.toString();
+
+
+  function impact(scenarioId: string) {
+    const counts = descendantCounts.get(scenarioId) ?? { testGroups: 0, testCases: 0 };
+    return `${counts.testGroups} Test Group(s) and ${counts.testCases} Test Case(s)`;
+  }
+
+  /** Manage actions bound to one row. They live here now that the Scenario
+   * detail page is gone — its only unique content was this Manage card. */
+  function manageActions(scenarioId: string) {
+    return {
+      async move(formData: FormData) {
+        "use server";
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        const actorId = session!.user.id;
+        const targetProjectId = formData.get("targetProjectId") as string;
+        const targetProject = targetProjectId ? await getProjectById(targetProjectId) : null;
+        if (!targetProject || targetProject.deletedAt) {
+          const query = new URLSearchParams(listQueryString);
+          query.set("moveError", "Target Project not found or archived");
+          query.set("editId", scenarioId);
+          redirect(`${listPath}?${query}`);
+        }
+        await requireProjectRoleOrNotFound(actorId, targetProjectId, EDITOR_ROLES);
+        await moveScenario(scenarioId, targetProjectId, actorId);
+        redirect(`/projects/${targetProjectId}/scenarios`);
+      },
+      async duplicate() {
+        "use server";
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        const actorId = session!.user.id;
+        await duplicateScenario(scenarioId, actorId);
+        redirect(listHref);
+      },
+      async archive() {
+        "use server";
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        const actorId = session!.user.id;
+        await archiveScenario(scenarioId, actorId);
+        redirect(listHref);
+      },
+      async restore() {
+        "use server";
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        const actorId = session!.user.id;
+        await restoreScenario(scenarioId, actorId);
+        redirect(listHref);
+      },
+      async removeForever() {
+        "use server";
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        const actorId = session!.user.id;
+        await deleteScenario(scenarioId, actorId, true);
+        redirect(listHref);
+      },
+    };
   }
 
   /** Bound per row: an inline Edit modal on a list needs one action per
@@ -131,7 +217,10 @@ export default async function ScenariosPage({
         );
       } catch (err) {
         if (err instanceof ValidationError) {
-          redirect(listHrefWithError(err.message, scenarioId));
+          const query = new URLSearchParams(listQueryString);
+          query.set("error", err.message);
+          query.set("editId", scenarioId);
+          redirect(`${listPath}?${query}`);
         }
         throw err;
       }
@@ -151,9 +240,8 @@ export default async function ScenariosPage({
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    let scenario;
     try {
-      scenario = await createScenario(
+      await createScenario(
         projectId,
         {
           name: formData.get("name") as string,
@@ -170,12 +258,14 @@ export default async function ScenariosPage({
       );
     } catch (err) {
       if (err instanceof ValidationError) {
-        redirect(listHrefWithError(err.message));
+        const query = new URLSearchParams(listQueryString);
+        query.set("error", err.message);
+        redirect(`${listPath}?${query}`);
       }
       throw err;
     }
 
-    redirect(`/projects/${projectId}/scenarios/${scenario.id}`);
+    redirect(listHref);
   }
 
   return (
@@ -256,6 +346,19 @@ export default async function ScenariosPage({
           />
         </label>
         <label className={labelClass}>
+          Show
+          <Select
+            name="archived"
+            defaultValue={archived ?? ""}
+            options={[
+              { value: "", label: "Active" },
+              { value: "1", label: "Archived" },
+            ]}
+            ariaLabel="Show"
+            className="max-w-36"
+          />
+        </label>
+        <label className={labelClass}>
           Order
           <Select
             name="sortOrder"
@@ -272,9 +375,11 @@ export default async function ScenariosPage({
 
       {scenarios.length === 0 ? (
         <p className={mutedTextClass}>
-          {hasFilters
-            ? "No scenarios match your search/filters."
-            : "No scenarios yet. Create one to get started."}
+          {showArchived
+            ? "No archived Scenarios."
+            : hasFilters
+              ? "No scenarios match your search/filters."
+              : "No scenarios yet. Create one to get started."}
         </p>
       ) : (
         <div className={tableWrapClass}>
@@ -321,16 +426,20 @@ export default async function ScenariosPage({
                     </>
                   }
                   actions={
-                    <Modal
-                      triggerLabel="Edit"
-                      triggerVariant="ghost"
-                      triggerIcon={<EditIcon />}
+                    <RowActions
+                      /* Keyed on the flag so a redirect that turns it on remounts the
+                         component: `openOnMount` seeds state and is never read again,
+                         so a reused instance would ignore it and stay shut. */
+                      key={`${scenario.id}-${editId === scenario.id}`}
+                      label={scenario.name}
                       title="Edit Scenario"
                       openOnMount={!!error && editId === scenario.id}
                     >
                       <ScenarioForm
                         action={updateAction(scenario.id)}
                         submitLabel="Save"
+                        formId={`edit-scenario-${scenario.id}`}
+                        hideActions
                         error={editId === scenario.id ? error : undefined}
                         defaults={{
                           name: scenario.name,
@@ -344,33 +453,47 @@ export default async function ScenariosPage({
                           tags: scenario.tags.join(", "),
                         }}
                       />
-                    </Modal>
+                      <EntityManageSection
+                        moveLabel="Move to another Project"
+                        moveFieldName="targetProjectId"
+                        moveOptions={moveTargets}
+                        movePlaceholder="Select a Project…"
+                        moveAction={manageActions(scenario.id).move}
+                        moveConfirm={`Move this Scenario? It carries ${impact(scenario.id)} with it.`}
+                        moveError={editId === scenario.id ? moveError : undefined}
+                        duplicateAction={manageActions(scenario.id).duplicate}
+                        duplicateConfirm="Duplicate this Scenario?"
+                        archiveAction={manageActions(scenario.id).archive}
+                        archiveConfirm={`Archive this Scenario? It carries ${impact(scenario.id)}, kept and restorable later.`}
+                        restoreAction={manageActions(scenario.id).restore}
+                        restoreConfirm="Restore this Scenario?"
+                        deleteAction={manageActions(scenario.id).removeForever}
+                        deleteConfirm={`Delete this Scenario? It carries ${impact(scenario.id)}. This cannot be undone from the UI.`}
+                        isArchived={showArchived}
+                        trailing={
+                          <>
+                            <DialogCloseButton />
+                            <Button type="submit" form={`edit-scenario-${scenario.id}`}>
+                              Save
+                            </Button>
+                          </>
+                        }
+                      />
+                    </RowActions>
                   }
                   detail={
-                    <div className="flex flex-col gap-4">
-                      <DetailFields>
-                        <DetailField label="Expected Result" wide>
-                          {scenario.expectedResult}
-                        </DetailField>
-                        <DetailField label="Description">{scenario.description}</DetailField>
-                        <DetailField label="Preconditions">{scenario.preconditions}</DetailField>
-                        <DetailField label="Test Data">{scenario.testData}</DetailField>
-                        <DetailField label="Steps">{scenario.steps}</DetailField>
-                        <DetailField label="Tags">
-                          {scenario.tags.length > 0 ? scenario.tags.join(", ") : null}
-                        </DetailField>
-                      </DetailFields>
-                      {/* The detail page still owns Manage (move / duplicate /
-                          archive / delete), so keep a way through to it. */}
-                      <div>
-                        <LinkButton
-                          href={`/projects/${projectId}/scenarios/${scenario.id}`}
-                          variant="secondary"
-                        >
-                          Open full page
-                        </LinkButton>
-                      </div>
-                    </div>
+                    <DetailFields>
+                      <DetailField label="Expected Result" wide>
+                        {scenario.expectedResult}
+                      </DetailField>
+                      <DetailField label="Description">{scenario.description}</DetailField>
+                      <DetailField label="Preconditions">{scenario.preconditions}</DetailField>
+                      <DetailField label="Test Data">{scenario.testData}</DetailField>
+                      <DetailField label="Steps">{scenario.steps}</DetailField>
+                      <DetailField label="Tags">
+                        {scenario.tags.length > 0 ? scenario.tags.join(", ") : null}
+                      </DetailField>
+                    </DetailFields>
                   }
                 />
               ))}

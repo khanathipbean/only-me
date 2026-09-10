@@ -22,11 +22,19 @@ export function ScenarioForm({
   defaults,
   submitLabel,
   error,
+  formId,
+  hideActions = false,
 }: {
   action: (formData: FormData) => void;
   defaults?: ScenarioFormDefaults;
   submitLabel: string;
   error?: string;
+  /** Lets a submit button outside the form target it via `form="…"`, which is
+   * how the footer can sit in the same row as the Manage buttons: those are
+   * their own `<form>`s and so can never live inside this one. */
+  formId?: string;
+  /** Drops the built-in Cancel/Save row — the caller renders it instead. */
+  hideActions?: boolean;
 }) {
   return (
     <>
@@ -35,7 +43,7 @@ export function ScenarioForm({
           {error}
         </p>
       )}
-      <form action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <form id={formId} action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={`${labelClass} sm:col-span-2`}>
           Scenario Name
           <input name="name" defaultValue={defaults?.name} required className={inputClass} />
@@ -92,10 +100,12 @@ export function ScenarioForm({
           Tags (comma-separated)
           <input name="tags" defaultValue={defaults?.tags} className={inputClass} />
         </label>
-        <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
-          <DialogCloseButton />
-          <Button type="submit">{submitLabel}</Button>
-        </div>
+        {!hideActions && (
+          <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
+            <DialogCloseButton />
+            <Button type="submit">{submitLabel}</Button>
+          </div>
+        )}
       </form>
     </>
   );
