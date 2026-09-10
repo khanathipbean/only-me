@@ -5,6 +5,59 @@ import { Button, IconButton, type ButtonVariant } from "@/components/ui/Button";
 import { ClearIcon } from "@/components/icons";
 
 /**
+ * The `<dialog>` itself, with no opinion about what opens it.
+ *
+ * Split out from `Modal` so a caller that already owns a control — the row
+ * actions menu, say — can reuse the same chrome instead of copying its
+ * classes. It's driven by a boolean rather than a ref because a render prop
+ * can't cross the server/client boundary, so the opener has to live in the
+ * same client component as its state.
+ */
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) {
+      dialog.showModal();
+    } else if (!open && dialog.open) {
+      dialog.close();
+    }
+  }, [open]);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      // Esc and the backdrop close the dialog natively; `close` keeps the
+      // caller's state in step with what the browser already did.
+      onClose={onClose}
+      className="m-auto w-full max-w-2xl rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+    >
+      <div className="max-h-[85vh] overflow-y-auto p-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+          <IconButton type="button" onClick={onClose} aria-label="Close" title="Close">
+            <ClearIcon />
+          </IconButton>
+        </div>
+        {children}
+      </div>
+    </dialog>
+  );
+}
+
+/**
  * A trigger button that opens its children in a styled `<dialog>` modal,
  * instead of navigating to a separate page. `openOnMount` lets a caller
  * reopen the modal automatically after a server-action redirect carries an
