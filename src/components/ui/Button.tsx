@@ -18,7 +18,11 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
 };
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-hover",
+  /* Built from the theme's own foreground/background rather than the brand
+   * accent, so the primary button can't clash with the palette: on the dark
+   * charcoal theme it's near-white on black, on the light one near-black on
+   * white. The brand colour stays what it is — a link and focus accent. */
+  primary: "bg-foreground text-background hover:bg-foreground/85",
   secondary:
     "border border-border bg-surface text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]",
   danger: "bg-red-600 text-white hover:bg-red-700",
@@ -54,16 +58,34 @@ export function LinkButton({
 }
 
 const ICON_BUTTON_BASE_CLASS =
-  "inline-flex size-9 shrink-0 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4";
+  "inline-flex size-9 shrink-0 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-50";
+
+/** The glyph size, kept off the base class and out of `className`: it's set
+ * through the `[&>svg]` variant, which outranks any `size-*` the icon itself
+ * carries, so a caller can't enlarge a glyph by styling the icon. The button
+ * box stays 36px either way, so a bigger glyph doesn't break row alignment. */
+const ICON_SIZE_CLASS = {
+  md: "[&>svg]:size-4",
+  lg: "[&>svg]:size-6",
+} as const;
+
+export type IconSize = keyof typeof ICON_SIZE_CLASS;
 
 /** A fixed-size, perfectly centered square button for a single icon — e.g. Edit, Delete, Log out, Clear filters. */
 export function IconButton({
   variant = "ghost",
+  iconSize = "md",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  iconSize?: IconSize;
+}) {
   return (
-    <button className={`${ICON_BUTTON_BASE_CLASS} ${VARIANT_CLASS[variant]} ${className}`} {...props} />
+    <button
+      className={`${ICON_BUTTON_BASE_CLASS} ${ICON_SIZE_CLASS[iconSize]} ${VARIANT_CLASS[variant]} ${className}`}
+      {...props}
+    />
   );
 }
 
@@ -76,10 +98,17 @@ export function IconButton({
  */
 export function IconLinkButton({
   variant = "ghost",
+  iconSize = "md",
   className = "",
   ...props
-}: ComponentProps<typeof Link> & { variant?: ButtonVariant }) {
+}: ComponentProps<typeof Link> & {
+  variant?: ButtonVariant;
+  iconSize?: IconSize;
+}) {
   return (
-    <Link className={`${ICON_BUTTON_BASE_CLASS} ${VARIANT_CLASS[variant]} ${className}`} {...props} />
+    <Link
+      className={`${ICON_BUTTON_BASE_CLASS} ${ICON_SIZE_CLASS[iconSize]} ${VARIANT_CLASS[variant]} ${className}`}
+      {...props}
+    />
   );
 }

@@ -21,8 +21,8 @@ function IconBase({ className = "size-4", ...props }: IconProps) {
 export function EditIcon(props: IconProps) {
   return (
     <IconBase {...props}>
-      <path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
-      <path d="M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+      <path d="m15 5 4 4" />
     </IconBase>
   );
 }
@@ -90,6 +90,24 @@ export function EyeOffIcon(props: IconProps) {
   return (
     <IconBase {...props}>
       <path d="M3.98 8.22A10.48 10.48 0 001.93 12c1.29 4.34 5.31 7.5 10.07 7.5.99 0 1.95-.14 2.86-.4M6.23 6.23A10.45 10.45 0 0112 4.5c4.76 0 8.77 3.16 10.07 7.5a10.52 10.52 0 01-4.3 5.77M6.23 6.23L3 3m3.23 3.23l3.65 3.65m7.89 7.89L21 21m-3.23-3.23l-3.65-3.65m0 0a3 3 0 10-4.24-4.24" />
+    </IconBase>
+  );
+}
+
+export function MoreVerticalIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </IconBase>
+  );
+}
+
+export function ArrowUpRightIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M7 17 17 7M9 7h8v8" />
     </IconBase>
   );
 }
