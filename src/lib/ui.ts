@@ -12,6 +12,13 @@ const fieldBaseClass =
 
 export const inputClass = `block w-full ${fieldBaseClass} px-3 py-2 placeholder:text-muted`;
 
+/** Input that reserves room on the right for a control sitting inside it (the
+ * show/hide button on a password field). A separate export rather than
+ * `${inputClass} pr-10`, because `px-3` and `pr-10` both resolve the right
+ * padding and which one wins depends on Tailwind's emit order — the same trap
+ * the note on `fieldBaseClass` describes. */
+export const inputWithTrailingButtonClass = `block w-full ${fieldBaseClass} py-2 pr-10 pl-3 placeholder:text-muted`;
+
 /** Native `<select>`: `appearance-none` hides the browser's own arrow (which
  * sits flush against the edge and can't be repositioned), replaced by
  * `.select-field` in globals.css — a custom chevron with proper inset. */

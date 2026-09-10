@@ -4,7 +4,18 @@ import type { ButtonHTMLAttributes, ComponentProps } from "react";
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
 const BASE_CLASS =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-3.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+
+export type ButtonSize = "md" | "lg";
+
+/** Height, padding and text size live here rather than in `className` on the
+ * call site: `h-9` and `h-11` both set `height`, so appending one to the other
+ * doesn't reliably override — Tailwind's emit order decides, not the order
+ * they're written. Composing from a fixed set sidesteps that entirely. */
+const SIZE_CLASS: Record<ButtonSize, string> = {
+  md: "h-9 px-3.5 text-sm",
+  lg: "h-11 px-5 text-base",
+};
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: "bg-brand text-white hover:bg-brand-hover",
@@ -16,20 +27,30 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
 
 export function Button({
   variant = "primary",
+  size = "md",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
   return (
-    <button className={`${BASE_CLASS} ${VARIANT_CLASS[variant]} ${className}`} {...props} />
+    <button
+      className={`${BASE_CLASS} ${SIZE_CLASS[size]} ${VARIANT_CLASS[variant]} ${className}`}
+      {...props}
+    />
   );
 }
 
 export function LinkButton({
   variant = "primary",
+  size = "md",
   className = "",
   ...props
-}: ComponentProps<typeof Link> & { variant?: ButtonVariant }) {
-  return <Link className={`${BASE_CLASS} ${VARIANT_CLASS[variant]} ${className}`} {...props} />;
+}: ComponentProps<typeof Link> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  return (
+    <Link
+      className={`${BASE_CLASS} ${SIZE_CLASS[size]} ${VARIANT_CLASS[variant]} ${className}`}
+      {...props}
+    />
+  );
 }
 
 const ICON_BUTTON_BASE_CLASS =
