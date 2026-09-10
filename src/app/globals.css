@@ -28,11 +28,11 @@
  * already reference var(--color-brand) and pick up whatever value :root
  * currently holds. */
 :root[data-theme="dark"] {
-  --color-background: #0b1120;
-  --color-surface: #111827;
-  --color-foreground: #e5e7eb;
-  --color-muted: #94a3b8;
-  --color-border: #1f2937;
+  --color-background: #08090b;
+  --color-surface: #131417;
+  --color-foreground: #e8e8ea;
+  --color-muted: #9b9ca3;
+  --color-border: #26282d;
   --color-brand: #818cf8;
   --color-brand-hover: #a5b4fc;
 }
@@ -41,11 +41,11 @@
  * data-theme, so this media query only ever matters if that script never ran. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --color-background: #0b1120;
-    --color-surface: #111827;
-    --color-foreground: #e5e7eb;
-    --color-muted: #94a3b8;
-    --color-border: #1f2937;
+    --color-background: #08090b;
+    --color-surface: #131417;
+    --color-foreground: #e8e8ea;
+    --color-muted: #9b9ca3;
+    --color-border: #26282d;
     --color-brand: #818cf8;
     --color-brand-hover: #a5b4fc;
   }
