@@ -2,6 +2,7 @@
 
 import { useRef, type FormEvent, type ReactNode } from "react";
 import { Button, type ButtonVariant } from "@/components/ui/Button";
+import { dialogClass } from "@/lib/ui";
 
 /**
  * Wraps a server-action form with a styled confirmation dialog instead of
@@ -46,7 +47,7 @@ export function ConfirmForm({
 
       <dialog
         ref={dialogRef}
-        className="m-auto w-full max-w-sm rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+        className={`${dialogClass} max-w-sm`}
       >
         <div className="p-5">
           <p className="text-sm text-foreground">{confirmMessage}</p>

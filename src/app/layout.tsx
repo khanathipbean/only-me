@@ -36,7 +36,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "only-me",
+  /* `template` wraps whatever each page exports, so a tab reads e.g.
+   * "Scenarios · PROM · Blueteria"; `default` covers pages that set none. */
+  title: {
+    default: "Blueteria",
+    template: "%s · Blueteria",
+  },
   description: "Manage Scenarios, Test Groups, and Test Cases",
   icons: { icon: "/logo.png" },
 };
@@ -77,8 +82,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur">
             <div className="flex w-full flex-wrap items-center gap-3 px-6 py-3 sm:px-8 lg:px-12 xl:px-16">
               <Link href="/projects" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-                <Image src="/logo.png" alt="only-me" width={28} height={28} unoptimized />
-                only-me
+                <Image src="/logo.png" alt="Blueteria" width={28} height={28} unoptimized />
+                Blueteria
               </Link>
 
               <FilterForm action="/search" showClear={false} className="flex-1 min-w-48">

@@ -6,6 +6,8 @@ import { ProjectForm } from "@/components/forms/ProjectForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { pageClass } from "@/lib/ui";
 
+export const metadata = { title: "New Project" };
+
 export default async function NewProjectPage({
   searchParams,
 }: {

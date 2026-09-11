@@ -1,3 +1,4 @@
+import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { PRIORITY_OPTIONS, TEST_TYPE_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
@@ -38,7 +39,10 @@ export function TestCaseForm({
       )}
       <form action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label className={`${labelClass} sm:col-span-3`}>
-          Test Case Name
+          <span>
+            Test Case Name
+            <RequiredMark />
+          </span>
           <input name="name" defaultValue={defaults?.name} required className={inputClass} />
         </label>
         <label className={labelClass}>
@@ -62,7 +66,10 @@ export function TestCaseForm({
           <TestStepEditor fieldName="stepsJson" initialSteps={defaults?.steps ?? []} />
         </div>
         <label className={`${labelClass} sm:col-span-3`}>
-          Expected Result (overall)
+          <span>
+            Expected Result (overall)
+            <RequiredMark />
+          </span>
           <textarea
             name="expectedResult"
             defaultValue={defaults?.expectedResult}
@@ -71,7 +78,10 @@ export function TestCaseForm({
           />
         </label>
         <label className={labelClass}>
-          Priority
+          <span>
+            Priority
+            <RequiredMark />
+          </span>
           <Select
             name="priority"
             defaultValue={defaults?.priority ?? "MEDIUM"}

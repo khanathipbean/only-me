@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import type { ProjectRole, ProjectStatus } from "@/generated/prisma/client";
@@ -103,7 +104,9 @@ export async function listProjectsForUserWithRole(userId: string, roles: Project
   });
 }
 
-export async function getProjectById(id: string) {
+/** Wrapped in React's `cache` so `generateMetadata` and the page body, which
+ * both need this record, share one query per request instead of two. */
+export const getProjectById = cache(async (id: string) => {
   return prisma.project.findUnique({
     where: { id },
     include: {
@@ -111,7 +114,7 @@ export async function getProjectById(id: string) {
       updatedBy: { select: { id: true, name: true, email: true } },
     },
   });
-}
+});
 
 export async function updateProject(
   id: string,

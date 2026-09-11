@@ -41,6 +41,12 @@ import {
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const project = await getProjectById(id);
+  return { title: project ? `Scenarios · ${project.name}` : "Scenarios" };
+}
+
 export default async function ScenariosPage({
   params,
   searchParams,
@@ -86,7 +92,7 @@ export default async function ScenariosPage({
 
   const project = await getProjectById(projectId);
   const showArchived = archived === "1";
-  const hasFilters = Boolean(search || status || priority);
+  const hasFilters = Boolean(search || status || priority || showArchived);
   const scenarios = await listScenariosForProject(projectId, {
     search,
     status: status as WorkflowStatus | undefined,
@@ -290,7 +296,7 @@ export default async function ScenariosPage({
         }
       />
 
-      <FilterForm>
+      <FilterForm showClear={hasFilters}>
         <input
           type="text"
           name="search"

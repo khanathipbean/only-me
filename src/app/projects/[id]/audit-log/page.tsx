@@ -1,3 +1,4 @@
+import { getProjectById } from "@/lib/projects";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { AUDIT_ACTIONS, listAuditLogForProject, parseUtcDateTimeLocal } from "@/lib/audit-log";
@@ -16,6 +17,12 @@ import {
   thClass,
   trHoverClass,
 } from "@/lib/ui";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const project = await getProjectById(id);
+  return { title: project ? `Audit Trail · ${project.name}` : "Audit Trail" };
+}
 
 export default async function AuditLogPage({
   params,
@@ -41,6 +48,10 @@ export default async function AuditLogPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
+  // `page`/`pageSize` are paging, not filtering, so clearing shouldn't be
+  // offered for them alone.
+  const hasFilters = Boolean(actorId || actorName || action || entityType || from || to);
+
   const result = await listAuditLogForProject(projectId, {
     actorId,
     actorName,
@@ -56,7 +67,7 @@ export default async function AuditLogPage({
     <main className={pageClass}>
       <PageHeader title="Audit Trail" subtitle="All timestamps are shown in UTC." />
 
-      <FilterForm>
+      <FilterForm showClear={hasFilters}>
         <label className={labelClass}>
           Actor User Name
           <input

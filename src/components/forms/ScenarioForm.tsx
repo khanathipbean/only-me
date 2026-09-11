@@ -1,3 +1,4 @@
+import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { PRIORITY_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
@@ -45,7 +46,10 @@ export function ScenarioForm({
       )}
       <form id={formId} action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={`${labelClass} sm:col-span-2`}>
-          Scenario Name
+          <span>
+            Scenario Name
+            <RequiredMark />
+          </span>
           <input name="name" defaultValue={defaults?.name} required className={inputClass} />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
@@ -69,7 +73,10 @@ export function ScenarioForm({
           <textarea name="steps" defaultValue={defaults?.steps ?? ""} className={textareaClass} />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
-          Expected Result
+          <span>
+            Expected Result
+            <RequiredMark />
+          </span>
           <textarea
             name="expectedResult"
             defaultValue={defaults?.expectedResult}
@@ -78,7 +85,10 @@ export function ScenarioForm({
           />
         </label>
         <label className={labelClass}>
-          Priority
+          <span>
+            Priority
+            <RequiredMark />
+          </span>
           <Select
             name="priority"
             defaultValue={defaults?.priority ?? "MEDIUM"}

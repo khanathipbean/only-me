@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -126,9 +127,11 @@ export async function listScenariosForProject(
   });
 }
 
-export async function getScenarioById(id: string) {
+/** Wrapped in React's `cache` so `generateMetadata` and the page body, which
+ * both need this record, share one query per request instead of two. */
+export const getScenarioById = cache(async (id: string) => {
   return prisma.scenario.findUnique({ where: { id } });
-}
+});
 
 export async function updateScenario(
   id: string,

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -156,8 +157,12 @@ export async function listTestCasesWithStepsForTestGroup(testGroupId: string) {
   });
 }
 
-/** Full detail (steps, attachments) plus a synthesized `projectId` for RBAC checks. */
-export async function getTestCaseWithProjectId(id: string) {
+/**
+ * Full detail (steps, attachments) plus a synthesized `projectId` for RBAC
+ * checks. Wrapped in React's `cache` so `generateMetadata` and the page body,
+ * which both need this record, share one query per request instead of two.
+ */
+export const getTestCaseWithProjectId = cache(async (id: string) => {
   const testCase = await prisma.testCase.findUnique({
     where: { id },
     include: {
@@ -170,7 +175,7 @@ export async function getTestCaseWithProjectId(id: string) {
     return null;
   }
   return { ...testCase, projectId: testCase.testGroup.scenario.projectId };
-}
+});
 
 /** Full-field edit for ADMIN/QA_LEAD, including replacing the Test Step list when `steps` is provided. */
 export async function updateTestCase(

@@ -3,6 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button, IconButton, type ButtonVariant } from "@/components/ui/Button";
 import { ClearIcon } from "@/components/icons";
+import { dialogClass } from "@/lib/ui";
 
 /**
  * The `<dialog>` itself, with no opinion about what opens it.
@@ -42,7 +43,7 @@ export function Dialog({
       // Esc and the backdrop close the dialog natively; `close` keeps the
       // caller's state in step with what the browser already did.
       onClose={onClose}
-      className="m-auto w-full max-w-2xl rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+      className={`${dialogClass} max-w-2xl`}
     >
       <div className="max-h-[85vh] overflow-y-auto p-6">
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -107,7 +108,7 @@ export function Modal({
 
       <dialog
         ref={dialogRef}
-        className="m-auto w-full max-w-2xl rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+        className={`${dialogClass} max-w-2xl`}
       >
         <div className="max-h-[85vh] overflow-y-auto p-6">
           <div className="mb-4 flex items-center justify-between gap-4">

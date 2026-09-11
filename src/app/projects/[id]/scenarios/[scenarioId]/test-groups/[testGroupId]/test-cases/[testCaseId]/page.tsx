@@ -37,6 +37,16 @@ import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/compo
 import { EditIcon, TrashIcon } from "@/components/icons";
 import { inputClass, labelClass, pageClass, textareaClass } from "@/lib/ui";
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ testCaseId: string }>;
+}) {
+  const { testCaseId } = await params;
+  const testCase = await getTestCaseWithProjectId(testCaseId);
+  return { title: testCase?.name ?? "Test Case" };
+}
+
 export default async function TestCaseDetailPage({
   params,
   searchParams,
@@ -395,7 +405,13 @@ export default async function TestCaseDetailPage({
               confirmMessage="Delete this Test Case? This cannot be undone from the UI."
               variant="danger"
             >
-              <IconButton type="submit" variant="danger" aria-label="Delete" title="Delete">
+              <IconButton
+                type="submit"
+                variant="danger"
+                iconSize="lg"
+                aria-label="Delete"
+                title="Delete"
+              >
                 <TrashIcon />
               </IconButton>
             </ConfirmForm>

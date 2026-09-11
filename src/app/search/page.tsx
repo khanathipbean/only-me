@@ -15,6 +15,8 @@ const RESULT_TYPE_TONE: Record<string, Tone> = {
   TestCase: "green",
 };
 
+export const metadata = { title: "Search" };
+
 export default async function SearchPage({
   searchParams,
 }: {

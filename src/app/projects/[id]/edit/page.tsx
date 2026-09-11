@@ -12,6 +12,12 @@ import { ProjectForm } from "@/components/forms/ProjectForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { pageClass } from "@/lib/ui";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const project = await getProjectById(id);
+  return { title: project ? `Edit · ${project.name}` : "Edit Project" };
+}
+
 export default async function EditProjectPage({
   params,
   searchParams,

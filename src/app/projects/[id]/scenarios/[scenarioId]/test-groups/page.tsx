@@ -37,6 +37,16 @@ import {
   thClass,
 } from "@/lib/ui";
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ scenarioId: string }>;
+}) {
+  const { scenarioId } = await params;
+  const scenario = await getScenarioById(scenarioId);
+  return { title: scenario ? `Test Groups · ${scenario.name}` : "Test Groups" };
+}
+
 export default async function TestGroupsPage({
   params,
   searchParams,

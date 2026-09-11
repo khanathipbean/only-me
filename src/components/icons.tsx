@@ -30,7 +30,11 @@ export function EditIcon(props: IconProps) {
 export function TrashIcon(props: IconProps) {
   return (
     <IconBase {...props}>
-      <path d="M6 7.5h12M9.75 7.5v-.75a2.25 2.25 0 012.25-2.25h0a2.25 2.25 0 012.25 2.25v.75M9.75 11.25v6M14.25 11.25v6M7.5 7.5l.75 11.25A2.25 2.25 0 0010.5 21h3a2.25 2.25 0 002.25-2.25L16.5 7.5" />
+      {/* Lid, then a small handle above it, then a plain tapered body — no
+          ribs inside, which turn to mush once the glyph is small. */}
+      <path d="M4 7h16" />
+      <path d="M9.5 7V5.6a.6.6 0 0 1 .6-.6h3.8a.6.6 0 0 1 .6.6V7" />
+      <path d="M6.2 7.8l.85 11.3A2 2 0 0 0 9.04 21h5.92a2 2 0 0 0 1.99-1.9L17.8 7.8" />
     </IconBase>
   );
 }
@@ -108,6 +112,17 @@ export function ArrowUpRightIcon(props: IconProps) {
   return (
     <IconBase {...props}>
       <path d="M7 17 17 7M9 7h8v8" />
+    </IconBase>
+  );
+}
+
+/** A funnel with a line struck through it — clearing the filters, as opposed
+ * to `ClearIcon`, whose × means "close this". */
+export function FilterOffIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 4H3l7.2 8.5V19l3.6 2v-8.5L21 4z" />
+      <path d="M3.5 3.5l17 17" />
     </IconBase>
   );
 }

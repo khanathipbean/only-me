@@ -21,6 +21,12 @@ import { Badge, projectStatusTone } from "@/components/ui/Badge";
 import { EditIcon } from "@/components/icons";
 import { pageClass } from "@/lib/ui";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const project = await getProjectById(id);
+  return { title: project?.name ?? "Project" };
+}
+
 export default async function ProjectDetailPage({
   params,
   searchParams,

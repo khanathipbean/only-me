@@ -2,8 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, type FormEvent, type ReactNode } from "react";
-import { ClearIcon } from "@/components/icons";
-import { IconButton } from "@/components/ui/Button";
+import { FilterOffIcon } from "@/components/icons";
+import { fieldButtonClass } from "@/lib/ui";
 
 const DEBOUNCE_MS = 400;
 
@@ -16,8 +16,13 @@ const DEBOUNCE_MS = 400;
  *
  * `action` overrides the destination path (defaults to the current page —
  * e.g. the global search box always targets `/search`, regardless of which
- * page it's rendered on). `showClear` hides the "Clear filters" button for
- * cases like that single search box, where there's nothing else to clear.
+ * page it's rendered on).
+ *
+ * `showClear` decides whether the "Clear filters" button appears, and the
+ * page passes it: only the page knows which of its query parameters are
+ * filters. The URL also carries `error`, `editId`, `page` and the like, so
+ * deciding here — from the query string or the field values — would offer to
+ * clear filters when none are set.
  */
 export function FilterForm({
   action,
@@ -96,9 +101,15 @@ export function FilterForm({
     >
       {children}
       {showClear && (
-        <IconButton type="button" variant="secondary" onClick={clear} aria-label="Clear filters" title="Clear filters">
-          <ClearIcon />
-        </IconButton>
+        <button
+          type="button"
+          onClick={clear}
+          aria-label="Clear filters"
+          title="Clear filters"
+          className={fieldButtonClass}
+        >
+          <FilterOffIcon />
+        </button>
       )}
     </form>
   );

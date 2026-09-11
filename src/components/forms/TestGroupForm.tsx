@@ -1,3 +1,4 @@
+import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
@@ -40,7 +41,10 @@ export function TestGroupForm({
       )}
       <form id={formId} action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={`${labelClass} sm:col-span-2`}>
-          Test Group Name
+          <span>
+            Test Group Name
+            <RequiredMark />
+          </span>
           <input name="name" defaultValue={defaults?.name} required className={inputClass} />
         </label>
         <label className={labelClass}>

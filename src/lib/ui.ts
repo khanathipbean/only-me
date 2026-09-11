@@ -30,7 +30,30 @@ export const selectClass = `block w-full ${fieldBaseClass} select-field appearan
  * variant's 36px looks like dead space around a two-digit value. */
 export const selectCompactClass = `${fieldBaseClass} select-field appearance-none bg-no-repeat py-1.5 pl-2.5 pr-8`;
 
+/**
+ * A square button that lines up with the fields beside it — the Clear filters
+ * "×", for instance. Built from the same base, padding and text size as
+ * `inputClass`, so its height matches by construction (8px padding + a 20px
+ * glyph + 1px border on each side = 38px) instead of by a hardcoded height
+ * that would drift the moment the fields change.
+ */
+export const fieldButtonClass = `inline-flex shrink-0 items-center justify-center ${fieldBaseClass} p-2 text-muted hover:bg-black/[.03] hover:text-foreground dark:hover:bg-white/[.05] [&>svg]:size-5`;
+
 export const textareaClass = `${inputClass} min-h-24`;
+
+/**
+ * Shared `<dialog>` chrome. Glass rather than a solid panel: the surface is
+ * translucent and blurs what's behind it, echoing the login card.
+ *
+ * The tint comes from `bg-surface/75` rather than the login card's fixed
+ * `bg-white/10`, because a modal opens over either theme — a fixed white
+ * wash would be a dark smear on the light theme. Keeping the theme's own
+ * surface means every token-based control inside stays readable in both.
+ *
+ * Callers add their own `max-w-*`.
+ */
+export const dialogClass =
+  "m-auto w-full rounded-2xl border border-border bg-surface/75 p-0 text-foreground shadow-2xl ring-1 ring-white/5 backdrop-blur-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm";
 
 export const checkboxClass = "size-4 rounded border-border text-brand focus:ring-brand";
 

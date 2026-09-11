@@ -1,8 +1,15 @@
+import { getProjectById } from "@/lib/projects";
 import { auth } from "@/auth";
 import { EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { ImportWizard } from "@/components/ImportWizard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { pageClass } from "@/lib/ui";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const project = await getProjectById(id);
+  return { title: project ? `Import · ${project.name}` : "Import" };
+}
 
 export default async function ImportPage({
   params,

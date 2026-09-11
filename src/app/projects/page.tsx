@@ -22,6 +22,8 @@ import {
 } from "@/lib/ui";
 import type { ProjectStatus } from "@/generated/prisma/client";
 
+export const metadata = { title: "Projects" };
+
 export default async function ProjectsPage({
   searchParams,
 }: {
@@ -79,7 +81,7 @@ export default async function ProjectsPage({
         }
       />
 
-      <FilterForm>
+      <FilterForm showClear={hasFilters}>
         <input
           type="text"
           name="search"

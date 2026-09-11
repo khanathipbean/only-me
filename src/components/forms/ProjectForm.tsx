@@ -1,3 +1,4 @@
+import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { PROJECT_STATUS_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
@@ -34,11 +35,17 @@ export function ProjectForm({
       )}
       <form action={action} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className={labelClass}>
-          Project Code
+          <span>
+            Project Code
+            <RequiredMark />
+          </span>
           <input name="code" defaultValue={defaults?.code} required className={inputClass} />
         </label>
         <label className={labelClass}>
-          Project Name
+          <span>
+            Project Name
+            <RequiredMark />
+          </span>
           <input name="name" defaultValue={defaults?.name} required className={inputClass} />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
@@ -54,7 +61,10 @@ export function ProjectForm({
           <input name="endDate" type="date" defaultValue={defaults?.endDate} className={inputClass} />
         </label>
         <label className={labelClass}>
-          Status
+          <span>
+            Status
+            <RequiredMark />
+          </span>
           <Select
             name="status"
             defaultValue={defaults?.status ?? "DRAFT"}

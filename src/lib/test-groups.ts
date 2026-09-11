@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -129,8 +130,12 @@ export async function getTestGroupById(id: string) {
   return prisma.testGroup.findUnique({ where: { id } });
 }
 
-/** Resolves { projectId } for a Test Group id, for RBAC checks that only know the parent Project. */
-export async function getTestGroupWithProjectId(id: string) {
+/**
+ * Resolves { projectId } for a Test Group id, for RBAC checks that only know
+ * the parent Project. Wrapped in React's `cache` so `generateMetadata` and the
+ * page body, which both need it, share one query per request instead of two.
+ */
+export const getTestGroupWithProjectId = cache(async (id: string) => {
   const testGroup = await prisma.testGroup.findUnique({
     where: { id },
     include: { scenario: { select: { projectId: true } } },
@@ -139,7 +144,7 @@ export async function getTestGroupWithProjectId(id: string) {
     return null;
   }
   return { ...testGroup, projectId: testGroup.scenario.projectId };
-}
+});
 
 export async function updateTestGroup(
   id: string,
