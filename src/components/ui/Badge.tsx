@@ -7,6 +7,8 @@ const TONE_CLASS = {
   red: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
   amber: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   purple: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300",
+  cyan: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
 } as const;
 
 export type Tone = keyof typeof TONE_CLASS;
@@ -19,6 +21,8 @@ const TONE_BAR_CLASS = {
   red: "bg-red-500",
   amber: "bg-amber-500",
   purple: "bg-purple-500",
+  indigo: "bg-indigo-500",
+  cyan: "bg-cyan-500",
 } as const satisfies Record<Tone, string>;
 
 export function toneBarClass(tone: Tone): string {

@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
 import { dialogClass, inputClass, labelClass } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
+import { testCaseHref, testCasesListHref, testGroupsListHref } from "@/lib/hrefs";
 import { Card } from "@/components/ui/Card";
 import {
   Badge,
@@ -67,7 +68,15 @@ type TreeTestCase = {
 };
 
 type TreeTestGroup = { id: string; name: string; testCaseCount: number; testCases: TreeTestCase[] };
-type TreeScenario = { id: string; name: string; testCaseCount: number; testGroups: TreeTestGroup[] };
+type TreeScenario = {
+  id: string;
+  name: string;
+  /** Its ancestors, so a tree row can link into the nested URL. */
+  moduleId: string;
+  requirementId: string;
+  testCaseCount: number;
+  testGroups: TreeTestGroup[];
+};
 
 type PreviewType = "scenario" | "testGroup" | "testCase";
 
@@ -456,8 +465,8 @@ function SummaryWidget({
       <WidgetShell label="Overview">
         <p className="text-sm text-muted">This project has no Scenarios yet.</p>
         <div className="mt-3 flex gap-2">
-          <LinkButton href={`/projects/${projectId}/scenarios?new=1`} variant="primary">
-            Create a Scenario
+          <LinkButton href={`/projects/${projectId}/modules`} variant="primary">
+            Go to Modules
           </LinkButton>
           <LinkButton href={`/projects/${projectId}/import`} variant="secondary">
             Import Data
@@ -614,6 +623,17 @@ function MeterRow({
   );
 }
 
+/** A tree node carries its own ancestors, since a Scenario's URL is nested
+ *  under the Module and Requirement it belongs to. */
+function idsOf(projectId: string, scenario: TreeScenario) {
+  return {
+    projectId,
+    moduleId: scenario.moduleId,
+    requirementId: scenario.requirementId,
+    scenarioId: scenario.id,
+  };
+}
+
 function TreeWidget({
   loading,
   error,
@@ -662,8 +682,8 @@ function TreeWidget({
     return (
       <WidgetShell label="Hierarchy">
         <p className="text-sm text-muted">This project has no Scenarios yet.</p>
-        <LinkButton href={`/projects/${projectId}/scenarios?new=1`} variant="primary" className="mt-3">
-          Create a Scenario
+        <LinkButton href={`/projects/${projectId}/modules`} variant="primary" className="mt-3">
+          Go to Modules
         </LinkButton>
       </WidgetShell>
     );
@@ -689,7 +709,7 @@ function TreeWidget({
                 onPreview({
                   type: "scenario",
                   id: scenario.id,
-                  href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups`,
+                  href: testGroupsListHref(idsOf(projectId, scenario)),
                   name: scenario.name,
                 })
               }
@@ -710,7 +730,7 @@ function TreeWidget({
                         onPreview({
                           type: "testGroup",
                           id: group.id,
-                          href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}/test-cases`,
+                          href: testCasesListHref({ ...idsOf(projectId, scenario), testGroupId: group.id }),
                           name: group.name,
                         })
                       }
@@ -729,7 +749,11 @@ function TreeWidget({
                                 onPreview({
                                   type: "testCase",
                                   id: testCase.id,
-                                  href: `/projects/${projectId}/scenarios/${scenario.id}/test-groups/${group.id}/test-cases/${testCase.id}`,
+                                  href: testCaseHref({
+                                    ...idsOf(projectId, scenario),
+                                    testGroupId: group.id,
+                                    testCaseId: testCase.id,
+                                  }),
                                   name: testCase.name,
                                   assigneeName: testCase.assigneeName,
                                 })

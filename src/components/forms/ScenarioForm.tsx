@@ -7,6 +7,7 @@ import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
 export type ScenarioFormDefaults = {
+  requirementId?: string;
   name?: string;
   description?: string | null;
   preconditions?: string | null;
@@ -25,6 +26,7 @@ export function ScenarioForm({
   error,
   formId,
   hideActions = false,
+  requirements,
 }: {
   action: (formData: FormData) => void;
   defaults?: ScenarioFormDefaults;
@@ -36,6 +38,9 @@ export function ScenarioForm({
   formId?: string;
   /** Drops the built-in Cancel/Save row — the caller renders it instead. */
   hideActions?: boolean;
+  /** The project's requirements, for the parent picker. Optional through
+   * phase 1: a Scenario can still exist without one. */
+  requirements?: { id: string; name: string; code: string | null }[];
 }) {
   return (
     <>
@@ -108,6 +113,29 @@ export function ScenarioForm({
             ariaLabel="Status"
           />
         </label>
+        {requirements && (
+          <label className={labelClass}>
+            <span>
+              Requirement
+              <RequiredMark />
+            </span>
+            {/* No blank option: a Scenario must belong to a Requirement, so
+                an empty choice could only ever be rejected on submit.
+                Changing it moves the Scenario to another Requirement. */}
+            <Select
+              name="requirementId"
+              defaultValue={defaults?.requirementId ?? ""}
+              required
+              options={requirements.map((requirement) => ({
+                value: requirement.id,
+                label: requirement.code
+                  ? `${requirement.code} — ${requirement.name}`
+                  : requirement.name,
+              }))}
+              ariaLabel="Requirement"
+            />
+          </label>
+        )}
         <label className={`${labelClass} sm:col-span-2`}>
           Tags (comma-separated)
           <input name="tags" defaultValue={defaults?.tags} className={inputClass} placeholder="login, regression, smoke" />

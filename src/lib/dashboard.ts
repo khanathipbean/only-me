@@ -49,6 +49,9 @@ export type DashboardTestGroupNode = {
 export type DashboardScenarioNode = {
   id: string;
   name: string;
+  /** Its ancestors, so the tree can link into the nested URL. */
+  moduleId: string;
+  requirementId: string;
   testCaseCount: number;
   testGroups: DashboardTestGroupNode[];
 };
@@ -117,6 +120,7 @@ export async function getProjectDashboard(
       testGroups: { some: { ...testGroupWhere, testCases: { some: testCaseWhere } } },
     },
     include: {
+      requirement: { select: { moduleId: true } },
       testGroups: {
         where: { ...testGroupWhere, testCases: { some: testCaseWhere } },
         orderBy: { sequence: "asc" },
@@ -141,6 +145,8 @@ export async function getProjectDashboard(
   const tree: DashboardScenarioNode[] = scenarios.map((scenario) => ({
     id: scenario.id,
     name: scenario.name,
+    moduleId: scenario.requirement.moduleId,
+    requirementId: scenario.requirementId,
     testCaseCount: scenario.testGroups.reduce((sum, group) => sum + group.testCases.length, 0),
     testGroups: scenario.testGroups.map((group) => ({
       id: group.id,

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import {
@@ -16,6 +16,7 @@ import {
   updateScenario,
 } from "@/lib/scenarios";
 import { getProjectById, listProjectsForUserWithRole } from "@/lib/projects";
+import { getRequirementById, listRequirementsForProject } from "@/lib/requirements";
 import { Button } from "@/components/ui/Button";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { EntityManageSection } from "@/components/EntityManageSection";
@@ -45,17 +46,25 @@ import {
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const project = await getProjectById(id);
-  return { title: project ? `Scenarios · ${project.name}` : "Scenarios" };
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string; requirementId: string }>;
+}) {
+  const { id, requirementId } = await params;
+  const [project, requirement] = await Promise.all([
+    getProjectById(id),
+    getRequirementById(requirementId),
+  ]);
+  const scope = requirement ? `${requirement.name} · ${project?.name ?? ""}` : project?.name;
+  return { title: scope ? `Scenarios · ${scope}` : "Scenarios" };
 }
 
 export default async function ScenariosPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; moduleId: string; requirementId: string }>;
   searchParams: Promise<{
     search?: string;
     status?: string;
@@ -64,6 +73,7 @@ export default async function ScenariosPage({
     sortOrder?: string;
     /** `?archived=1` lists archived Scenarios so they can be restored. */
     archived?: string;
+    /** Set by clicking a Requirement, so its Scenarios open filtered. */
     page?: string;
     pageSize?: string;
     error?: string;
@@ -79,7 +89,7 @@ export default async function ScenariosPage({
     new?: string;
   }>;
 }) {
-  const { id: projectId } = await params;
+  const { id: projectId, moduleId, requirementId } = await params;
   const {
     search,
     status,
@@ -98,7 +108,22 @@ export default async function ScenariosPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
-  const project = await getProjectById(projectId);
+  const [project, requirement] = await Promise.all([
+    getProjectById(projectId),
+    getRequirementById(requirementId),
+  ]);
+
+  // Ids from another project (or another Module) would otherwise render that
+  // Requirement's name and list; the role check above only covers the project.
+  if (
+    !requirement ||
+    requirement.projectId !== projectId ||
+    requirement.moduleId !== moduleId ||
+    !requirement.module
+  ) {
+    notFound();
+  }
+
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || status || priority || showArchived);
   const result = await listScenariosForProjectPage(projectId, {
@@ -108,6 +133,7 @@ export default async function ScenariosPage({
     sortBy: isScenarioSortField(sortBy) ? sortBy : undefined,
     sortOrder: sortOrder === "asc" ? "asc" : undefined,
     archived: showArchived,
+    requirementId,
     page: page ? Number(page) : undefined,
     pageSize: pageSize ? Number(pageSize) : undefined,
   });
@@ -116,10 +142,16 @@ export default async function ScenariosPage({
   // Batched, not per row: the Manage section needs each Scenario's descendant
   // counts to word its confirmations, and one query per row would be N round
   // trips to a remote database.
-  const [descendantCounts, editableProjects] = await Promise.all([
+  const [descendantCounts, editableProjects, requirements] = await Promise.all([
     getScenarioDescendantCountsForMany(scenarios.map((scenario) => scenario.id)),
     listProjectsForUserWithRole(session!.user.id, EDITOR_ROLES),
+    listRequirementsForProject(projectId),
   ]);
+  const requirementOptions = requirements.map((requirement) => ({
+    id: requirement.id,
+    name: requirement.name,
+    code: requirement.code,
+  }));
   const moveTargets = editableProjects
     .filter((target) => target.id !== projectId)
     .map((target) => ({ value: target.id, label: `${target.code} — ${target.name}` }));
@@ -131,7 +163,7 @@ export default async function ScenariosPage({
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   );
-  const listPath = `/projects/${projectId}/scenarios`;
+  const listPath = `/projects/${projectId}/modules/${moduleId}/requirements/${requirementId}/scenarios`;
   const listHref = listQuery.size > 0 ? `${listPath}?${listQuery}` : listPath;
 
   /** Plain strings, because a server action may only close over serialisable
@@ -165,7 +197,8 @@ export default async function ScenariosPage({
         }
         await requireProjectRoleOrNotFound(actorId, targetProjectId, EDITOR_ROLES);
         await moveScenario(scenarioId, targetProjectId, actorId);
-        redirect(`/projects/${targetProjectId}/scenarios`);
+        // Re-filed on arrival, so its new home is that project's Modules list.
+        redirect(`/projects/${targetProjectId}/modules`);
       },
       async duplicate() {
         "use server";
@@ -220,6 +253,7 @@ export default async function ScenariosPage({
         await updateScenario(
           scenarioId,
           {
+            requirementId: formData.get("requirementId") as string,
             name: formData.get("name") as string,
             description: (formData.get("description") as string) || null,
             preconditions: (formData.get("preconditions") as string) || null,
@@ -261,6 +295,7 @@ export default async function ScenariosPage({
       await createScenario(
         projectId,
         {
+          requirementId: formData.get("requirementId") as string,
           name: formData.get("name") as string,
           description: (formData.get("description") as string) || null,
           preconditions: (formData.get("preconditions") as string) || null,
@@ -288,7 +323,11 @@ export default async function ScenariosPage({
   return (
     <main className={pageClass}>
       <Breadcrumb
-        segments={scenariosListBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
+        segments={scenariosListBreadcrumb(
+          { id: projectId, name: nameOr(project, projectId) },
+          requirement.module,
+          requirement,
+        )}
       />
       <PageHeader
         title="Scenarios"
@@ -298,10 +337,15 @@ export default async function ScenariosPage({
             title="New Scenario"
             openOnMount={(!!error && !editId) || openNew === "1"}
           >
+            {/* The Requirement defaults to this page's own: without it the
+                picker opens on the project's first Requirement, and a
+                Scenario created without touching it lands in another list. */}
             <ScenarioForm
               action={create}
               submitLabel="Create Scenario"
               error={editId ? undefined : error}
+              requirements={requirementOptions}
+              defaults={{ requirementId }}
             />
           </Modal>
         }
@@ -428,7 +472,7 @@ export default async function ScenariosPage({
                             detail page: drilling down is the common move, and
                             the panel below covers a quick look. */}
                         <Link
-                          href={`/projects/${projectId}/scenarios/${scenario.id}/test-groups`}
+                          href={`${listPath}/${scenario.id}/test-groups`}
                           className="font-medium text-foreground hover:text-brand hover:underline"
                         >
                           {scenario.name}
@@ -458,7 +502,9 @@ export default async function ScenariosPage({
                         formId={`edit-scenario-${scenario.id}`}
                         hideActions
                         error={editId === scenario.id ? error : undefined}
+                        requirements={requirementOptions}
                         defaults={{
+                          requirementId: scenario.requirementId,
                           name: scenario.name,
                           description: scenario.description,
                           preconditions: scenario.preconditions,

@@ -21,12 +21,14 @@ import {
 } from "@/lib/test-cases";
 import { parseStepsJson } from "@/lib/test-case-form";
 import { getTestGroupWithProjectId, listTestGroupsForProject } from "@/lib/test-groups";
-import { getScenarioById } from "@/lib/scenarios";
+import { getScenarioById, getScenarioLocation } from "@/lib/scenarios";
 import { getProjectById } from "@/lib/projects";
 import { saveAttachment } from "@/lib/attachments";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
+import { testCasesListHref } from "@/lib/hrefs";
+import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
@@ -51,10 +53,17 @@ export default async function TestCaseDetailPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string; scenarioId: string; testGroupId: string; testCaseId: string }>;
+  params: Promise<{
+    id: string;
+    moduleId: string;
+    requirementId: string;
+    scenarioId: string;
+    testGroupId: string;
+    testCaseId: string;
+  }>;
   searchParams: Promise<{ error?: string; moveError?: string }>;
 }) {
-  const { scenarioId, testGroupId, testCaseId } = await params;
+  const { moduleId, requirementId, scenarioId, testGroupId, testCaseId } = await params;
   const { error, moveError } = await searchParams;
   const session = await auth();
 
@@ -67,14 +76,33 @@ export default async function TestCaseDetailPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
   const membership = await getProjectMembership(session!.user.id, projectId);
   const canEditFully = membership?.role === "ADMIN" || membership?.role === "QA_LEAD";
-  const [project, scenario, allTestGroups] = await Promise.all([
+  const [project, scenario, requirement, allTestGroups] = await Promise.all([
     getProjectById(projectId),
     getScenarioById(scenarioId),
+    getRequirementById(requirementId),
     listTestGroupsForProject(projectId),
   ]);
+
+  // The ancestors in the URL must be this Test Case's actual ancestors.
+  if (
+    testCase.testGroup.scenarioId !== scenarioId ||
+    !scenario ||
+    scenario.requirementId !== requirementId ||
+    !requirement ||
+    requirement.moduleId !== moduleId ||
+    !requirement.module
+  ) {
+    notFound();
+  }
   const moveTargets = allTestGroups.filter((tg) => tg.id !== testGroupId);
 
-  const basePath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}/test-cases`;
+  const basePath = testCasesListHref({
+    projectId,
+    moduleId,
+    requirementId,
+    scenarioId,
+    testGroupId,
+  });
 
   async function update(formData: FormData) {
     "use server";
@@ -161,8 +189,11 @@ export default async function TestCaseDetailPage({
     }
     await requireProjectRoleOrNotFound(session!.user.id, targetTestGroup.projectId, EDITOR_ROLES);
     await moveTestCase(testCaseId, targetTestGroupId, session!.user.id);
+    const location = await getScenarioLocation(targetTestGroup.scenarioId);
     redirect(
-      `/projects/${targetTestGroup.projectId}/scenarios/${targetTestGroup.scenarioId}/test-groups/${targetTestGroupId}/test-cases/${testCaseId}`,
+      location
+        ? `${testCasesListHref({ ...location, testGroupId: targetTestGroupId })}/${testCaseId}`
+        : `${basePath}/${testCaseId}`,
     );
   }
 
@@ -203,7 +234,9 @@ export default async function TestCaseDetailPage({
       <Breadcrumb
         segments={testCaseBreadcrumb(
           { id: projectId, name: nameOr(project, projectId) },
-          { id: scenarioId, name: nameOr(scenario, scenarioId) },
+          requirement.module,
+          requirement,
+          scenario,
           testCase.testGroup,
           testCase,
         )}

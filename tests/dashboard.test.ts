@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { calculateTestProgress } from "@/lib/dashboard";
 import { createScenario } from "@/lib/scenarios";
+import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { createTestGroup } from "@/lib/test-groups";
 import { createTestCase, updateAssignee, updateTestResultAndNotes } from "@/lib/test-cases";
 
@@ -59,9 +60,12 @@ async function seedDashboardFixture(ownerId: string, code: string) {
   const user1 = await createUser(`${code}-user1@example.com`);
   const user2 = await createUser(`${code}-user2@example.com`);
 
+  // Every Scenario needs a Requirement; one shared fixture keeps the tree
+  // shape the assertions below expect.
+  const requirementId = await findOrCreateUnassignedRequirement(project.id, ownerId);
   const scenarioA = await createScenario(
     project.id,
-    { name: "Scenario A", expectedResult: "A works", priority: "MEDIUM", tags: ["smoke"] },
+    { name: "Scenario A", requirementId, expectedResult: "A works", priority: "MEDIUM", tags: ["smoke"] },
     ownerId,
   );
   const groupA1 = await createTestGroup(scenarioA.id, { name: "Group A1" }, ownerId);
@@ -83,7 +87,7 @@ async function seedDashboardFixture(ownerId: string, code: string) {
 
   const scenarioB = await createScenario(
     project.id,
-    { name: "Scenario B", expectedResult: "B works", priority: "MEDIUM", tags: ["regression"] },
+    { name: "Scenario B", requirementId, expectedResult: "B works", priority: "MEDIUM", tags: ["regression"] },
     ownerId,
   );
   const groupB1 = await createTestGroup(scenarioB.id, { name: "Group B1" }, ownerId);

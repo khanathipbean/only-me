@@ -26,6 +26,8 @@ import {
 } from "@/app/api/test-groups/[id]/test-cases/route";
 import { POST as moveTestCaseRoute } from "@/app/api/test-cases/[id]/move/route";
 
+import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+
 const mockAuth = vi.mocked(auth);
 
 function sessionFor(userId: string) {
@@ -63,10 +65,16 @@ async function createProject(code: string) {
 }
 
 async function createScenario(projectId: string, name: string) {
+  // A Scenario must belong to a Requirement; the move is expected to re-file
+  // it under the target project's own, which is what these tests assert.
+  // Whoever the test has signed in, same as the route would see.
+  const session = await auth();
+  const requirementId = await findOrCreateUnassignedRequirement(projectId, session!.user!.id!);
   return (
     await createScenarioRoute(
       jsonRequest(`http://test/api/projects/${projectId}/scenarios`, "POST", {
         name,
+        requirementId,
         expectedResult: "Result",
         priority: "MEDIUM",
       }),
