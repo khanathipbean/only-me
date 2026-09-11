@@ -25,6 +25,7 @@ export const PATCH = withEntityProjectRole(
       const scenario = await updateScenario(
         entityId,
         {
+          requirementId: body.requirementId,
           name: body.name,
           description: body.description,
           preconditions: body.preconditions,

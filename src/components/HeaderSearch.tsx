@@ -9,6 +9,8 @@ const DEBOUNCE_MS = 300;
 
 const RESULT_TYPE_TONE: Record<string, Tone> = {
   Project: "purple",
+  Module: "indigo",
+  Requirement: "cyan",
   Scenario: "blue",
   TestGroup: "amber",
   TestCase: "green",

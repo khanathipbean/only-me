@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { searchAll } from "@/lib/search";
 import { createScenario } from "@/lib/scenarios";
+import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { createTestGroup } from "@/lib/test-groups";
 import { createTestCase } from "@/lib/test-cases";
 
@@ -45,11 +46,15 @@ async function seedHierarchy(ownerId: string, code: string) {
     )
   ).json();
 
+  // A Scenario can only exist under a Requirement now, and the URL every
+  // search result points at is nested under that Requirement's Module.
+  const requirementId = await findOrCreateUnassignedRequirement(project.id, ownerId);
   const scenario = await createScenario(
     project.id,
-    { name: `Login Scenario ${code}`, expectedResult: "ok", priority: "MEDIUM" },
+    { name: `Login Scenario ${code}`, requirementId, expectedResult: "ok", priority: "MEDIUM" },
     ownerId,
   );
+  const requirement = await prisma.requirement.findUniqueOrThrow({ where: { id: requirementId } });
   const testGroup = await createTestGroup(scenario.id, { name: `Navigation Group ${code}` }, ownerId);
   const testCase = await createTestCase(
     testGroup.id,
@@ -62,7 +67,7 @@ async function seedHierarchy(ownerId: string, code: string) {
     ownerId,
   );
 
-  return { project, scenario, testGroup, testCase };
+  return { project, requirement, scenario, testGroup, testCase };
 }
 
 describe("global search", () => {
@@ -87,13 +92,15 @@ describe("global search", () => {
   it("finds a Scenario by name and by id, with correct type/project/position", async () => {
     const owner = await createUser("search-owner2@example.com");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, scenario } = await seedHierarchy(owner.id, "PRJ-SRCH-2");
+    const { project, requirement, scenario } = await seedHierarchy(owner.id, "PRJ-SRCH-2");
 
     const byName = await searchAll(owner.id, "Login Scenario PRJ-SRCH-2");
     const result = byName.find((r) => r.type === "Scenario" && r.id === scenario.id);
     expect(result).toBeDefined();
     expect(result?.projectName).toBe(project.name);
-    expect(result?.href).toBe(`/projects/${project.id}/scenarios/${scenario.id}`);
+    expect(result?.href).toBe(
+      `/projects/${project.id}/modules/${requirement.moduleId}/requirements/${requirement.id}/scenarios/${scenario.id}/test-groups`,
+    );
 
     const byId = await searchAll(owner.id, scenario.id);
     expect(byId.some((r) => r.type === "Scenario" && r.id === scenario.id)).toBe(true);

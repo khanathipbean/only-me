@@ -57,3 +57,7 @@ next-env.d.ts
 # the single source of truth. Regenerate with:
 #   npx skills@latest add mattpocock/skills
 .claude/skills
+
+# senior-mode writes a local first-run timestamp here. The plans beside it
+# are checked in; this one is per-machine state.
+.senior-mode/.welcomed

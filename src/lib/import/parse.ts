@@ -3,6 +3,8 @@ import ExcelJS from "exceljs";
 
 export const IMPORT_COLUMNS = [
   "Project Code",
+  "Module",
+  "Requirement Name",
   "Scenario Name",
   "Test Group Name",
   "Test Case Name",
@@ -19,6 +21,12 @@ export const IMPORT_COLUMNS = [
 export type ImportRow = {
   rowNumber: number;
   projectCode: string;
+  /** Optional: the Module and Requirement the Scenario is filed under. A
+   * sheet written before those levels existed leaves them blank and the
+   * import parks the rows under "Unassigned", the same name the backfill
+   * used, rather than refusing a CSV that used to be valid. */
+  moduleName: string;
+  requirementName: string;
   scenarioName: string;
   testGroupName: string;
   testCaseName: string;
@@ -56,6 +64,8 @@ function toRow(rowNumber: number, record: Record<string, unknown>): ImportRow {
   return {
     rowNumber,
     projectCode: get("Project Code"),
+    moduleName: get("Module"),
+    requirementName: get("Requirement Name"),
     scenarioName: get("Scenario Name"),
     testGroupName: get("Test Group Name"),
     testCaseName: get("Test Case Name"),
@@ -122,8 +132,11 @@ export async function parseImportFile(buffer: Buffer, fileName: string): Promise
 
 export function generateImportTemplateCsv(): string {
   const header = IMPORT_COLUMNS.join(",");
+  // Positional: this row must line up with IMPORT_COLUMNS above.
   const example = [
     "PRJ-001",
+    "Authentication",
+    "REQ-001 Users can sign in",
     "Login Flow",
     "Functional",
     "Valid login redirects to dashboard",

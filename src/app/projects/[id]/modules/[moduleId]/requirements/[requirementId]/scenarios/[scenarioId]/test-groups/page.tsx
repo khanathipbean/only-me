@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
-import { getScenarioById, listScenariosForProject } from "@/lib/scenarios";
+import {
+  getScenarioById,
+  getScenarioLocation,
+  listScenariosForProject,
+} from "@/lib/scenarios";
 import { getProjectById } from "@/lib/projects";
 import {
   ValidationError,
@@ -20,6 +24,8 @@ import {
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testGroupsListBreadcrumb } from "@/lib/breadcrumb";
+import { testGroupsListHref } from "@/lib/hrefs";
+import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestGroupForm } from "@/components/forms/TestGroupForm";
@@ -56,7 +62,7 @@ export default async function TestGroupsPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string; scenarioId: string }>;
+  params: Promise<{ id: string; moduleId: string; requirementId: string; scenarioId: string }>;
   searchParams: Promise<{
     error?: string;
     /** Surfaced inside the row's Manage section when a Move is rejected. */
@@ -70,13 +76,23 @@ export default async function TestGroupsPage({
     editId?: string;
   }>;
 }) {
-  const { id: projectId, scenarioId } = await params;
+  const { id: projectId, moduleId, requirementId, scenarioId } = await params;
   const { error, moveError, archived, page, pageSize, editId } = await searchParams;
   const showArchived = archived === "1";
   const session = await auth();
 
   const scenario = await getScenarioById(scenarioId);
-  if (!scenario) {
+  // The ancestors in the URL must be this Scenario's actual ancestors, or the
+  // breadcrumb would climb to a Requirement that doesn't own it.
+  if (
+    !scenario ||
+    scenario.projectId !== projectId ||
+    scenario.requirementId !== requirementId
+  ) {
+    notFound();
+  }
+  const requirement = await getRequirementById(requirementId);
+  if (!requirement || requirement.moduleId !== moduleId || !requirement.module) {
     notFound();
   }
 
@@ -99,7 +115,7 @@ export default async function TestGroupsPage({
     .filter((target) => target.id !== scenarioId)
     .map((target) => ({ value: target.id, label: target.name }));
 
-  const listPath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups`;
+  const listPath = testGroupsListHref({ projectId, moduleId, requirementId, scenarioId });
   const listHref = showArchived ? `${listPath}?archived=1` : listPath;
 
   function impact(testGroupId: string) {
@@ -125,7 +141,10 @@ export default async function TestGroupsPage({
         }
         await requireProjectRoleOrNotFound(actorId, target.projectId, EDITOR_ROLES);
         await moveTestGroup(testGroupId, targetScenarioId, actorId);
-        redirect(`/projects/${target.projectId}/scenarios/${targetScenarioId}/test-groups`);
+        // The target Scenario may sit under a different Requirement, so its
+        // path is resolved rather than rebuilt from this page's ids.
+        const location = await getScenarioLocation(targetScenarioId);
+        redirect(location ? testGroupsListHref(location) : listPath);
       },
       async duplicate() {
         "use server";
@@ -215,7 +234,7 @@ export default async function TestGroupsPage({
     } catch (err) {
       if (err instanceof ValidationError) {
         redirect(
-          `/projects/${projectId}/scenarios/${scenarioId}/test-groups?error=${encodeURIComponent(err.message)}`,
+          `${listPath}?error=${encodeURIComponent(err.message)}`,
         );
       }
       throw err;
@@ -237,7 +256,7 @@ export default async function TestGroupsPage({
       [orderedIds[index], orderedIds[swapWith]] = [orderedIds[swapWith], orderedIds[index]];
       await reorderTestGroups(scenarioId, orderedIds, session!.user.id);
     }
-    redirect(`/projects/${projectId}/scenarios/${scenarioId}/test-groups`);
+    redirect(listPath);
   }
 
   async function moveUp(formData: FormData) {
@@ -255,6 +274,8 @@ export default async function TestGroupsPage({
       <Breadcrumb
         segments={testGroupsListBreadcrumb(
           { id: projectId, name: nameOr(project, projectId) },
+          requirement.module,
+          requirement,
           scenario,
         )}
       />

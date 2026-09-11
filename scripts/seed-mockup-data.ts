@@ -365,7 +365,17 @@ async function resetExistingMockupData(projectId: string) {
   await prisma.auditLog.deleteMany({
     where: { projectId, entityType: { in: ["Scenario", "TestGroup", "TestCase"] } },
   });
+
+  // The Requirement and Module the seeded Scenarios hang off. Removed after
+  // the Scenarios above, which are what still reference them.
+  await prisma.requirement.deleteMany({ where: { projectId, name: MOCKUP_REQUIREMENT_NAME } });
+  await prisma.module.deleteMany({ where: { projectId, name: MOCKUP_MODULE_NAME } });
 }
+
+/** A Scenario needs a Requirement, which needs a Module, so the seed brings
+ *  its own rather than attaching mockup data to real ones. */
+const MOCKUP_MODULE_NAME = "Mockup";
+const MOCKUP_REQUIREMENT_NAME = "Mockup requirements";
 
 async function main() {
   const actor = await prisma.user.findFirstOrThrow({ select: { id: true } });
@@ -376,10 +386,25 @@ async function main() {
 
   await resetExistingMockupData(project.id);
 
+  const mockupModule = await prisma.module.upsert({
+    where: { projectId_name: { projectId: project.id, name: MOCKUP_MODULE_NAME } },
+    update: { deletedAt: null },
+    create: { projectId: project.id, name: MOCKUP_MODULE_NAME },
+  });
+  const mockupRequirement = await prisma.requirement.create({
+    data: {
+      projectId: project.id,
+      moduleId: mockupModule.id,
+      name: MOCKUP_REQUIREMENT_NAME,
+      priority: "MEDIUM",
+    },
+  });
+
   for (const scenarioSeed of SCENARIOS) {
     const scenario = await createScenario(
       project.id,
       {
+        requirementId: mockupRequirement.id,
         name: scenarioSeed.name,
         description: scenarioSeed.description,
         preconditions: scenarioSeed.preconditions,

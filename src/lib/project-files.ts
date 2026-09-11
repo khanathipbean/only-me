@@ -31,13 +31,17 @@ export class FileValidationError extends Error {}
 
 export async function saveProjectFile(
   projectId: string,
-  module: string,
+  moduleId: string,
   file: File,
   uploadedById: string,
 ) {
-  const moduleName = module.trim();
-  if (!moduleName) {
-    throw new FileValidationError("Module is required");
+  // Not named `module`: that identifier is reserved in a CommonJS scope and
+  // the Next lint rule rejects assigning to it.
+  const target = moduleId
+    ? await prisma.module.findFirst({ where: { id: moduleId, projectId, deletedAt: null } })
+    : null;
+  if (!target) {
+    throw new FileValidationError("Choose a module");
   }
   if (file.size === 0) {
     throw new FileValidationError("That file is empty");
@@ -58,7 +62,10 @@ export async function saveProjectFile(
   return prisma.projectFile.create({
     data: {
       projectId,
-      module: moduleName,
+      moduleId: target.id,
+      // The text column stays written until phase 2 drops it, so a rollback
+      // doesn't leave files with no heading at all.
+      module: target.name,
       fileName: file.name,
       storageKey,
       contentType: file.type || "application/octet-stream",

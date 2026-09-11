@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { paginate, type PageFilters } from "@/lib/pagination";
+import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
@@ -13,6 +14,7 @@ export class ConfirmRequiredError extends Error {
 }
 
 export type ScenarioInput = {
+  requirementId: string;
   name: string;
   description?: string | null;
   preconditions?: string | null;
@@ -70,10 +72,14 @@ export async function createScenario(
   actorId: string,
 ) {
   validateScenarioInput(input);
+  if (!input.requirementId) {
+    throw new ValidationError("requirementId is required");
+  }
 
   const scenario = await prisma.scenario.create({
     data: {
       projectId,
+      requirementId: input.requirementId,
       name: input.name,
       description: input.description ?? null,
       preconditions: input.preconditions ?? null,
@@ -101,6 +107,7 @@ export function isScenarioSortField(value: string | null | undefined): value is 
 
 export type ScenarioFilters = {
   search?: string;
+  requirementId?: string;
   status?: WorkflowStatus;
   priority?: Priority;
   sortBy?: ScenarioSortField;
@@ -119,6 +126,7 @@ function scenarioListWhere(projectId: string, filters: ScenarioFilters) {
     deletedAt: filters.archived ? { not: null } : null,
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.priority ? { priority: filters.priority } : {}),
+    ...(filters.requirementId ? { requirementId: filters.requirementId } : {}),
     ...(filters.search
       ? { name: { contains: filters.search, mode: "insensitive" as const } }
       : {}),
@@ -161,9 +169,14 @@ export const getScenarioById = cache(async (id: string) => {
   return prisma.scenario.findUnique({ where: { id } });
 });
 
+/** A PATCH may leave the Requirement out; only a move states a new one. */
+export type ScenarioUpdateInput = Omit<ScenarioInput, "requirementId"> & {
+  requirementId?: string;
+};
+
 export async function updateScenario(
   id: string,
-  input: ScenarioInput,
+  input: ScenarioUpdateInput,
   actorId: string,
 ) {
   validateScenarioInput(input);
@@ -173,6 +186,7 @@ export async function updateScenario(
   const after = await prisma.scenario.update({
     where: { id },
     data: {
+      requirementId: input.requirementId ?? before.requirementId,
       name: input.name,
       description: input.description ?? null,
       preconditions: input.preconditions ?? null,
@@ -197,6 +211,7 @@ export async function duplicateScenario(id: string, actorId: string) {
   const copy = await prisma.scenario.create({
     data: {
       projectId: source.projectId,
+      requirementId: source.requirementId,
       name: source.name,
       description: source.description,
       preconditions: source.preconditions,
@@ -286,17 +301,48 @@ export async function deleteScenario(id: string, actorId: string, confirm: boole
   return { ...scenario, descendantCounts };
 }
 
+/**
+ * The ancestor ids a Scenario's URL needs. Every page below a Scenario has
+ * only its own id to work from once a move lands it under a different
+ * Requirement, so the path is resolved from the row rather than assumed.
+ */
+export async function getScenarioLocation(scenarioId: string) {
+  const scenario = await prisma.scenario.findUnique({
+    where: { id: scenarioId },
+    select: {
+      id: true,
+      projectId: true,
+      requirementId: true,
+      requirement: { select: { moduleId: true } },
+    },
+  });
+  if (!scenario) {
+    return null;
+  }
+  return {
+    projectId: scenario.projectId,
+    moduleId: scenario.requirement.moduleId,
+    requirementId: scenario.requirementId,
+    scenarioId: scenario.id,
+  };
+}
+
 export async function moveScenario(id: string, targetProjectId: string, actorId: string) {
   const before = await prisma.scenario.findUniqueOrThrow({ where: { id } });
 
+  /* Its Requirement belongs to the project it is leaving. Carrying that
+   * across would put the Scenario under another project's Module, where its
+   * own project's URL can't reach it, so it is re-filed on arrival. */
+  const requirementId = await findOrCreateUnassignedRequirement(targetProjectId, actorId);
+
   const scenario = await prisma.scenario.update({
     where: { id },
-    data: { projectId: targetProjectId },
+    data: { projectId: targetProjectId, requirementId },
   });
 
   await logScenarioEvent("move", scenario, actorId, {
-    oldValue: { projectId: before.projectId },
-    newValue: { projectId: targetProjectId },
+    oldValue: { projectId: before.projectId, requirementId: before.requirementId },
+    newValue: { projectId: targetProjectId, requirementId },
   });
 
   const descendantCounts = await getScenarioDescendantCounts(id);

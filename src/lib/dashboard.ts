@@ -18,6 +18,8 @@ export function parseUtcDateOnly(value: string | null | undefined, boundary: "st
 }
 
 export type DashboardFilters = {
+  moduleId?: string;
+  requirementId?: string;
   scenarioId?: string;
   testGroupId?: string;
   testResult?: TestResult;
@@ -49,18 +51,55 @@ export type DashboardTestGroupNode = {
 export type DashboardScenarioNode = {
   id: string;
   name: string;
+  /** Its ancestors, so the tree can link into the nested URL. */
+  moduleId: string;
+  requirementId: string;
   testCaseCount: number;
   testGroups: DashboardTestGroupNode[];
 };
 
+export type DashboardRequirementNode = {
+  id: string;
+  name: string;
+  code: string | null;
+  testCaseCount: number;
+  scenarios: DashboardScenarioNode[];
+};
+
+export type DashboardModuleNode = {
+  id: string;
+  name: string;
+  testCaseCount: number;
+  requirements: DashboardRequirementNode[];
+};
+
+/**
+ * What the filter dropdowns offer. Deliberately *unfiltered*: taken from the
+ * tree instead, choosing one Module would drop every other Module from its
+ * own list and there would be no way to switch to a different one.
+ */
+export type DashboardFilterOptions = {
+  modules: Array<{ id: string; name: string }>;
+  requirements: Array<{ id: string; name: string; moduleId: string }>;
+  scenarios: Array<{ id: string; name: string; requirementId: string }>;
+  testGroups: Array<{ id: string; name: string; scenarioId: string }>;
+};
+
 export type ProjectDashboard = {
   hasAnyData: boolean;
-  counts: { scenarios: number; testGroups: number; testCases: number };
+  counts: {
+    modules: number;
+    requirements: number;
+    scenarios: number;
+    testGroups: number;
+    testCases: number;
+  };
   testCasesByResult: Record<TestResult, number>;
   testCasesByPriority: Record<Priority, number>;
   testCasesByAssignee: Array<{ assigneeId: string | null; assigneeName: string; count: number }>;
   testProgress: number;
-  tree: DashboardScenarioNode[];
+  tree: DashboardModuleNode[];
+  options: DashboardFilterOptions;
 };
 
 function zeroCountRecord<K extends string>(keys: K[]): Record<K, number> {
@@ -113,10 +152,21 @@ export async function getProjectDashboard(
       projectId,
       deletedAt: null,
       ...(filters.scenarioId ? { id: filters.scenarioId } : {}),
+      ...(filters.requirementId ? { requirementId: filters.requirementId } : {}),
+      ...(filters.moduleId ? { requirement: { moduleId: filters.moduleId } } : {}),
       ...(filters.tags && filters.tags.length > 0 ? { tags: { hasSome: filters.tags } } : {}),
       testGroups: { some: { ...testGroupWhere, testCases: { some: testCaseWhere } } },
     },
     include: {
+      requirement: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          moduleId: true,
+          module: { select: { id: true, name: true, sequence: true } },
+        },
+      },
       testGroups: {
         where: { ...testGroupWhere, testCases: { some: testCaseWhere } },
         orderBy: { sequence: "asc" },
@@ -138,9 +188,11 @@ export async function getProjectDashboard(
   let totalTestCases = 0;
   let testCasesWithResult = 0;
 
-  const tree: DashboardScenarioNode[] = scenarios.map((scenario) => ({
+  const scenarioNodes: DashboardScenarioNode[] = scenarios.map((scenario) => ({
     id: scenario.id,
     name: scenario.name,
+    moduleId: scenario.requirement.moduleId,
+    requirementId: scenario.requirementId,
     testCaseCount: scenario.testGroups.reduce((sum, group) => sum + group.testCases.length, 0),
     testGroups: scenario.testGroups.map((group) => ({
       id: group.id,
@@ -177,9 +229,77 @@ export async function getProjectDashboard(
     })),
   }));
 
+  /* Grouped here rather than by querying Modules downward: the filters all
+   * bite at Test Case level, and only a Scenario that survived them should
+   * bring its Module and Requirement into the tree. Starting from Modules
+   * would list the ones a filter emptied. */
+  const moduleNodes = new Map<string, DashboardModuleNode>();
+  const requirementNodes = new Map<string, DashboardRequirementNode>();
+
+  scenarios.forEach((scenario, index) => {
+    const node = scenarioNodes[index];
+    const { module: scenarioModule, ...requirement } = scenario.requirement;
+
+    let moduleNode = moduleNodes.get(scenarioModule.id);
+    if (!moduleNode) {
+      moduleNode = {
+        id: scenarioModule.id,
+        name: scenarioModule.name,
+        testCaseCount: 0,
+        requirements: [],
+      };
+      moduleNodes.set(scenarioModule.id, moduleNode);
+    }
+
+    let requirementNode = requirementNodes.get(requirement.id);
+    if (!requirementNode) {
+      requirementNode = {
+        id: requirement.id,
+        name: requirement.name,
+        code: requirement.code,
+        testCaseCount: 0,
+        scenarios: [],
+      };
+      requirementNodes.set(requirement.id, requirementNode);
+      moduleNode.requirements.push(requirementNode);
+    }
+
+    requirementNode.scenarios.push(node);
+    requirementNode.testCaseCount += node.testCaseCount;
+    moduleNode.testCaseCount += node.testCaseCount;
+  });
+
+  const tree = Array.from(moduleNodes.values());
+
+  const [moduleOptions, requirementOptions, scenarioOptions, testGroupOptions] =
+    await Promise.all([
+      prisma.module.findMany({
+        where: { projectId, deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: [{ sequence: "asc" }, { name: "asc" }],
+      }),
+      prisma.requirement.findMany({
+        where: { projectId, deletedAt: null },
+        select: { id: true, name: true, moduleId: true },
+        orderBy: [{ code: "asc" }, { name: "asc" }],
+      }),
+      prisma.scenario.findMany({
+        where: { projectId, deletedAt: null },
+        select: { id: true, name: true, requirementId: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.testGroup.findMany({
+        where: { deletedAt: null, scenario: { projectId, deletedAt: null } },
+        select: { id: true, name: true, scenarioId: true },
+        orderBy: { sequence: "asc" },
+      }),
+    ]);
+
   return {
     hasAnyData,
     counts: {
+      modules: tree.length,
+      requirements: requirementNodes.size,
       scenarios: scenarios.length,
       testGroups: scenarios.reduce((sum, scenario) => sum + scenario.testGroups.length, 0),
       testCases: totalTestCases,
@@ -189,5 +309,11 @@ export async function getProjectDashboard(
     testCasesByAssignee: Array.from(byAssignee.values()),
     testProgress: calculateTestProgress(testCasesWithResult, totalTestCases),
     tree,
+    options: {
+      modules: moduleOptions,
+      requirements: requirementOptions,
+      scenarios: scenarioOptions,
+      testGroups: testGroupOptions,
+    },
   };
 }

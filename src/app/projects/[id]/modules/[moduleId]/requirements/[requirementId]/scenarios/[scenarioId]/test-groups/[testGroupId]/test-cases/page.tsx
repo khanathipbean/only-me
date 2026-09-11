@@ -14,6 +14,8 @@ import { getProjectById } from "@/lib/projects";
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCasesListBreadcrumb } from "@/lib/breadcrumb";
+import { testCasesListHref } from "@/lib/hrefs";
+import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
@@ -47,7 +49,13 @@ export default async function TestCasesPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string; scenarioId: string; testGroupId: string }>;
+  params: Promise<{
+    id: string;
+    moduleId: string;
+    requirementId: string;
+    scenarioId: string;
+    testGroupId: string;
+  }>;
   searchParams: Promise<{
     error?: string;
     /** Which row's inline Edit modal to reopen after a failed save — without
@@ -57,20 +65,21 @@ export default async function TestCasesPage({
     pageSize?: string;
   }>;
 }) {
-  const { id: projectId, scenarioId, testGroupId } = await params;
+  const { id: projectId, moduleId, requirementId, scenarioId, testGroupId } = await params;
   const { error, editId, page, pageSize } = await searchParams;
   const session = await auth();
 
   const testGroup = await getTestGroupWithProjectId(testGroupId);
-  if (!testGroup) {
+  if (!testGroup || testGroup.scenarioId !== scenarioId) {
     notFound();
   }
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
-  const [project, scenario, testCasePage] = await Promise.all([
+  const [project, scenario, requirement, testCasePage] = await Promise.all([
     getProjectById(projectId),
     getScenarioById(scenarioId),
+    getRequirementById(requirementId),
     // Steps included: each row's inline Edit modal seeds a TestStepEditor,
     // which would silently wipe the steps if it mounted with an empty list.
     listTestCasesWithStepsForTestGroupPage(testGroupId, {
@@ -80,7 +89,25 @@ export default async function TestCasesPage({
   ]);
   const testCases = testCasePage.items;
 
-  const basePath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}/test-cases`;
+  // The ancestors in the URL must be this Test Group's actual ancestors.
+  if (
+    !scenario ||
+    scenario.projectId !== projectId ||
+    scenario.requirementId !== requirementId ||
+    !requirement ||
+    requirement.moduleId !== moduleId ||
+    !requirement.module
+  ) {
+    notFound();
+  }
+
+  const basePath = testCasesListHref({
+    projectId,
+    moduleId,
+    requirementId,
+    scenarioId,
+    testGroupId,
+  });
 
   /** Bound per row: an inline Edit modal on a list needs one action per Test
    * Case, unlike the detail page where a single closed-over id suffices. */
@@ -156,7 +183,9 @@ export default async function TestCasesPage({
       <Breadcrumb
         segments={testCasesListBreadcrumb(
           { id: projectId, name: nameOr(project, projectId) },
-          { id: scenarioId, name: nameOr(scenario, scenarioId) },
+          requirement.module,
+          requirement,
+          scenario,
           testGroup,
         )}
       />

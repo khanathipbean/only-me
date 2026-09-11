@@ -11,14 +11,16 @@ import {
   listProjectFilesByModule,
   saveProjectFile,
 } from "@/lib/project-files";
+import { listModulesForProject } from "@/lib/modules";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilePreview } from "@/components/FilePreview";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button, IconButton } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { TrashIcon } from "@/components/icons";
-import { inputClass, labelClass, mutedTextClass, pageClass } from "@/lib/ui";
+import { labelClass, mutedTextClass, pageClass } from "@/lib/ui";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -38,7 +40,10 @@ export default async function ProjectFilesPage({
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
-  const groups = await listProjectFilesByModule(projectId);
+  const [groups, modules] = await Promise.all([
+    listProjectFilesByModule(projectId),
+    listModulesForProject(projectId),
+  ]);
 
   async function upload(formData: FormData) {
     "use server";
@@ -104,11 +109,15 @@ export default async function ProjectFilesPage({
                 Module
                 <RequiredMark />
               </span>
-              <input
+              <Select
                 name="module"
+                defaultValue=""
                 required
-                placeholder="e.g. ISMS assessment"
-                className={inputClass}
+                options={[
+                  { value: "", label: "Choose a module…" },
+                  ...modules.map((module) => ({ value: module.id, label: module.name })),
+                ]}
+                ariaLabel="Module"
               />
             </label>
             <label className={labelClass}>

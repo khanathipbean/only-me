@@ -68,6 +68,8 @@ model Project {
   scenarios     Scenario[]
   importLogs    ImportLog[]
   files         ProjectFile[]
+  modules       Module[]
+  requirements  Requirement[]
 }
 
 model ProjectMember {
@@ -131,6 +133,11 @@ enum WorkflowStatus {
 model Scenario {
   id             String           @id @default(cuid())
   projectId      String
+  /// Mandatory: a Scenario is reached through its Requirement, which is
+  /// reached through its Module, so one without a Requirement would have no
+  /// URL at all. `projectId` above is kept for now; removing it and resolving
+  /// the Project through here is its own change.
+  requirementId  String
   name           String
   description    String?
   preconditions  String?
@@ -145,9 +152,10 @@ model Scenario {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
-  project    Project     @relation(fields: [projectId], references: [id])
-  owner      User?       @relation(fields: [ownerId], references: [id])
-  testGroups TestGroup[]
+  project     Project      @relation(fields: [projectId], references: [id])
+  requirement Requirement  @relation(fields: [requirementId], references: [id])
+  owner       User?        @relation(fields: [ownerId], references: [id])
+  testGroups  TestGroup[]
 }
 
 model TestGroup {
@@ -237,8 +245,10 @@ model ImportLog {
 model ProjectFile {
   id           String    @id @default(cuid())
   projectId    String
-  /// Free-text heading the file is listed under, e.g. "ISMS assessment".
+  /// Free-text heading the file was listed under before Modules existed.
+  /// Kept until every row has a `moduleId`, then dropped.
   module       String
+  moduleId     String?
   /// The name the uploader's file had. Display only — never used to build a
   /// path, so a name containing ".." can't escape the upload directory.
   fileName     String
@@ -250,8 +260,56 @@ model ProjectFile {
   uploadedAt   DateTime  @default(now())
   deletedAt    DateTime?
 
-  project    Project @relation(fields: [projectId], references: [id])
-  uploadedBy User    @relation(fields: [uploadedById], references: [id])
+  project      Project @relation(fields: [projectId], references: [id])
+  moduleRef    Module? @relation(fields: [moduleId], references: [id])
+  uploadedBy   User    @relation(fields: [uploadedById], references: [id])
 
   @@index([projectId, module])
+}
+
+/// One menu of the system under test — Dashboard, Workflow, Sprints.
+///
+/// A table rather than a text column because the same names are chosen over
+/// and over, by Requirements and by the documents filed against them: free
+/// text means "Dashboard" and "dashboard" quietly become two groups. It is
+/// deliberately *not* a level of the hierarchy — nothing nests under it, it
+/// groups and filters.
+model Module {
+  id        String    @id @default(cuid())
+  projectId String
+  name      String
+  /// Display order, so the list can mirror the real menu.
+  sequence  Int       @default(0)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  project      Project       @relation(fields: [projectId], references: [id])
+  requirements Requirement[]
+  files        ProjectFile[]
+
+  @@unique([projectId, name])
+}
+
+/// What the Feature docs boil down to: a statement the tests must prove.
+/// Sits between a Project and its Scenarios.
+model Requirement {
+  id          String         @id @default(cuid())
+  projectId   String
+  moduleId    String
+  /// Reference used in the source document, e.g. "REQ-014".
+  code        String?
+  name        String
+  description String?
+  priority    Priority       @default(MEDIUM)
+  status      WorkflowStatus @default(DRAFT)
+  deletedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id])
+  module    Module     @relation(fields: [moduleId], references: [id])
+  scenarios Scenario[]
+
+  @@index([projectId, moduleId])
 }

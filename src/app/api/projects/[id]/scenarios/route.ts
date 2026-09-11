@@ -30,6 +30,7 @@ export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, u
     const scenario = await createScenario(
       projectId,
       {
+        requirementId: body.requirementId,
         name: body.name,
         description: body.description,
         preconditions: body.preconditions,
