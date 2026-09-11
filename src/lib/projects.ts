@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import type { ProjectRole, ProjectStatus } from "@/generated/prisma/client";
 
@@ -69,27 +70,49 @@ export async function createProject(input: ProjectInput, ownerId: string) {
   return project;
 }
 
-export async function listProjectsForUser(
-  userId: string,
-  filters: { search?: string; status?: ProjectStatus; owner?: string } = {},
-) {
+export type ProjectFilters = { search?: string; status?: ProjectStatus; owner?: string };
+
+/** Shared by the plain and paginated lists so their results can't drift. */
+function projectListWhere(userId: string, filters: ProjectFilters) {
+  return {
+    deletedAt: null,
+    members: { some: { userId } },
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.owner ? { ownerId: filters.owner } : {}),
+    ...(filters.search
+      ? {
+          OR: [
+            { name: { contains: filters.search, mode: "insensitive" as const } },
+            { code: { contains: filters.search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function listProjectsForUser(userId: string, filters: ProjectFilters = {}) {
   return prisma.project.findMany({
-    where: {
-      deletedAt: null,
-      members: { some: { userId } },
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.owner ? { ownerId: filters.owner } : {}),
-      ...(filters.search
-        ? {
-            OR: [
-              { name: { contains: filters.search, mode: "insensitive" } },
-              { code: { contains: filters.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
+    where: projectListWhere(userId, filters),
     orderBy: { createdAt: "desc" },
   });
+}
+
+/**
+ * One page of the same list, plus the counts the table's pager needs. A
+ * separate function rather than an option on the one above: that one is what
+ * `/api/projects` returns, and its response shouldn't grow paging metadata.
+ */
+export async function listProjectsForUserPage(
+  userId: string,
+  filters: ProjectFilters & PageFilters = {},
+) {
+  const where = projectListWhere(userId, filters);
+  return paginate(
+    filters,
+    () => prisma.project.count({ where }),
+    ({ skip, take }) =>
+      prisma.project.findMany({ where, orderBy: { createdAt: "desc" }, skip, take }),
+  );
 }
 
 /** Projects where the user holds one of `roles` — used to populate "move to another Project"

@@ -45,16 +45,17 @@ export function TestGroupForm({
             Test Group Name
             <RequiredMark />
           </span>
-          <input name="name" defaultValue={defaults?.name} required className={inputClass} />
+          <input name="name" defaultValue={defaults?.name} required className={inputClass} placeholder="e.g. Validation" />
         </label>
         <label className={labelClass}>
           Description
-          <textarea name="description" defaultValue={defaults?.description ?? ""} className={textareaClass} />
+          <textarea name="description" defaultValue={defaults?.description ?? ""} className={textareaClass} placeholder="What this group covers" />
         </label>
         <label className={labelClass}>
           Test Objective
           <textarea
             name="testObjective"
+            placeholder="What you are trying to prove with these Test Cases"
             defaultValue={defaults?.testObjective ?? ""}
             className={textareaClass}
           />

@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 import type { Priority, TestResult, TestType, WorkflowStatus } from "@/generated/prisma/client";
@@ -155,6 +156,26 @@ export async function listTestCasesWithStepsForTestGroup(testGroupId: string) {
     orderBy: { createdAt: "desc" },
     include: { steps: { orderBy: { sequence: "asc" } } },
   });
+}
+
+/** One page of the list above, for the table's pager. */
+export async function listTestCasesWithStepsForTestGroupPage(
+  testGroupId: string,
+  filters: PageFilters = {},
+) {
+  const where = { testGroupId, deletedAt: null };
+  return paginate(
+    filters,
+    () => prisma.testCase.count({ where }),
+    ({ skip, take }) =>
+      prisma.testCase.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: { steps: { orderBy: { sequence: "asc" } } },
+        skip,
+        take,
+      }),
+  );
 }
 
 /**

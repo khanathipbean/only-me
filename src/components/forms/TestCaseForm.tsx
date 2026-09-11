@@ -43,23 +43,24 @@ export function TestCaseForm({
             Test Case Name
             <RequiredMark />
           </span>
-          <input name="name" defaultValue={defaults?.name} required className={inputClass} />
+          <input name="name" defaultValue={defaults?.name} required className={inputClass} placeholder="e.g. Reject a password shorter than 8 characters" />
         </label>
         <label className={labelClass}>
           Condition
-          <textarea name="condition" defaultValue={defaults?.condition ?? ""} className={textareaClass} />
+          <textarea name="condition" defaultValue={defaults?.condition ?? ""} className={textareaClass} placeholder="The situation being tested" />
         </label>
         <label className={labelClass}>
           Preconditions
           <textarea
             name="preconditions"
+            placeholder="What must already be true before this case runs"
             defaultValue={defaults?.preconditions ?? ""}
             className={textareaClass}
           />
         </label>
         <label className={labelClass}>
           Test Data
-          <textarea name="testData" defaultValue={defaults?.testData ?? ""} className={textareaClass} />
+          <textarea name="testData" defaultValue={defaults?.testData ?? ""} className={textareaClass} placeholder="Values this case needs — e.g. email: user@example.com" />
         </label>
         <div className="flex flex-col gap-1.5 sm:col-span-3">
           <span className="text-sm font-medium text-foreground">Test Steps</span>
@@ -72,6 +73,7 @@ export function TestCaseForm({
           </span>
           <textarea
             name="expectedResult"
+            placeholder="What the system should do overall when this case passes"
             defaultValue={defaults?.expectedResult}
             required
             className={textareaClass}

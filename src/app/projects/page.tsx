@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { DuplicateCodeError, ValidationError, createProject, listProjectsForUser } from "@/lib/projects";
+import { DuplicateCodeError, ValidationError, createProject, listProjectsForUserPage } from "@/lib/projects";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
+import { Pagination } from "@/components/ui/Pagination";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
@@ -16,7 +17,9 @@ import {
   pageClass,
   tableClass,
   tableWrapClass,
+  tdCenterClass,
   tdClass,
+  thCenterClass,
   thClass,
   trHoverClass,
 } from "@/lib/ui";
@@ -27,17 +30,27 @@ export const metadata = { title: "Projects" };
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string; owner?: string; error?: string }>;
+  searchParams: Promise<{
+    search?: string;
+    status?: string;
+    owner?: string;
+    page?: string;
+    pageSize?: string;
+    error?: string;
+  }>;
 }) {
   const session = await auth();
-  const { search, status, owner, error } = await searchParams;
+  const { search, status, owner, page, pageSize, error } = await searchParams;
   const hasFilters = Boolean(search || status || owner);
 
-  const projects = await listProjectsForUser(session!.user.id, {
+  const result = await listProjectsForUserPage(session!.user.id, {
     search,
     status: status as ProjectStatus | undefined,
     owner,
+    page: page ? Number(page) : undefined,
+    pageSize: pageSize ? Number(pageSize) : undefined,
   });
+  const projects = result.items;
 
   async function create(formData: FormData) {
     "use server";
@@ -134,7 +147,7 @@ export default async function ProjectsPage({
               <tr>
                 <th className={thClass}>Code</th>
                 <th className={thClass}>Name</th>
-                <th className={thClass}>Status</th>
+                <th className={thCenterClass}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -146,7 +159,7 @@ export default async function ProjectsPage({
                       {project.name}
                     </Link>
                   </td>
-                  <td className={tdClass}>
+                  <td className={tdCenterClass}>
                     <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
                   </td>
                 </tr>
@@ -155,6 +168,13 @@ export default async function ProjectsPage({
           </table>
         </div>
       )}
+
+      <Pagination
+        page={result.page}
+        totalPages={result.totalPages}
+        total={result.total}
+        pageSize={result.pageSize}
+      />
     </main>
   );
 }

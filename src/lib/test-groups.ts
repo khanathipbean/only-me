@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 import type { WorkflowStatus } from "@/generated/prisma/client";
@@ -101,19 +102,44 @@ export async function createTestGroup(
   return testGroup;
 }
 
+export type TestGroupFilters = {
+  /** Show archived Test Groups instead of live ones — the only way to reach
+   * one now that archiving is driven from the list rather than a detail
+   * page that could be opened by URL. */
+  archived?: boolean;
+};
+
+function testGroupListWhere(scenarioId: string, filters: TestGroupFilters) {
+  return { scenarioId, deletedAt: filters.archived ? { not: null } : null };
+}
+
+/**
+ * Every Test Group in the Scenario, in sequence order. The reorder action
+ * depends on this staying unpaginated: it rebuilds the whole ordering, so a
+ * page of it would renumber the rest of the list wrongly.
+ */
 export async function listTestGroupsForScenario(
   scenarioId: string,
-  filters: {
-    /** Show archived Test Groups instead of live ones — the only way to reach
-     * one now that archiving is driven from the list rather than a detail
-     * page that could be opened by URL. */
-    archived?: boolean;
-  } = {},
+  filters: TestGroupFilters = {},
 ) {
   return prisma.testGroup.findMany({
-    where: { scenarioId, deletedAt: filters.archived ? { not: null } : null },
+    where: testGroupListWhere(scenarioId, filters),
     orderBy: { sequence: "asc" },
   });
+}
+
+/** One page of the same list, for the table. */
+export async function listTestGroupsForScenarioPage(
+  scenarioId: string,
+  filters: TestGroupFilters & PageFilters = {},
+) {
+  const where = testGroupListWhere(scenarioId, filters);
+  return paginate(
+    filters,
+    () => prisma.testGroup.count({ where }),
+    ({ skip, take }) =>
+      prisma.testGroup.findMany({ where, orderBy: { sequence: "asc" }, skip, take }),
+  );
 }
 
 /** Every Test Group across every non-archived Scenario in a Project, with its parent Scenario's

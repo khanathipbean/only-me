@@ -50,10 +50,14 @@ export const textareaClass = `${inputClass} min-h-24`;
  * wash would be a dark smear on the light theme. Keeping the theme's own
  * surface means every token-based control inside stays readable in both.
  *
+ * `text-left` is explicit because `text-align` inherits and a dialog is a
+ * descendant of wherever it was declared — mounted inside a centred table
+ * cell, every label in the form came out centred.
+ *
  * Callers add their own `max-w-*`.
  */
 export const dialogClass =
-  "m-auto w-full rounded-2xl border border-border bg-surface/75 p-0 text-foreground shadow-2xl ring-1 ring-white/5 backdrop-blur-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm";
+  "m-auto w-full rounded-2xl border border-border bg-surface/75 p-0 text-left text-foreground shadow-2xl ring-1 ring-white/5 backdrop-blur-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm";
 
 export const checkboxClass = "size-4 rounded border-border text-brand focus:ring-brand";
 
@@ -71,12 +75,29 @@ export const tableWrapClass = "overflow-x-auto rounded-lg border border-border";
  * `whitespace-nowrap`, which still pushes the table past the wrapper and
  * scrolls — but only when genuinely needed.
  */
-export const tableClass = "w-full border-collapse text-sm";
+export const tableClass = "data-table w-full border-collapse text-sm";
 
-export const thClass =
-  "border-b border-border bg-black/[.02] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted dark:bg-white/[.03]";
+/* Alignment is a separate exported variant rather than something a call site
+ * appends, because `text-left` and `text-center` both set `text-align` — two
+ * of them in one class string resolve by Tailwind's emit order, not by the
+ * order they were written. */
+const thBaseClass =
+  "border-b border-border bg-black/[.02] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted dark:bg-white/[.03]";
 
-export const tdClass = "border-b border-border px-3 py-2 align-middle last:border-b-0";
+export const thClass = `${thBaseClass} text-left`;
+
+/** Header for a column of badges or icon buttons, which centre in their cell. */
+export const thCenterClass = `${thBaseClass} text-center`;
+
+/* No `last:border-b-0` here: on a `<td>` that variant matches the last cell
+ * *in its row*, so it stripped the bottom border from the trailing column and
+ * the divider stopped short of the table's right edge. Suppressing the line
+ * under the final row is the table's job — see `tableClass`. */
+const tdBaseClass = "border-b border-border px-3 py-2 align-middle";
+
+export const tdClass = `${tdBaseClass} text-left`;
+
+export const tdCenterClass = `${tdBaseClass} text-center`;
 
 export const trHoverClass = "transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.04]";
 

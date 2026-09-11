@@ -4,9 +4,9 @@ import Link from "next/link";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { auth, signOut } from "@/auth";
+import { getUserById } from "@/lib/users";
 import { FilterForm } from "@/components/FilterForm";
-import { IconButton } from "@/components/ui/Button";
-import { LogoutIcon } from "@/components/icons";
+import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import "./globals.css";
 
@@ -37,10 +37,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   /* `template` wraps whatever each page exports, so a tab reads e.g.
-   * "Scenarios · PROM · Blueteria"; `default` covers pages that set none. */
+   * "Scenarios · PROM · Bull Terrier"; `default` covers pages that set none. */
   title: {
-    default: "Blueteria",
-    template: "%s · Blueteria",
+    default: "Bull Terrier",
+    template: "%s · Bull Terrier",
   },
   description: "Manage Scenarios, Test Groups, and Test Cases",
   icons: { icon: "/logo.png" },
@@ -48,6 +48,11 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await auth();
+  // Read from the database, not the session: `name` is baked into the JWT at
+  // sign-in, so renaming yourself wouldn't show here until you signed out and
+  // back in. `getUserById` is cached per request, so pages that need it too
+  // don't pay for a second query.
+  const currentUser = session?.user ? await getUserById(session.user.id) : null;
 
   async function logout() {
     "use server";
@@ -82,8 +87,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur">
             <div className="flex w-full flex-wrap items-center gap-3 px-6 py-3 sm:px-8 lg:px-12 xl:px-16">
               <Link href="/projects" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-                <Image src="/logo.png" alt="Blueteria" width={28} height={28} unoptimized />
-                Blueteria
+                <Image src="/logo.png" alt="Bull Terrier" width={28} height={28} unoptimized />
+                Bull Terrier
               </Link>
 
               <FilterForm action="/search" showClear={false} className="flex-1 min-w-48">
@@ -91,17 +96,21 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   type="search"
                   name="q"
                   placeholder="Search Projects, Scenarios, Test Groups, Test Cases"
-                  className="block w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                  // `rounded-md` replaced outright rather than having a larger radius
+                  // appended: two `rounded-*` utilities set the same property,
+                  // and which one wins is Tailwind's emit order, not the order
+                  // they're written. The extra left padding keeps the
+                  // placeholder off the curve.
+                  className="block w-full rounded-full border border-border bg-background px-4 py-1.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-brand focus:ring-1 focus:ring-brand"
                 />
               </FilterForm>
 
-              <span className="text-sm text-muted">{session.user.email}</span>
               <ThemeToggle />
-              <form action={logout}>
-                <IconButton type="submit" aria-label="Log out" title="Log out">
-                  <LogoutIcon />
-                </IconButton>
-              </form>
+              <AccountMenu
+                name={currentUser?.name ?? session.user.email ?? "Account"}
+                email={currentUser?.email ?? session.user.email ?? ""}
+                logout={logout}
+              />
             </div>
           </header>
         )}

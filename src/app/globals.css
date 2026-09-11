@@ -173,3 +173,14 @@ input[type="datetime-local"]:focus::-webkit-calendar-picker-indicator {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   }
 }
+
+/* The divider under a table's final row would sit directly on the wrapper's
+ * own border and read as one thick line, so drop it. Written as plain CSS
+ * rather than an arbitrary variant: `[&>tbody>tr:last-child>td]:…` and
+ * `last:*:…` both failed to generate, and a class that silently produces no
+ * rule is worse than one line of CSS that plainly does. */
+@layer components {
+  .data-table > tbody > tr:last-child > td {
+    border-bottom-width: 0;
+  }
+}

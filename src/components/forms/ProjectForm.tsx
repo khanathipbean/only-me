@@ -39,18 +39,18 @@ export function ProjectForm({
             Project Code
             <RequiredMark />
           </span>
-          <input name="code" defaultValue={defaults?.code} required className={inputClass} />
+          <input name="code" defaultValue={defaults?.code} required className={inputClass} placeholder="e.g. PROM-001" />
         </label>
         <label className={labelClass}>
           <span>
             Project Name
             <RequiredMark />
           </span>
-          <input name="name" defaultValue={defaults?.name} required className={inputClass} />
+          <input name="name" defaultValue={defaults?.name} required className={inputClass} placeholder="e.g. Promotion Portal" />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
           Description
-          <textarea name="description" defaultValue={defaults?.description ?? ""} className={textareaClass} />
+          <textarea name="description" defaultValue={defaults?.description ?? ""} className={textareaClass} placeholder="What this project is for" />
         </label>
         <label className={labelClass}>
           Start Date

@@ -12,8 +12,8 @@ import {
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { projectBreadcrumb } from "@/lib/breadcrumb";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
+import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { ProjectForm } from "@/components/forms/ProjectForm";
@@ -97,23 +97,22 @@ export default async function ProjectDetailPage({
     <main className={pageClass}>
       <Breadcrumb segments={projectBreadcrumb(project)} />
 
-      <PageHeader
-        title={
-          <span className="flex items-center gap-2">
-            {project.name}
-            <span className="text-base font-normal text-muted">({project.code})</span>
-          </span>
-        }
-        subtitle={
-          <span className="flex items-center gap-2">
-            <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
-            {project.deletedAt && <Badge tone="gray">Archived</Badge>}
-          </span>
-        }
-        actions={
+      {/* One card, not a page header plus a detached card plus a loose
+          button: every part of this page describes the same Project, so it
+          reads as one object with its own actions rather than three
+          unrelated blocks stacked down the page. */}
+      <Card className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
+              {project.name}
+              <span className="text-base font-normal text-muted">({project.code})</span>
+            </h1>
+          </div>
+
           <Modal
             triggerLabel="Edit"
-            triggerVariant="secondary"
+            triggerVariant="ghost"
             triggerIcon={<EditIcon />}
             title="Edit Project"
             openOnMount={!!error}
@@ -132,40 +131,49 @@ export default async function ProjectDetailPage({
               }}
             />
           </Modal>
-        }
-      />
+        </div>
 
-      <Card className="flex flex-col gap-2 text-sm">
-        <p>
-          <span className="text-muted">Description:</span> {project.description ?? "—"}
-        </p>
-        <p>
-          <span className="text-muted">Owner:</span> {project.owner.name}
-        </p>
-        <p>
-          <span className="text-muted">Last updated by:</span> {project.updatedBy?.name ?? "—"} at{" "}
-          {project.updatedAt.toISOString()}
-        </p>
+        <div className="border-t border-border pt-5">
+          <DetailFields>
+            {/* Not `wide`: with four fields, dropping the full-width span
+                lets them fall into an even 2x2 instead of leaving Last
+                updated stranded alone on a row of its own. */}
+            <DetailField label="Description">{project.description}</DetailField>
+            {/* Status sits with the other facts rather than under the title:
+                it's another field describing this Project, not a caption. */}
+            <DetailField label="Status">
+              <span className="flex flex-wrap items-center gap-2">
+                <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
+                {project.deletedAt && <Badge tone="gray">Archived</Badge>}
+              </span>
+            </DetailField>
+            <DetailField label="Owner">{project.owner.name}</DetailField>
+            <DetailField label="Last updated">
+              {project.updatedBy?.name ?? "—"} at {project.updatedAt.toISOString()}
+            </DetailField>
+          </DetailFields>
+        </div>
+
+        <div className="flex justify-end border-t border-border pt-4">
+          {project.deletedAt ? (
+            <ConfirmForm action={restore} confirmMessage="Restore this project?">
+              <Button type="submit" variant="secondary">
+                Restore
+              </Button>
+            </ConfirmForm>
+          ) : (
+            <ConfirmForm
+              action={archive}
+              confirmMessage="Archive this project? Its Scenarios, Test Groups, and Test Cases are kept and can be restored later."
+            >
+              <Button type="submit" variant="secondary">
+                Archive
+              </Button>
+            </ConfirmForm>
+          )}
+        </div>
       </Card>
 
-      <div>
-        {project.deletedAt ? (
-          <ConfirmForm action={restore} confirmMessage="Restore this project?">
-            <Button type="submit" variant="secondary">
-              Restore
-            </Button>
-          </ConfirmForm>
-        ) : (
-          <ConfirmForm
-            action={archive}
-            confirmMessage="Archive this project? Its Scenarios, Test Groups, and Test Cases are kept and can be restored later."
-          >
-            <Button type="submit" variant="secondary">
-              Archive
-            </Button>
-          </ConfirmForm>
-        )}
-      </div>
     </main>
   );
 }

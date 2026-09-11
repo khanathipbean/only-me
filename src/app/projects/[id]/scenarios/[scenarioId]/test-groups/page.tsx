@@ -11,6 +11,7 @@ import {
   duplicateTestGroup,
   getTestGroupDescendantCountsForMany,
   listTestGroupsForScenario,
+  listTestGroupsForScenarioPage,
   moveTestGroup,
   reorderTestGroups,
   restoreTestGroup,
@@ -24,8 +25,10 @@ import { Modal } from "@/components/ui/Modal";
 import { TestGroupForm } from "@/components/forms/TestGroupForm";
 import { Badge, workflowStatusTone } from "@/components/ui/Badge";
 import { Button, LinkButton } from "@/components/ui/Button";
+import { Pagination } from "@/components/ui/Pagination";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
-import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
+import { DetailField, DetailFields } from "@/components/ui/DetailFields";
+import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
 import { EntityManageSection } from "@/components/EntityManageSection";
 import {
@@ -33,7 +36,9 @@ import {
   pageClass,
   tableClass,
   tableWrapClass,
+  tdCenterClass,
   tdClass,
+  thCenterClass,
   thClass,
 } from "@/lib/ui";
 
@@ -58,13 +63,15 @@ export default async function TestGroupsPage({
     moveError?: string;
     /** `?archived=1` lists archived Test Groups so they can be restored. */
     archived?: string;
+    page?: string;
+    pageSize?: string;
     /** Which row's inline Edit modal to reopen after a failed save — without
      * it a validation error would reopen every row's modal at once. */
     editId?: string;
   }>;
 }) {
   const { id: projectId, scenarioId } = await params;
-  const { error, moveError, archived, editId } = await searchParams;
+  const { error, moveError, archived, page, pageSize, editId } = await searchParams;
   const showArchived = archived === "1";
   const session = await auth();
 
@@ -76,7 +83,12 @@ export default async function TestGroupsPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
   const project = await getProjectById(projectId);
-  const testGroups = await listTestGroupsForScenario(scenarioId, { archived: showArchived });
+  const result = await listTestGroupsForScenarioPage(scenarioId, {
+    archived: showArchived,
+    page: page ? Number(page) : undefined,
+    pageSize: pageSize ? Number(pageSize) : undefined,
+  });
+  const testGroups = result.items;
 
   // Batched, not per row — one query per row would be N round trips.
   const [descendantCounts, projectScenarios] = await Promise.all([
@@ -290,9 +302,9 @@ export default async function TestGroupsPage({
               <tr>
                 <th className={thClass}>Sequence</th>
                 <th className={thClass}>Name</th>
-                <th className={thClass}>Status</th>
-                <th className={thClass}>Reorder</th>
-                <th className={`${thClass} text-right`}>Actions</th>
+                <th className={thCenterClass}>Status</th>
+                <th className={thCenterClass}>Reorder</th>
+                <th className={thCenterClass}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -315,13 +327,13 @@ export default async function TestGroupsPage({
                           {testGroup.name}
                         </Link>
                       </td>
-                      <td className={tdClass}>
+                      <td className={tdCenterClass}>
                         <Badge tone={workflowStatusTone(testGroup.status)}>
                           {testGroup.status}
                         </Badge>
                       </td>
-                      <td className={tdClass}>
-                        <div className="flex items-center gap-1">
+                      <td className={tdCenterClass}>
+                        <div className="flex items-center justify-center gap-1">
                           <form action={moveUp}>
                             <input type="hidden" name="id" value={testGroup.id} />
                             <button
@@ -412,6 +424,13 @@ export default async function TestGroupsPage({
           </table>
         </div>
       )}
+
+      <Pagination
+        page={result.page}
+        totalPages={result.totalPages}
+        total={result.total}
+        pageSize={result.pageSize}
+      />
     </main>
   );
 }

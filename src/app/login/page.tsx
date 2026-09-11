@@ -120,9 +120,9 @@ export default async function LoginPage({
         <div className="flex justify-center">
           <div className="w-full max-w-md rounded-3xl border border-white/20 bg-white/10 p-10 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.75)] ring-1 ring-white/5 backdrop-blur-2xl">
             <div className="flex flex-col items-center gap-3 text-center">
-              <Image src="/logo.png" alt="Blueteria" width={80} height={80} unoptimized />
+              <Image src="/logo.png" alt="Bull Terrier" width={80} height={80} unoptimized />
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight text-white">Blueteria</h1>
+                <h1 className="text-3xl font-semibold tracking-tight text-white">Bull Terrier</h1>
                 <p className="mt-1.5 text-sm text-white/60">
                   Manage Scenarios, Test Groups and Test Cases
                 </p>

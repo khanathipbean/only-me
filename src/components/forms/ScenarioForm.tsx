@@ -50,27 +50,28 @@ export function ScenarioForm({
             Scenario Name
             <RequiredMark />
           </span>
-          <input name="name" defaultValue={defaults?.name} required className={inputClass} />
+          <input name="name" defaultValue={defaults?.name} required className={inputClass} placeholder="e.g. Log in with a valid account" />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
           Description
-          <textarea name="description" defaultValue={defaults?.description ?? ""} className={textareaClass} />
+          <textarea name="description" defaultValue={defaults?.description ?? ""} className={textareaClass} placeholder="What this scenario covers, in a sentence or two" />
         </label>
         <label className={labelClass}>
           Preconditions
           <textarea
             name="preconditions"
+            placeholder="What must already be true before testing — e.g. the account exists and is active"
             defaultValue={defaults?.preconditions ?? ""}
             className={textareaClass}
           />
         </label>
         <label className={labelClass}>
           Test Data
-          <textarea name="testData" defaultValue={defaults?.testData ?? ""} className={textareaClass} />
+          <textarea name="testData" defaultValue={defaults?.testData ?? ""} className={textareaClass} placeholder="Accounts, values or files this scenario needs" />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
           Scenario Steps
-          <textarea name="steps" defaultValue={defaults?.steps ?? ""} className={textareaClass} />
+          <textarea name="steps" defaultValue={defaults?.steps ?? ""} className={textareaClass} placeholder="One step per line" />
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
           <span>
@@ -79,6 +80,7 @@ export function ScenarioForm({
           </span>
           <textarea
             name="expectedResult"
+            placeholder="What the system should do when the scenario passes"
             defaultValue={defaults?.expectedResult}
             required
             className={textareaClass}
@@ -108,7 +110,7 @@ export function ScenarioForm({
         </label>
         <label className={`${labelClass} sm:col-span-2`}>
           Tags (comma-separated)
-          <input name="tags" defaultValue={defaults?.tags} className={inputClass} />
+          <input name="tags" defaultValue={defaults?.tags} className={inputClass} placeholder="login, regression, smoke" />
         </label>
         {!hideActions && (
           <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">

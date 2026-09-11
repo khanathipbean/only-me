@@ -3,7 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { ChevronRightIcon } from "@/components/icons";
-import { tdClass, trHoverClass } from "@/lib/ui";
+import { tdCenterClass, trHoverClass } from "@/lib/ui";
 
 /**
  * A table row that expands a detail panel underneath itself instead of
@@ -44,10 +44,18 @@ export function ExpandableRow({
 
   return (
     <>
-      <tr className={trHoverClass}>
+      {/* The divider belongs under the panel, not under the summary: a row
+          and its panel are one record, so the line goes on the last `<tr>` of
+          the pair — which is also the one `.data-table`'s last-row rule can
+          then drop, instead of it stacking on the wrapper's border. */}
+      <tr className={`${trHoverClass} *:border-b-0`}>
         {cells}
-        <td className={tdClass}>
-          <div className="flex items-center justify-end gap-1">
+        <td className={tdCenterClass}>
+          {/* `inline-flex`, so the group is centred by the cell's own
+              `text-center` as an inline box. A block-level flex row fills the
+              cell and relies on nothing else in it having width — this way
+              the icons sit on the column's centre line regardless. */}
+          <div className="inline-flex items-center gap-1">
             {actions}
             <IconButton
               type="button"
@@ -65,9 +73,8 @@ export function ExpandableRow({
         </td>
       </tr>
       <tr>
-        {/* No border or padding of its own: the row above already draws the
-            separator, and any padding here would show as a gap while collapsed. */}
-        <td colSpan={colSpan} className="border-0 p-0">
+        {/* No padding of its own: it would show as a gap while collapsed. */}
+        <td colSpan={colSpan} className="border-b border-border p-0">
           <div
             id={panelId}
             inert={!open}
@@ -85,28 +92,5 @@ export function ExpandableRow({
         </td>
       </tr>
     </>
-  );
-}
-
-/** Field list for an `ExpandableRow` panel, mirroring the detail pages' cards. */
-export function DetailFields({ children }: { children: ReactNode }) {
-  return <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{children}</dl>;
-}
-
-export function DetailField({
-  label,
-  children,
-  wide,
-}: {
-  label: string;
-  children?: ReactNode;
-  /** Spans both columns — for long prose or a step list. */
-  wide?: boolean;
-}) {
-  return (
-    <div className={`flex flex-col gap-0.5 ${wide ? "sm:col-span-2" : ""}`}>
-      <dt className="text-xs font-semibold tracking-wide text-muted uppercase">{label}</dt>
-      <dd className="text-sm whitespace-pre-wrap text-foreground">{children ?? "—"}</dd>
-    </div>
   );
 }

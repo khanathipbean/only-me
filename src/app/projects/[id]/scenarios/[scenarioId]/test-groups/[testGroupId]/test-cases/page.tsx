@@ -5,7 +5,7 @@ import { getTestGroupWithProjectId } from "@/lib/test-groups";
 import {
   ValidationError,
   createTestCase,
-  listTestCasesWithStepsForTestGroup,
+  listTestCasesWithStepsForTestGroupPage,
   updateTestCase,
 } from "@/lib/test-cases";
 import { parseStepsJson } from "@/lib/test-case-form";
@@ -15,17 +15,21 @@ import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCasesListBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Pagination } from "@/components/ui/Pagination";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
-import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
+import { DetailField, DetailFields } from "@/components/ui/DetailFields";
+import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
 import {
   mutedTextClass,
   pageClass,
   tableClass,
   tableWrapClass,
+  tdCenterClass,
   tdClass,
+  thCenterClass,
   thClass,
 } from "@/lib/ui";
 
@@ -49,10 +53,12 @@ export default async function TestCasesPage({
     /** Which row's inline Edit modal to reopen after a failed save — without
      * it a validation error would reopen every row's modal at once. */
     editId?: string;
+    page?: string;
+    pageSize?: string;
   }>;
 }) {
   const { id: projectId, scenarioId, testGroupId } = await params;
-  const { error, editId } = await searchParams;
+  const { error, editId, page, pageSize } = await searchParams;
   const session = await auth();
 
   const testGroup = await getTestGroupWithProjectId(testGroupId);
@@ -62,13 +68,17 @@ export default async function TestCasesPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
-  const [project, scenario, testCases] = await Promise.all([
+  const [project, scenario, testCasePage] = await Promise.all([
     getProjectById(projectId),
     getScenarioById(scenarioId),
     // Steps included: each row's inline Edit modal seeds a TestStepEditor,
     // which would silently wipe the steps if it mounted with an empty list.
-    listTestCasesWithStepsForTestGroup(testGroupId),
+    listTestCasesWithStepsForTestGroupPage(testGroupId, {
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    }),
   ]);
+  const testCases = testCasePage.items;
 
   const basePath = `/projects/${projectId}/scenarios/${scenarioId}/test-groups/${testGroupId}/test-cases`;
 
@@ -182,10 +192,10 @@ export default async function TestCasesPage({
             <thead>
               <tr>
                 <th className={thClass}>Name</th>
-                <th className={thClass}>Priority</th>
-                <th className={thClass}>Test Result</th>
-                <th className={thClass}>Status</th>
-                <th className={`${thClass} text-right`}>Actions</th>
+                <th className={thCenterClass}>Priority</th>
+                <th className={thCenterClass}>Test Result</th>
+                <th className={thCenterClass}>Status</th>
+                <th className={thCenterClass}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -207,15 +217,15 @@ export default async function TestCasesPage({
                           {testCase.name}
                         </Link>
                       </td>
-                      <td className={tdClass}>
+                      <td className={tdCenterClass}>
                         <Badge tone={priorityTone(testCase.priority)}>{testCase.priority}</Badge>
                       </td>
-                      <td className={tdClass}>
+                      <td className={tdCenterClass}>
                         <Badge tone={testResultTone(testCase.testResult)}>
                           {testCase.testResult.replace(/_/g, " ")}
                         </Badge>
                       </td>
-                      <td className={tdClass}>
+                      <td className={tdCenterClass}>
                         <Badge tone={workflowStatusTone(testCase.status)}>{testCase.status}</Badge>
                       </td>
                     </>
@@ -291,6 +301,13 @@ export default async function TestCasesPage({
           </table>
         </div>
       )}
+
+      <Pagination
+        page={testCasePage.page}
+        totalPages={testCasePage.totalPages}
+        total={testCasePage.total}
+        pageSize={testCasePage.pageSize}
+      />
     </main>
   );
 }

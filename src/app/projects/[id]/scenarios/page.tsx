@@ -10,7 +10,7 @@ import {
   duplicateScenario,
   getScenarioDescendantCountsForMany,
   isScenarioSortField,
-  listScenariosForProject,
+  listScenariosForProjectPage,
   moveScenario,
   restoreScenario,
   updateScenario,
@@ -21,13 +21,15 @@ import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { EntityManageSection } from "@/components/EntityManageSection";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
+import { Pagination } from "@/components/ui/Pagination";
 import { nameOr, scenariosListBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { ScenarioForm } from "@/components/forms/ScenarioForm";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
-import { DetailField, DetailFields, ExpandableRow } from "@/components/ui/ExpandableRow";
+import { DetailField, DetailFields } from "@/components/ui/DetailFields";
+import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
 import {
   labelClass,
@@ -36,7 +38,9 @@ import {
   inputClass,
   tableClass,
   tableWrapClass,
+  tdCenterClass,
   tdClass,
+  thCenterClass,
   thClass,
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
@@ -60,6 +64,8 @@ export default async function ScenariosPage({
     sortOrder?: string;
     /** `?archived=1` lists archived Scenarios so they can be restored. */
     archived?: string;
+    page?: string;
+    pageSize?: string;
     error?: string;
     /** Surfaced inside the row's Manage section when a Move is rejected. */
     moveError?: string;
@@ -81,6 +87,8 @@ export default async function ScenariosPage({
     sortBy,
     sortOrder,
     archived,
+    page,
+    pageSize,
     error,
     moveError,
     editId,
@@ -93,14 +101,17 @@ export default async function ScenariosPage({
   const project = await getProjectById(projectId);
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || status || priority || showArchived);
-  const scenarios = await listScenariosForProject(projectId, {
+  const result = await listScenariosForProjectPage(projectId, {
     search,
     status: status as WorkflowStatus | undefined,
     priority: priority as Priority | undefined,
     sortBy: isScenarioSortField(sortBy) ? sortBy : undefined,
     sortOrder: sortOrder === "asc" ? "asc" : undefined,
     archived: showArchived,
+    page: page ? Number(page) : undefined,
+    pageSize: pageSize ? Number(pageSize) : undefined,
   });
+  const scenarios = result.items;
 
   // Batched, not per row: the Manage section needs each Scenario's descendant
   // counts to word its confirmations, and one query per row would be N round
@@ -399,9 +410,9 @@ export default async function ScenariosPage({
             <thead>
               <tr>
                 <th className={thClass}>Name</th>
-                <th className={thClass}>Priority</th>
-                <th className={thClass}>Status</th>
-                <th className={`${thClass} text-right`}>Actions</th>
+                <th className={thCenterClass}>Priority</th>
+                <th className={thCenterClass}>Status</th>
+                <th className={thCenterClass}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -423,10 +434,10 @@ export default async function ScenariosPage({
                           {scenario.name}
                         </Link>
                       </td>
-                      <td className={tdClass}>
+                      <td className={tdCenterClass}>
                         <Badge tone={priorityTone(scenario.priority)}>{scenario.priority}</Badge>
                       </td>
-                      <td className={tdClass}>
+                      <td className={tdCenterClass}>
                         <Badge tone={workflowStatusTone(scenario.status)}>{scenario.status}</Badge>
                       </td>
                     </>
@@ -507,6 +518,13 @@ export default async function ScenariosPage({
           </table>
         </div>
       )}
+
+      <Pagination
+        page={result.page}
+        totalPages={result.totalPages}
+        total={result.total}
+        pageSize={result.pageSize}
+      />
     </main>
   );
 }

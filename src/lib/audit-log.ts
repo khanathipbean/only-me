@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/prisma";
-
-const DEFAULT_PAGE_SIZE = 10;
-const MAX_PAGE_SIZE = 100;
+import { paginate } from "@/lib/pagination";
 
 /**
  * Parses a `datetime-local`-style string (e.g. "2026-09-08T14:30", no
@@ -50,16 +48,7 @@ export type AuditLogFilters = {
   pageSize?: number;
 };
 
-function sanitizePositiveInt(value: number | undefined, fallback: number, max: number) {
-  if (value === undefined || Number.isNaN(value) || value < 1) {
-    return fallback;
-  }
-  return Math.min(value, max);
-}
-
 export async function listAuditLogForProject(projectId: string, filters: AuditLogFilters = {}) {
-  const pageSize = sanitizePositiveInt(filters.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
-  const page = sanitizePositiveInt(filters.page, 1, Number.MAX_SAFE_INTEGER);
 
   const where = {
     projectId,
@@ -79,22 +68,17 @@ export async function listAuditLogForProject(projectId: string, filters: AuditLo
       : {}),
   };
 
-  const [entries, total] = await Promise.all([
-    prisma.auditLog.findMany({
-      where,
-      include: { actor: { select: { id: true, name: true, email: true } } },
-      orderBy: { occurredAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.auditLog.count({ where }),
-  ]);
-
-  return {
-    entries,
-    total,
-    page,
-    pageSize,
-    totalPages: Math.max(Math.ceil(total / pageSize), 1),
-  };
+  const { items, ...rest } = await paginate(
+    filters,
+    () => prisma.auditLog.count({ where }),
+    ({ skip, take }) =>
+      prisma.auditLog.findMany({
+        where,
+        include: { actor: { select: { id: true, name: true, email: true } } },
+        orderBy: { occurredAt: "desc" },
+        skip,
+        take,
+      }),
+  );
+  return { entries: items, ...rest };
 }

@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
@@ -98,33 +99,60 @@ export function isScenarioSortField(value: string | null | undefined): value is 
   return SCENARIO_SORT_FIELDS.includes(value as ScenarioSortField);
 }
 
+export type ScenarioFilters = {
+  search?: string;
+  status?: WorkflowStatus;
+  priority?: Priority;
+  sortBy?: ScenarioSortField;
+  sortOrder?: "asc" | "desc";
+  /** Show archived Scenarios instead of live ones. Without this the list
+   * can only ever show `deletedAt: null`, which — now that archiving is
+   * driven from the list — would leave an archived Scenario unreachable and
+   * make "restorable later" a lie. */
+  archived?: boolean;
+};
+
+/** Shared by the plain and paginated lists so their results can't drift. */
+function scenarioListWhere(projectId: string, filters: ScenarioFilters) {
+  return {
+    projectId,
+    deletedAt: filters.archived ? { not: null } : null,
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.priority ? { priority: filters.priority } : {}),
+    ...(filters.search
+      ? { name: { contains: filters.search, mode: "insensitive" as const } }
+      : {}),
+  };
+}
+
+function scenarioListOrder(filters: ScenarioFilters) {
+  return { [filters.sortBy ?? "createdAt"]: filters.sortOrder ?? "desc" };
+}
+
 export async function listScenariosForProject(
   projectId: string,
-  filters: {
-    search?: string;
-    status?: WorkflowStatus;
-    priority?: Priority;
-    sortBy?: ScenarioSortField;
-    sortOrder?: "asc" | "desc";
-    /** Show archived Scenarios instead of live ones. Without this the list
-     * can only ever show `deletedAt: null`, which — now that archiving is
-     * driven from the list — would leave an archived Scenario unreachable and
-     * make "restorable later" a lie. */
-    archived?: boolean;
-  } = {},
+  filters: ScenarioFilters = {},
 ) {
   return prisma.scenario.findMany({
-    where: {
-      projectId,
-      deletedAt: filters.archived ? { not: null } : null,
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.priority ? { priority: filters.priority } : {}),
-      ...(filters.search
-        ? { name: { contains: filters.search, mode: "insensitive" } }
-        : {}),
-    },
-    orderBy: { [filters.sortBy ?? "createdAt"]: filters.sortOrder ?? "desc" },
+    where: scenarioListWhere(projectId, filters),
+    orderBy: scenarioListOrder(filters),
   });
+}
+
+/** One page of the same list. Kept separate so `/api/projects/[id]/scenarios`
+ * and the "move to another Scenario" picker, which both need every row, are
+ * unaffected. */
+export async function listScenariosForProjectPage(
+  projectId: string,
+  filters: ScenarioFilters & PageFilters = {},
+) {
+  const where = scenarioListWhere(projectId, filters);
+  return paginate(
+    filters,
+    () => prisma.scenario.count({ where }),
+    ({ skip, take }) =>
+      prisma.scenario.findMany({ where, orderBy: scenarioListOrder(filters), skip, take }),
+  );
 }
 
 /** Wrapped in React's `cache` so `generateMetadata` and the page body, which
