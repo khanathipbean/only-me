@@ -96,8 +96,14 @@ body {
   box-sizing: border-box;
 }
 
-a {
-  color: inherit;
+/* In `base` on purpose. Unlayered CSS outranks everything inside a layer, so
+ * while this sat outside one it beat Tailwind's `@layer utilities` — a
+ * `text-*` class on a link did nothing, and LinkButton's primary variant
+ * rendered near-white text on its near-white background. */
+@layer base {
+  a {
+    color: inherit;
+  }
 }
 
 /* A `<button>` shows the plain arrow cursor by default — that's the browser's
