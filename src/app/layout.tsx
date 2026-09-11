@@ -5,7 +5,7 @@ import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { auth, signOut } from "@/auth";
 import { getUserById } from "@/lib/users";
-import { FilterForm } from "@/components/FilterForm";
+import { HeaderSearch } from "@/components/HeaderSearch";
 import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import "./globals.css";
@@ -91,19 +91,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 Bull Terrier
               </Link>
 
-              <FilterForm action="/search" showClear={false} className="flex-1 min-w-48">
-                <input
-                  type="search"
-                  name="q"
-                  placeholder="Search Projects, Scenarios, Test Groups, Test Cases"
-                  // `rounded-md` replaced outright rather than having a larger radius
-                  // appended: two `rounded-*` utilities set the same property,
-                  // and which one wins is Tailwind's emit order, not the order
-                  // they're written. The extra left padding keeps the
-                  // placeholder off the curve.
-                  className="block w-full rounded-full border border-border bg-background px-4 py-1.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                />
-              </FilterForm>
+              <HeaderSearch className="min-w-48 flex-1" />
 
               <ThemeToggle />
               <AccountMenu
