@@ -14,15 +14,29 @@ import { dialogClass } from "@/lib/ui";
  * can't cross the server/client boundary, so the opener has to live in the
  * same client component as its state.
  */
+/** Widths a dialog can take. A fixed set rather than a class the caller
+ * appends: two `max-w-*` utilities resolve by Tailwind's emit order, so
+ * `${dialogClass} max-w-5xl` would be a coin toss against the built-in one. */
+const DIALOG_WIDTH_CLASS = {
+  md: "max-w-2xl",
+  /** For content that needs room to be legible — a PDF page, say. */
+  lg: "max-w-5xl",
+  /** Nearly the whole window, for a document you actually have to read.
+   * `95vw` rather than a rem cap so it fills a wide monitor too. */
+  full: "max-w-[95vw]",
+} as const;
+
 export function Dialog({
   open,
   onClose,
   title,
+  width = "md",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  width?: keyof typeof DIALOG_WIDTH_CLASS;
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -43,7 +57,7 @@ export function Dialog({
       // Esc and the backdrop close the dialog natively; `close` keeps the
       // caller's state in step with what the browser already did.
       onClose={onClose}
-      className={`${dialogClass} max-w-2xl`}
+      className={`${dialogClass} ${DIALOG_WIDTH_CLASS[width]}`}
     >
       <div className="max-h-[85vh] overflow-y-auto p-6">
         <div className="mb-4 flex items-center justify-between gap-4">

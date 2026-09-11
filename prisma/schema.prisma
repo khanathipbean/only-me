@@ -31,6 +31,7 @@ model User {
   updatedTestCases    TestCase[]   @relation("TestCaseUpdatedBy")
   uploadedAttachments Attachment[]
   performedImports    ImportLog[]
+  uploadedFiles       ProjectFile[]
 }
 
 enum ProjectStatus {
@@ -66,6 +67,7 @@ model Project {
   auditLogs     AuditLog[]
   scenarios     Scenario[]
   importLogs    ImportLog[]
+  files         ProjectFile[]
 }
 
 model ProjectMember {
@@ -228,4 +230,28 @@ model ImportLog {
 
   project     Project @relation(fields: [projectId], references: [id])
   performedBy User    @relation(fields: [performedById], references: [id])
+}
+
+/// A document kept against the Project — a spec, a report, an assessment.
+/// Stored and listed only; nothing reads the contents.
+model ProjectFile {
+  id           String    @id @default(cuid())
+  projectId    String
+  /// Free-text heading the file is listed under, e.g. "ISMS assessment".
+  module       String
+  /// The name the uploader's file had. Display only — never used to build a
+  /// path, so a name containing ".." can't escape the upload directory.
+  fileName     String
+  /// Random name the bytes actually live under on disk.
+  storageKey   String    @unique
+  contentType  String
+  size         Int
+  uploadedById String
+  uploadedAt   DateTime  @default(now())
+  deletedAt    DateTime?
+
+  project    Project @relation(fields: [projectId], references: [id])
+  uploadedBy User    @relation(fields: [uploadedById], references: [id])
+
+  @@index([projectId, module])
 }

@@ -12,6 +12,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     { label: "Scenarios", href: `${overviewHref}/scenarios` },
     { label: "Dashboard", href: `${overviewHref}/dashboard` },
     { label: "Audit Trail", href: `${overviewHref}/audit-log` },
+    { label: "Files", href: `${overviewHref}/files` },
     { label: "Import", href: `${overviewHref}/import` },
   ];
 
