@@ -119,7 +119,13 @@ describe("project dashboard", () => {
     const result = await dashboard(project.id);
 
     expect(result.hasAnyData).toBe(true);
-    expect(result.counts).toEqual({ scenarios: 2, testGroups: 2, testCases: 3 });
+    expect(result.counts).toEqual({
+      modules: 1,
+      requirements: 1,
+      scenarios: 2,
+      testGroups: 2,
+      testCases: 3,
+    });
     expect(result.testProgress).toBeCloseTo((2 / 3) * 100);
     expect(result.testCasesByResult).toEqual({
       NOT_RUN: 1,
@@ -138,8 +144,16 @@ describe("project dashboard", () => {
     );
     expect(byAssignee).toEqual({ [user1.id]: 1, [user2.id]: 1, unassigned: 1 });
 
-    expect(result.tree).toHaveLength(2);
-    const scenarioANode = result.tree.find((s: { name: string }) => s.name === "Scenario A");
+    // Both Scenarios sit under the one seeded Requirement, so the tree is a
+    // single Module holding a single Requirement holding the two of them.
+    expect(result.tree).toHaveLength(1);
+    const moduleNode = result.tree[0];
+    expect(moduleNode.testCaseCount).toBe(3);
+    expect(moduleNode.requirements).toHaveLength(1);
+
+    const scenarios = moduleNode.requirements[0].scenarios;
+    expect(scenarios).toHaveLength(2);
+    const scenarioANode = scenarios.find((s: { name: string }) => s.name === "Scenario A");
     expect(scenarioANode.testCaseCount).toBe(2);
     expect(scenarioANode.testGroups[0].testCaseCount).toBe(2);
   });
@@ -151,13 +165,20 @@ describe("project dashboard", () => {
 
     const filtered = await dashboard(project.id, "?testResult=PASSED");
 
-    expect(filtered.counts).toEqual({ scenarios: 1, testGroups: 1, testCases: 1 });
+    expect(filtered.counts).toEqual({
+      modules: 1,
+      requirements: 1,
+      scenarios: 1,
+      testGroups: 1,
+      testCases: 1,
+    });
     expect(filtered.testProgress).toBe(100);
     expect(filtered.testCasesByResult.PASSED).toBe(1);
     expect(filtered.testCasesByResult.FAILED).toBe(0);
     expect(filtered.tree).toHaveLength(1);
-    expect(filtered.tree[0].testGroups[0].testCases).toHaveLength(1);
-    expect(filtered.tree[0].testGroups[0].testCases[0].id).toBe(tc1.id);
+    const filteredScenario = filtered.tree[0].requirements[0].scenarios[0];
+    expect(filteredScenario.testGroups[0].testCases).toHaveLength(1);
+    expect(filteredScenario.testGroups[0].testCases[0].id).toBe(tc1.id);
   });
 
   it("filters by scenarioId, testGroupId, priority, status, assigneeId, and tags", async () => {
@@ -208,7 +229,13 @@ describe("project dashboard", () => {
     const result = await dashboard(project.id, "?testResult=BLOCKED");
 
     expect(result.hasAnyData).toBe(true);
-    expect(result.counts).toEqual({ scenarios: 0, testGroups: 0, testCases: 0 });
+    expect(result.counts).toEqual({
+      modules: 0,
+      requirements: 0,
+      scenarios: 0,
+      testGroups: 0,
+      testCases: 0,
+    });
     expect(result.tree).toEqual([]);
     expect(result.testProgress).toBe(0);
   });
@@ -229,7 +256,13 @@ describe("project dashboard", () => {
 
     const result = await dashboard(project.id);
     expect(result.hasAnyData).toBe(false);
-    expect(result.counts).toEqual({ scenarios: 0, testGroups: 0, testCases: 0 });
+    expect(result.counts).toEqual({
+      modules: 0,
+      requirements: 0,
+      scenarios: 0,
+      testGroups: 0,
+      testCases: 0,
+    });
   });
 
   it("rejects a non-member with 403 and isolates counts per project", async () => {
@@ -257,6 +290,12 @@ describe("project dashboard", () => {
     expect(forbidden.status).toBe(403);
 
     const ownDashboard = await dashboard(projectB.id);
-    expect(ownDashboard.counts).toEqual({ scenarios: 0, testGroups: 0, testCases: 0 });
+    expect(ownDashboard.counts).toEqual({
+      modules: 0,
+      requirements: 0,
+      scenarios: 0,
+      testGroups: 0,
+      testCases: 0,
+    });
   });
 });

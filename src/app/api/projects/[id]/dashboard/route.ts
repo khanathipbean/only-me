@@ -14,6 +14,8 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
   const tags = searchParams.get("tags");
 
   const result = await getProjectDashboard(projectId, {
+    moduleId: searchParams.get("moduleId") ?? undefined,
+    requirementId: searchParams.get("requirementId") ?? undefined,
     scenarioId: searchParams.get("scenarioId") ?? undefined,
     testGroupId: searchParams.get("testGroupId") ?? undefined,
     testResult: asEnumOrUndefined<TestResult>(searchParams.get("testResult"), TEST_RESULT_VALUES),

@@ -78,6 +78,23 @@ type TreeScenario = {
   testGroups: TreeTestGroup[];
 };
 
+type TreeRequirement = {
+  id: string;
+  name: string;
+  code: string | null;
+  testCaseCount: number;
+  scenarios: TreeScenario[];
+};
+
+type TreeModule = {
+  id: string;
+  name: string;
+  testCaseCount: number;
+  requirements: TreeRequirement[];
+};
+
+/** Only these three have a record to fetch; a Module or a Requirement row
+ *  expands and links, but has no preview. */
 type PreviewType = "scenario" | "testGroup" | "testCase";
 
 type PreviewTarget = {
@@ -93,15 +110,29 @@ type PreviewTarget = {
 
 type DashboardData = {
   hasAnyData: boolean;
-  counts: { scenarios: number; testGroups: number; testCases: number };
+  counts: {
+    modules: number;
+    requirements: number;
+    scenarios: number;
+    testGroups: number;
+    testCases: number;
+  };
   testCasesByResult: Record<string, number>;
   testCasesByPriority: Record<string, number>;
   testCasesByAssignee: Array<{ assigneeId: string | null; assigneeName: string; count: number }>;
   testProgress: number;
-  tree: TreeScenario[];
+  tree: TreeModule[];
+  options: {
+    modules: Array<{ id: string; name: string }>;
+    requirements: Array<{ id: string; name: string; moduleId: string }>;
+    scenarios: Array<{ id: string; name: string; requirementId: string }>;
+    testGroups: Array<{ id: string; name: string; scenarioId: string }>;
+  };
 };
 
 type Filters = {
+  moduleId: string;
+  requirementId: string;
   scenarioId: string;
   testGroupId: string;
   testResult: string;
@@ -116,6 +147,8 @@ type Filters = {
 };
 
 const EMPTY_FILTERS: Filters = {
+  moduleId: "",
+  requirementId: "",
   scenarioId: "",
   testGroupId: "",
   testResult: "",
@@ -130,8 +163,10 @@ const EMPTY_FILTERS: Filters = {
 };
 
 const FILTER_LABELS: Record<keyof Filters, string> = {
-  scenarioId: "Scenario ID",
-  testGroupId: "Test Group ID",
+  moduleId: "Module",
+  requirementId: "Requirement",
+  scenarioId: "Scenario",
+  testGroupId: "Test Group",
   testResult: "Test Result",
   priority: "Priority",
   status: "Status",
@@ -214,6 +249,24 @@ export function DashboardView({ projectId }: { projectId: string }) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  /* The four hierarchy filters are one chain, so choosing a Module has to
+   * drop a Requirement chosen under a different one — left alone the two
+   * would contradict each other and the result would always be empty. */
+  function updateHierarchyFilter(key: "moduleId" | "requirementId" | "scenarioId", value: string) {
+    setLoading(true);
+    setFilters((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === "moduleId") {
+        next.requirementId = "";
+      }
+      if (key === "moduleId" || key === "requirementId") {
+        next.scenarioId = "";
+      }
+      next.testGroupId = "";
+      return next;
+    });
+  }
+
   function clearAllFilters() {
     setLoading(true);
     setFilters(EMPTY_FILTERS);
@@ -234,6 +287,34 @@ export function DashboardView({ projectId }: { projectId: string }) {
       }
       return next;
     });
+  }
+
+  const options = data?.options;
+  const requirementOptions = (options?.requirements ?? []).filter(
+    (requirement) => !filters.moduleId || requirement.moduleId === filters.moduleId,
+  );
+  const scenarioOptions = (options?.scenarios ?? []).filter((scenario) => {
+    if (filters.requirementId) {
+      return scenario.requirementId === filters.requirementId;
+    }
+    // No Requirement chosen but a Module is: every Scenario under it.
+    return (
+      !filters.moduleId ||
+      requirementOptions.some((requirement) => requirement.id === scenario.requirementId)
+    );
+  });
+  const testGroupOptions = (options?.testGroups ?? []).filter(
+    (testGroup) =>
+      !filters.scenarioId
+        ? scenarioOptions.some((scenario) => scenario.id === testGroup.scenarioId)
+        : testGroup.scenarioId === filters.scenarioId,
+  );
+
+  function toOptions(rows: Array<{ id: string; name: string }>, allLabel: string) {
+    return [
+      { value: "", label: allLabel },
+      ...rows.map((row) => ({ value: row.id, label: row.name })),
+    ];
   }
 
   const activeFilters = Object.entries(filters).filter(([, value]) => value);
@@ -263,6 +344,24 @@ export function DashboardView({ projectId }: { projectId: string }) {
           {/* aria-label rather than relying on the wrapping <label>: a label
               can only be programmatically bound to a real form control, not to
               a custom combobox, so the visible text is decorative here. */}
+          <label className={labelClass}>
+            Module
+            <Select
+              value={filters.moduleId}
+              onChange={(next) => updateHierarchyFilter("moduleId", next)}
+              options={toOptions(options?.modules ?? [], "All Modules")}
+              ariaLabel="Module"
+            />
+          </label>
+          <label className={labelClass}>
+            Requirement
+            <Select
+              value={filters.requirementId}
+              onChange={(next) => updateHierarchyFilter("requirementId", next)}
+              options={toOptions(requirementOptions, "All Requirements")}
+              ariaLabel="Requirement"
+            />
+          </label>
           <label className={labelClass}>
             Test Result
             <Select
@@ -302,19 +401,21 @@ export function DashboardView({ projectId }: { projectId: string }) {
           {showMoreFilters && (
             <>
               <label className={labelClass}>
-                Scenario ID
-                <input
+                Scenario
+                <Select
                   value={filters.scenarioId}
-                  onChange={(event) => updateFilter("scenarioId", event.target.value)}
-                  className={inputClass}
+                  onChange={(next) => updateHierarchyFilter("scenarioId", next)}
+                  options={toOptions(scenarioOptions, "All Scenarios")}
+                  ariaLabel="Scenario"
                 />
               </label>
               <label className={labelClass}>
-                Test Group ID
-                <input
+                Test Group
+                <Select
                   value={filters.testGroupId}
-                  onChange={(event) => updateFilter("testGroupId", event.target.value)}
-                  className={inputClass}
+                  onChange={(next) => updateFilter("testGroupId", next)}
+                  options={toOptions(testGroupOptions, "All Test Groups")}
+                  ariaLabel="Test Group"
                 />
               </label>
               <label className={labelClass}>
@@ -486,7 +587,11 @@ function SummaryWidget({
 
   return (
     <WidgetShell label="Overview">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* Six stats: 2 / 3 / 6 per row divides evenly at every width, where
+          the old 4-column grid would leave a ragged last row. */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <Stat label="Modules" value={data.counts.modules} />
+        <Stat label="Requirements" value={data.counts.requirements} />
         <Stat label="Scenarios" value={data.counts.scenarios} />
         <Stat label="Test Groups" value={data.counts.testGroups} />
         <Stat label="Test Cases" value={data.counts.testCases} />
@@ -700,8 +805,38 @@ function TreeWidget({
   return (
     <WidgetShell label="Hierarchy">
       <ul className="flex flex-col gap-0.5">
-        {data.tree.map((scenario) => (
-          <li key={scenario.id}>
+        {data.tree.map((moduleNode) => (
+          <li key={moduleNode.id}>
+            <TreeRow
+              expanded={expanded.has(moduleNode.id)}
+              onToggle={() => onToggle(moduleNode.id)}
+              label={moduleNode.name}
+              count={moduleNode.testCaseCount}
+              level="Module"
+              levelTone="indigo"
+              bold
+            />
+            {expanded.has(moduleNode.id) && (
+              <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
+                {moduleNode.requirements.map((requirement) => (
+                  <li key={requirement.id}>
+                    <TreeRow
+                      expanded={expanded.has(requirement.id)}
+                      onToggle={() => onToggle(requirement.id)}
+                      label={
+                        requirement.code
+                          ? `${requirement.code} — ${requirement.name}`
+                          : requirement.name
+                      }
+                      count={requirement.testCaseCount}
+                      level="Requirement"
+                      levelTone="cyan"
+                      bold
+                    />
+                    {expanded.has(requirement.id) && (
+                      <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
+                        {requirement.scenarios.map((scenario) => (
+                          <li key={scenario.id}>
             <TreeRow
               expanded={expanded.has(scenario.id)}
               onToggle={() => onToggle(scenario.id)}
@@ -774,6 +909,14 @@ function TreeWidget({
                 ))}
               </ul>
             )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ul>
@@ -793,7 +936,9 @@ function TreeRow({
 }: {
   expanded: boolean;
   onToggle: () => void;
-  onPreview: () => void;
+  /** Omitted for the two levels with no record of their own to show, where
+   *  clicking the name expands the row instead. */
+  onPreview?: () => void;
   label: string;
   count: number;
   level: string;
@@ -813,7 +958,7 @@ function TreeRow({
       <Badge tone={levelTone}>{level}</Badge>
       <button
         type="button"
-        onClick={onPreview}
+        onClick={onPreview ?? onToggle}
         className={`min-w-0 flex-1 truncate text-left text-foreground hover:text-brand hover:underline ${bold ? "font-medium" : ""}`}
       >
         {label}
