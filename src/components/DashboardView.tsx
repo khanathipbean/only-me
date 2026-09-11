@@ -1,8 +1,9 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
-import { inputClass, labelClass } from "@/lib/ui";
+import { dialogClass, inputClass, labelClass } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import {
@@ -14,7 +15,7 @@ import {
   workflowStatusTone,
 } from "@/components/ui/Badge";
 import { Button, IconButton, LinkButton } from "@/components/ui/Button";
-import { ChevronRightIcon, ClearIcon } from "@/components/icons";
+import { ChevronRightIcon, ClearIcon, FilterOffIcon } from "@/components/icons";
 
 const TEST_RESULT_LABELS: Record<string, string> = {
   NOT_RUN: "Not Run",
@@ -153,6 +154,12 @@ export function DashboardView({ projectId }: { projectId: string }) {
   // that follows regardless of the `await`. Nesting them inside .then()/
   // .catch()/.finally() callbacks instead keeps them out of the effect's
   // own synchronous body.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const callbackUrl = query ? `${pathname}?${query}` : pathname;
+
   const fetchDashboard = useCallback(() => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
@@ -162,6 +169,14 @@ export function DashboardView({ projectId }: { projectId: string }) {
     }
     fetch(`/api/projects/${projectId}/dashboard?${params.toString()}`)
       .then((response) => {
+        // The session can lapse while this page sits open. The API answers
+        // 401 rather than redirecting, so send the browser to the login page
+        // ourselves — otherwise the dashboard would just sit on a generic
+        // "failed to load" and never say why.
+        if (response.status === 401) {
+          router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+          return undefined;
+        }
         if (!response.ok) {
           setError("Failed to load dashboard");
           setData(null);
@@ -179,7 +194,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
       .finally(() => {
         setLoading(false);
       });
-  }, [projectId, filters]);
+  }, [projectId, filters, router, callbackUrl]);
 
   useEffect(() => {
     fetchDashboard();
@@ -219,15 +234,18 @@ export function DashboardView({ projectId }: { projectId: string }) {
       <Card>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Filters</h2>
-          <IconButton
-            type="button"
-            variant="secondary"
-            onClick={clearAllFilters}
-            aria-label="Clear all filters"
-            title="Clear all filters"
-          >
-            <ClearIcon />
-          </IconButton>
+          {/* Only when there is something to clear. */}
+          {activeFilters.length > 0 && (
+            <IconButton
+              type="button"
+              variant="secondary"
+              onClick={clearAllFilters}
+              aria-label="Clear all filters"
+              title="Clear all filters"
+            >
+              <FilterOffIcon />
+            </IconButton>
+          )}
         </div>
         <form
           onSubmit={(event) => event.preventDefault()}
@@ -821,7 +839,7 @@ function PreviewModal({ target, onClose }: { target: PreviewTarget | null; onClo
     <dialog
       ref={dialogRef}
       onClose={onClose}
-      className="m-auto w-full max-w-2xl rounded-lg border border-border bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+      className={`${dialogClass} max-w-2xl`}
     >
       {target && (
         <div className="max-h-[85vh] overflow-y-auto p-6">
