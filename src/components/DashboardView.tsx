@@ -636,11 +636,12 @@ function SummaryWidget({
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    // A tinted tile, not bare text on the Card's own surface: six numbers
-    // floating with only whitespace between them read as empty rather than
-    // a considered group. One step off-surface (not a border) keeps it quiet
-    // relative to the Card it sits inside, instead of doubling up on edges.
-    <div className="rounded-lg bg-black/[.03] p-4 dark:bg-white/[.04]">
+    // A glass pane, not a flat tint: a soft gradient fill plus blur reads as
+    // a pane sitting just above the Card's surface, and the hairline top
+    // edge (brighter than the border's other three sides) is what sells
+    // "glass" rather than "tinted box" — light catching the top of a bevel.
+    <div className="relative overflow-hidden rounded-xl border border-black/[.06] bg-gradient-to-b from-black/[.05] to-black/[.015] p-4 shadow-sm backdrop-blur-sm dark:border-white/10 dark:from-white/[.08] dark:to-white/[.02]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 dark:bg-white/15" />
       {/* Proportional figures, not tabular-nums: these sit alone, not in a
           column that needs to align digit-for-digit, and tabular-nums makes
           a standalone number like "5" look loose at display size. */}
