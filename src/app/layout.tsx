@@ -5,6 +5,7 @@ import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { auth, signOut } from "@/auth";
 import { getUserById } from "@/lib/users";
+import { isAdminAnywhere } from "@/lib/rbac";
 import { HeaderSearch } from "@/components/HeaderSearch";
 import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -53,6 +54,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // back in. `getUserById` is cached per request, so pages that need it too
   // don't pay for a second query.
   const currentUser = session?.user ? await getUserById(session.user.id) : null;
+  const canManageMembers = session?.user ? await isAdminAnywhere(session.user.id) : false;
 
   async function logout() {
     "use server";
@@ -106,6 +108,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 name={currentUser?.name ?? session.user.email ?? "Account"}
                 email={currentUser?.email ?? session.user.email ?? ""}
                 logout={logout}
+                canManageMembers={canManageMembers}
               />
             </div>
           </header>

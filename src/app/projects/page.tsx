@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { DuplicateCodeError, ValidationError, createProject, listProjectsForUserPage } from "@/lib/projects";
+import { isAdminAnywhere } from "@/lib/rbac";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { Pagination } from "@/components/ui/Pagination";
@@ -33,20 +34,19 @@ export default async function ProjectsPage({
   searchParams: Promise<{
     search?: string;
     status?: string;
-    owner?: string;
     page?: string;
     pageSize?: string;
     error?: string;
   }>;
 }) {
   const session = await auth();
-  const { search, status, owner, page, pageSize, error } = await searchParams;
-  const hasFilters = Boolean(search || status || owner);
+  const { search, status, page, pageSize, error } = await searchParams;
+  const hasFilters = Boolean(search || status);
+  const canCreateProject = await isAdminAnywhere(session!.user.id);
 
   const result = await listProjectsForUserPage(session!.user.id, {
     search,
     status: status as ProjectStatus | undefined,
-    owner,
     page: page ? Number(page) : undefined,
     pageSize: pageSize ? Number(pageSize) : undefined,
   });
@@ -56,6 +56,10 @@ export default async function ProjectsPage({
     "use server";
 
     const session = await auth();
+    if (!(await isAdminAnywhere(session!.user.id))) {
+      redirect(`/projects?error=${encodeURIComponent("Only an Admin can create new projects")}`);
+    }
+
     const startDate = formData.get("startDate") as string;
     const endDate = formData.get("endDate") as string;
 
@@ -88,9 +92,11 @@ export default async function ProjectsPage({
       <PageHeader
         title="Projects"
         actions={
-          <Modal triggerLabel="+ New Project" title="New Project" openOnMount={!!error}>
-            <ProjectForm action={create} submitLabel="Create Project" error={error} />
-          </Modal>
+          canCreateProject && (
+            <Modal triggerLabel="+ New Project" title="New Project" openOnMount={!!error}>
+              <ProjectForm action={create} submitLabel="Create Project" error={error} />
+            </Modal>
+          )
         }
       />
 
@@ -115,16 +121,6 @@ export default async function ProjectsPage({
             ]}
             ariaLabel="Status"
             className="max-w-40"
-          />
-        </label>
-        <label className={labelClass}>
-          Owner
-          <input
-            type="text"
-            name="owner"
-            placeholder="Owner user ID"
-            defaultValue={owner}
-            className={`${inputClass} max-w-xs`}
           />
         </label>
       </FilterForm>

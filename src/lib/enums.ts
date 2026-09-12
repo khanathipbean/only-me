@@ -57,6 +57,13 @@ export const PROJECT_STATUS_OPTIONS = [
   { value: "COMPLETED", label: "Completed" },
 ];
 
+export const PROJECT_ROLE_OPTIONS = [
+  { value: "ADMIN", label: "Admin" },
+  { value: "QA_LEAD", label: "QA Lead" },
+  { value: "TESTER", label: "Tester" },
+  { value: "VIEWER", label: "Viewer" },
+];
+
 export const TEST_TYPE_OPTIONS = [
   { value: "", label: "—" },
   { value: "POSITIVE", label: "Positive" },
