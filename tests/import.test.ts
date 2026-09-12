@@ -12,6 +12,7 @@ import { GET as getTemplate } from "@/app/api/import/template/route";
 import { POST as validateImportRoute } from "@/app/api/projects/[id]/import/validate/route";
 import { POST as confirmImportRoute } from "@/app/api/projects/[id]/import/confirm/route";
 import { IMPORT_COLUMNS } from "@/lib/import/parse";
+import { UNASSIGNED_NAME } from "@/lib/requirements";
 
 const mockAuth = vi.mocked(auth);
 
@@ -56,6 +57,15 @@ async function createProject(code: string) {
 }
 
 const CSV_HEADER = IMPORT_COLUMNS.join(",");
+
+/** Builds a CSV data row from column name → value, defaulting every column
+ * not given to "". Positional (a plain array + .join(",")) is exactly what
+ * broke twice already as IMPORT_COLUMNS grew — a row written against one
+ * column count silently misaligns, or throws an "Invalid Record Length",
+ * against a later one. Keying by name survives future columns unchanged. */
+function csvRow(values: Partial<Record<(typeof IMPORT_COLUMNS)[number], string>>): string {
+  return IMPORT_COLUMNS.map((column) => values[column] ?? "").join(",");
+}
 
 describe("import", () => {
   beforeEach(() => {
@@ -102,8 +112,23 @@ describe("import", () => {
 
     const csv = [
       CSV_HEADER,
-      `PRJ-IMP-3,Login Flow,Functional,Valid login,,Enter credentials,User reaches dashboard,HIGH`,
-      `PRJ-IMP-3,,Functional,Missing scenario name,,Some step,Some result,LOW`,
+      csvRow({
+        "Project Code": "PRJ-IMP-3",
+        "Scenario Name": "Login Flow",
+        "Test Group Name": "Functional",
+        "Test Case Name": "Valid login",
+        "Test Steps": "Enter credentials",
+        "Expected Result": "User reaches dashboard",
+        Priority: "HIGH",
+      }),
+      csvRow({
+        "Project Code": "PRJ-IMP-3",
+        "Test Group Name": "Functional",
+        "Test Case Name": "Missing scenario name",
+        "Test Steps": "Some step",
+        "Expected Result": "Some result",
+        Priority: "LOW",
+      }),
     ].join("\n");
 
     const response = await validateImportRoute(
@@ -135,7 +160,15 @@ describe("import", () => {
 
     const csv = [
       CSV_HEADER,
-      `PRJ-IMP-4,Login Flow,Functional,Valid login,,Enter credentials,User reaches dashboard,HIGH`,
+      csvRow({
+        "Project Code": "PRJ-IMP-4",
+        "Scenario Name": "Login Flow",
+        "Test Group Name": "Functional",
+        "Test Case Name": "Valid login",
+        "Test Steps": "Enter credentials",
+        "Expected Result": "User reaches dashboard",
+        Priority: "HIGH",
+      }),
     ].join("\n");
 
     // First import creates the Scenario/Test Group/Test Case.
@@ -470,5 +503,87 @@ describe("import", () => {
     });
     expect(skipEntry).not.toBeNull();
     expect(skipEntry?.entityId).toBeTruthy();
+  });
+
+  it("creates the named Module and Requirement from the sheet, and files the Scenario under them", async () => {
+    const owner = await createUser("imp-owner12@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-12");
+
+    const rowData = {
+      rowNumber: 1,
+      projectCode: "PRJ-IMP-12",
+      moduleName: "Authentication",
+      requirementName: "REQ-001 Users can sign in",
+      scenarioName: "Scenario",
+      testGroupName: "Group",
+      testCaseName: "Case",
+      preconditions: "",
+      testSteps: "Step",
+      expectedResult: "Result",
+      priority: "MEDIUM",
+    };
+
+    await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
+        rows: [{ rowNumber: 1, data: rowData }],
+      }),
+      { params: Promise.resolve({ id: project.id }) },
+    );
+
+    const mod = await prisma.module.findFirst({
+      where: { projectId: project.id, name: "Authentication" },
+    });
+    expect(mod).not.toBeNull();
+
+    const requirement = await prisma.requirement.findFirst({
+      where: { projectId: project.id, moduleId: mod!.id, name: "REQ-001 Users can sign in" },
+    });
+    expect(requirement).not.toBeNull();
+
+    const scenario = await prisma.scenario.findFirst({
+      where: { projectId: project.id, name: "Scenario" },
+    });
+    expect(scenario?.requirementId).toBe(requirement!.id);
+  });
+
+  it("falls back to an Unassigned Module and Requirement when both columns are blank", async () => {
+    const owner = await createUser("imp-owner13@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-13");
+
+    const rowData = {
+      rowNumber: 1,
+      projectCode: "PRJ-IMP-13",
+      scenarioName: "Scenario",
+      testGroupName: "Group",
+      testCaseName: "Case",
+      preconditions: "",
+      testSteps: "Step",
+      expectedResult: "Result",
+      priority: "MEDIUM",
+    };
+
+    await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
+        rows: [{ rowNumber: 1, data: rowData }],
+      }),
+      { params: Promise.resolve({ id: project.id }) },
+    );
+
+    const mod = await prisma.module.findFirst({
+      where: { projectId: project.id, name: UNASSIGNED_NAME },
+    });
+    expect(mod).not.toBeNull();
+
+    const requirement = await prisma.requirement.findFirst({
+      where: { projectId: project.id, moduleId: mod!.id, name: UNASSIGNED_NAME },
+    });
+    expect(requirement).not.toBeNull();
+
+    const scenario = await prisma.scenario.findFirst({
+      where: { projectId: project.id, name: "Scenario" },
+    });
+    expect(scenario?.requirementId).toBe(requirement!.id);
   });
 });

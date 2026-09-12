@@ -26,6 +26,7 @@ export function Select({
   onChange,
   name,
   required,
+  disabled,
   ariaLabel,
   className = "",
 }: {
@@ -37,6 +38,7 @@ export function Select({
   /** Renders the hidden native select, so the value takes part in form submit. */
   name?: string;
   required?: boolean;
+  disabled?: boolean;
   ariaLabel?: string;
   className?: string;
 }) {
@@ -190,6 +192,7 @@ export function Select({
           ref={nativeRef}
           name={name}
           required={required}
+          disabled={disabled}
           defaultValue={selected}
           aria-hidden="true"
           tabIndex={-1}
@@ -214,9 +217,10 @@ export function Select({
         aria-controls={listboxId}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
+        disabled={disabled}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onTriggerKeyDown}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-surface py-2 pr-2.5 pl-3 text-left text-sm text-foreground shadow-sm transition-colors outline-none hover:bg-black/[.02] focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand dark:hover:bg-white/[.04]"
+        className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-surface py-2 pr-2.5 pl-3 text-left text-sm text-foreground shadow-sm transition-colors outline-none hover:bg-black/[.02] focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/[.04]"
       >
         <span className="truncate">{selectedLabel}</span>
         <ChevronRightIcon className="size-3.5 shrink-0 rotate-90 text-muted" />

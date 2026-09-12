@@ -267,7 +267,6 @@ export default async function TestCasesPage({
                       key={`${testCase.id}-${editId === testCase.id}`}
                       label={testCase.name}
                       title="Edit Test Case"
-                      openHref={`${basePath}/${testCase.id}`}
                       openOnMount={!!error && editId === testCase.id}
                     >
                       <TestCaseForm

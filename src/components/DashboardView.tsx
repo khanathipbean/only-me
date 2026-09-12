@@ -589,7 +589,7 @@ function SummaryWidget({
     <WidgetShell label="Overview">
       {/* Six stats: 2 / 3 / 6 per row divides evenly at every width, where
           the old 4-column grid would leave a ragged last row. */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Modules" value={data.counts.modules} />
         <Stat label="Requirements" value={data.counts.requirements} />
         <Stat label="Scenarios" value={data.counts.scenarios} />
@@ -636,9 +636,18 @@ function SummaryWidget({
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div>
-      <p className="text-2xl font-semibold tabular-nums text-foreground">{value}</p>
-      <p className="text-xs text-muted">{label}</p>
+    // A tinted tile, not bare text on the Card's own surface: six numbers
+    // floating with only whitespace between them read as empty rather than
+    // a considered group. One step off-surface (not a border) keeps it quiet
+    // relative to the Card it sits inside, instead of doubling up on edges.
+    <div className="rounded-lg bg-black/[.03] p-4 dark:bg-white/[.04]">
+      {/* Proportional figures, not tabular-nums: these sit alone, not in a
+          column that needs to align digit-for-digit, and tabular-nums makes
+          a standalone number like "5" look loose at display size. */}
+      <p className="text-3xl font-semibold text-foreground">{value}</p>
+      <p className="mt-0.5 text-xs font-semibold tracking-wide text-muted uppercase">
+        {label}
+      </p>
     </div>
   );
 }

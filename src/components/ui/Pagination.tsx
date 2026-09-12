@@ -70,7 +70,12 @@ export function Pagination({
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    // A deliberate stack below sm:, not flex-wrap: with three pieces (rows
+    // selector, page count, Previous/Next) all marked nowrap, flex-wrap chose
+    // where to break based on whatever ran out of room first — often mid-group,
+    // e.g. Previous landing on the row-count's own line. Two clean rows read
+    // better than a wrap that could land anywhere.
+    <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {/* whitespace-nowrap on both the label and the count: they sit in a
             flex row that can squeeze, and "Rows per page" was wrapping onto
@@ -92,6 +97,9 @@ export function Pagination({
           Page {page} of {totalPages} ({total} total)
         </p>
       </div>
+      {/* A compact pair, not spread across the row: justify-between here
+          pinned Previous to the screen's left edge on its own line, which
+          read as unintentional rather than a button group. */}
       <div className="flex items-center gap-2">
         {page > 1 ? (
           <LinkButton href={hrefForPage(page - 1)} variant="secondary">

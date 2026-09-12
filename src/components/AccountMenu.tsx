@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
-import { EditIcon, LogoutIcon } from "@/components/icons";
+import { EditIcon, LogoutIcon, MoonIcon, SunIcon } from "@/components/icons";
+import { useTheme } from "@/lib/theme";
 
 /**
  * The avatar in the header, and the menu it opens: who you are signed in as,
@@ -31,6 +32,7 @@ export function AccountMenu({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const { isDark, toggle: toggleTheme } = useTheme();
 
   function toggle() {
     if (open) {
@@ -111,6 +113,18 @@ export function AccountMenu({
                 <EditIcon />
                 Edit Profile
               </Link>
+              {/* Below sm: only — the standalone icon in the header already
+                  covers this on wider screens, where there's room for both a
+                  theme icon and the avatar without wrapping the header. */}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={toggleTheme}
+                className={`sm:hidden ${itemClass}`}
+              >
+                {isDark ? <SunIcon /> : <MoonIcon />}
+                {isDark ? "Switch to light mode" : "Switch to dark mode"}
+              </button>
             </div>
 
             <div className="border-t border-border py-1">

@@ -162,7 +162,11 @@ export default async function ProjectFilesPage({
             </h2>
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {group.files.map((file) => (
-                <li key={file.id}>
+                // min-w-0: a grid item defaults to min-width: auto, sized off
+                // its content's min-content — an unbroken filename (no spaces
+                // to wrap at) pushed that past the viewport on mobile, even
+                // though the name inside is marked `truncate`.
+                <li key={file.id} className="min-w-0">
                   <FilePreview
                     file={{
                       id: file.id,
