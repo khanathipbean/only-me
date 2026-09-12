@@ -86,14 +86,22 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {session?.user && (
           <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur">
             <div className="flex w-full flex-wrap items-center gap-3 px-6 py-3 sm:px-8 lg:px-12 xl:px-16">
-              <Link href="/projects" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
+              <Link href="/projects" className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
                 <Image src="/logo.png" alt="Bull Terrier" width={28} height={28} unoptimized />
-                Bull Terrier
+                {/* Hidden below sm: the name plus a usable search bar don't
+                    both fit at phone widths — the logo alone still reads as
+                    "home", so it's what stays. */}
+                <span className="hidden sm:inline">Bull Terrier</span>
               </Link>
 
               <HeaderSearch className="min-w-48 flex-1" />
 
-              <ThemeToggle />
+              {/* Hidden below sm: AccountMenu folds the same toggle into its
+                  own menu there, so the header doesn't need to fit both a
+                  theme icon and the avatar in the width a phone gives it. */}
+              <div className="hidden sm:flex">
+                <ThemeToggle />
+              </div>
               <AccountMenu
                 name={currentUser?.name ?? session.user.email ?? "Account"}
                 email={currentUser?.email ?? session.user.email ?? ""}

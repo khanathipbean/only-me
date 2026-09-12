@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -52,6 +52,14 @@ type ImportField = {
  */
 const FIELD_GROUPS: { title: string; note?: string; fields: ImportField[] }[] = [
   {
+    title: "Module & Requirement",
+    note: 'Left blank, this row files under an "Unassigned" Module and Requirement — matched (or created) by name otherwise.',
+    fields: [
+      { key: "moduleName", label: "Module" },
+      { key: "requirementName", label: "Requirement Name" },
+    ],
+  },
+  {
     title: "Scenario",
     note: "Name is matched against existing Scenarios — the rest apply only when this row creates a new one.",
     fields: [
@@ -89,6 +97,21 @@ export function ImportWizard({ projectId }: { projectId: string }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // A bulk-apply button can legitimately produce no visible change (every
+  // duplicate already defaults to "Update", so clicking "Update all" without
+  // having touched anything first flips nothing) — without its own feedback
+  // that reads as broken rather than a no-op. Confirms the click regardless
+  // of whether anything actually changed.
+  const [bulkActionMessage, setBulkActionMessage] = useState<string | null>(null);
+  const bulkActionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (bulkActionTimeoutRef.current) {
+        clearTimeout(bulkActionTimeoutRef.current);
+      }
+    };
+  }, []);
 
   async function handlePreview() {
     if (!file) {
@@ -103,9 +126,19 @@ export function ImportWizard({ projectId }: { projectId: string }) {
         method: "POST",
         body: formData,
       });
-      const body = await response.json();
+      // Read as text first, same as handleConfirm below: an unhandled server
+      // error comes back with an empty or non-JSON body, and response.json()
+      // on that throws — which previously escaped this function (no catch),
+      // leaving the user with no error message and an apparently frozen page.
+      const raw = await response.text();
+      let body: { error?: string } = {};
+      try {
+        body = raw ? JSON.parse(raw) : {};
+      } catch {
+        body = {};
+      }
       if (!response.ok) {
-        setError(body.error ?? "Validation failed");
+        setError(body.error ?? `Validation failed (server responded ${response.status}).`);
         return;
       }
       setPreview(body as Preview);
@@ -125,21 +158,34 @@ export function ImportWizard({ projectId }: { projectId: string }) {
       }
       setRowChoices(initialChoices);
       setRowData(initialData);
+    } catch (err) {
+      setError(err instanceof Error ? `Validation failed: ${err.message}` : "Validation failed.");
     } finally {
       setLoading(false);
     }
   }
 
   function applyToAllDuplicates(resolution: "skip" | "update" | "create_new") {
+    // Computed up front, not inside the setRowChoices updater below: that
+    // callback isn't guaranteed to run before the next line does, so a
+    // counter incremented inside it read back as 0 every time.
+    const duplicateRows = (preview?.rows ?? []).filter((row) => row.duplicate);
+
     setRowChoices((prev) => {
       const next = { ...prev };
-      for (const row of preview?.rows ?? []) {
-        if (row.duplicate) {
-          next[row.rowNumber] = { ...next[row.rowNumber], duplicateResolution: resolution };
-        }
+      for (const row of duplicateRows) {
+        next[row.rowNumber] = { ...next[row.rowNumber], duplicateResolution: resolution };
       }
       return next;
     });
+
+    const label = DUPLICATE_RESOLUTION_OPTIONS.find((option) => option.value === resolution)?.label;
+    const affected = duplicateRows.length;
+    setBulkActionMessage(`Applied "${label}" to ${affected} duplicate row${affected === 1 ? "" : "s"}.`);
+    if (bulkActionTimeoutRef.current) {
+      clearTimeout(bulkActionTimeoutRef.current);
+    }
+    bulkActionTimeoutRef.current = setTimeout(() => setBulkActionMessage(null), 3000);
   }
 
   function updateRowField(rowNumber: number, field: string, value: string) {
@@ -235,8 +281,9 @@ export function ImportWizard({ projectId }: { projectId: string }) {
           <input
             type="file"
             accept=".csv,.xlsx"
+            disabled={loading}
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            className="text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-hover"
+            className="text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-hover disabled:pointer-events-none disabled:opacity-50"
           />
           <Button type="button" onClick={handlePreview} disabled={!file || loading}>
             {loading && !preview ? "Loading…" : "Preview"}
@@ -268,19 +315,35 @@ export function ImportWizard({ projectId }: { projectId: string }) {
             {preview.summary.duplicates > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-muted">Apply to all duplicates:</span>
-                <Button type="button" variant="secondary" onClick={() => applyToAllDuplicates("skip")}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={loading}
+                  onClick={() => applyToAllDuplicates("skip")}
+                >
                   Skip all
                 </Button>
-                <Button type="button" variant="secondary" onClick={() => applyToAllDuplicates("update")}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={loading}
+                  onClick={() => applyToAllDuplicates("update")}
+                >
                   Update all
                 </Button>
                 <Button
                   type="button"
                   variant="secondary"
+                  disabled={loading}
                   onClick={() => applyToAllDuplicates("create_new")}
                 >
                   Create new for all
                 </Button>
+                {bulkActionMessage && (
+                  <span role="status" className="text-emerald-600 dark:text-emerald-400">
+                    {bulkActionMessage}
+                  </span>
+                )}
               </div>
             )}
           </Card>
@@ -326,6 +389,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                               {multiline ? (
                                 <textarea
                                   value={data[key] ?? ""}
+                                  disabled={loading}
                                   onChange={(event) =>
                                     updateRowField(row.rowNumber, key, event.target.value)
                                   }
@@ -334,6 +398,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                               ) : (
                                 <input
                                   value={data[key] ?? ""}
+                                  disabled={loading}
                                   onChange={(event) =>
                                     updateRowField(row.rowNumber, key, event.target.value)
                                   }
@@ -353,6 +418,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                         Duplicate resolution
                         <Select
                           value={rowChoices[row.rowNumber]?.duplicateResolution ?? "skip"}
+                          disabled={loading}
                           onChange={(next) =>
                             setRowChoices((prev) => ({
                               ...prev,
@@ -371,6 +437,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                         <input
                           type="checkbox"
                           checked={rowChoices[row.rowNumber]?.skip ?? false}
+                          disabled={loading}
                           onChange={(event) =>
                             setRowChoices((prev) => ({
                               ...prev,

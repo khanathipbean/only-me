@@ -397,7 +397,7 @@ export default async function TestCaseDetailPage({
                     { value: "", label: "Select a Test Group…" },
                     ...moveTargets.map((testGroup) => ({
                       value: testGroup.id,
-                      label: ` → `,
+                      label: `${testGroup.scenario.name} → ${testGroup.name}`,
                     })),
                   ]}
                   ariaLabel="Move to another Test Group"

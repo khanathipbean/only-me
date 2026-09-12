@@ -33,7 +33,21 @@ export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId })
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const rows = await parseImportFile(buffer, file.name);
+  let rows;
+  try {
+    rows = await parseImportFile(buffer, file.name);
+  } catch (err) {
+    // A malformed/corrupted file (e.g. a renamed .csv, or a CSV whose columns
+    // don't match the template) throws from csv-parse/ExcelJS — without this,
+    // that propagated as an uncaught 500 with no JSON body, which crashed the
+    // wizard's `response.json()` call with an opaque "Unexpected end of JSON
+    // input" instead of showing the user what was actually wrong.
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Could not read the file: ${message}` },
+      { status: 400 },
+    );
+  }
 
   const preview = await previewImport(projectId, project.code, rows);
   return NextResponse.json(preview);

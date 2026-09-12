@@ -97,7 +97,13 @@ export function FilterForm({
       ref={formRef}
       onChange={handleChange}
       onSubmit={handleSubmit}
-      className={`flex flex-wrap items-end gap-3 ${className}`}
+      // Below sm: an even grid (every field's column at least 8rem, however
+      // many fit per row) instead of flex-wrap — flex-wrap breaks the row
+      // wherever each field's own width happens to run out of room, which
+      // read as ragged (three narrow fields on one line, two on the next,
+      // for no reason a viewer could see). sm: and up reverts to flex-wrap,
+      // unchanged from before — plenty of room there for one tidy row.
+      className={`grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] items-end gap-3 sm:flex sm:flex-wrap ${className}`}
     >
       {children}
       {showClear && (
