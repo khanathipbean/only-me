@@ -70,7 +70,7 @@ export async function createProject(input: ProjectInput, ownerId: string) {
   return project;
 }
 
-export type ProjectFilters = { search?: string; status?: ProjectStatus; owner?: string };
+export type ProjectFilters = { search?: string; status?: ProjectStatus };
 
 /** Shared by the plain and paginated lists so their results can't drift. */
 function projectListWhere(userId: string, filters: ProjectFilters) {
@@ -78,7 +78,6 @@ function projectListWhere(userId: string, filters: ProjectFilters) {
     deletedAt: null,
     members: { some: { userId } },
     ...(filters.status ? { status: filters.status } : {}),
-    ...(filters.owner ? { ownerId: filters.owner } : {}),
     ...(filters.search
       ? {
           OR: [
@@ -113,6 +112,18 @@ export async function listProjectsForUserPage(
     ({ skip, take }) =>
       prisma.project.findMany({ where, orderBy: { createdAt: "desc" }, skip, take }),
   );
+}
+
+/** Every Project in the system, membership aside — used only to populate the
+ * "Project" field on the global Members page, where an ADMIN on one Project
+ * has to be able to add someone to a Project they aren't a member of yet
+ * (a brand-new one, say, whose creator only starts as QA_LEAD). */
+export async function listAllProjectsForPicker() {
+  return prisma.project.findMany({
+    where: { deletedAt: null },
+    select: { id: true, code: true, name: true },
+    orderBy: { code: "asc" },
+  });
 }
 
 /** Projects where the user holds one of `roles` — used to populate "move to another Project"

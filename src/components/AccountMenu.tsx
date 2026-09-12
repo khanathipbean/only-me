@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
-import { EditIcon, LogoutIcon, MoonIcon, SunIcon } from "@/components/icons";
+import { EditIcon, LogoutIcon, MoonIcon, SunIcon, UsersIcon } from "@/components/icons";
 import { useTheme } from "@/lib/theme";
 
 /**
@@ -22,10 +22,14 @@ export function AccountMenu({
   name,
   email,
   logout,
+  canManageMembers,
 }: {
   name: string;
   email: string;
   logout: () => void;
+  /** ADMIN on at least one Project — not shown at all to anyone else, since
+   * the page itself 404s them too (see `requireAdminAnywhereOrNotFound`). */
+  canManageMembers: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState<{ top: number; right: number } | null>(null);
@@ -113,6 +117,12 @@ export function AccountMenu({
                 <EditIcon />
                 Edit Profile
               </Link>
+              {canManageMembers && (
+                <Link role="menuitem" href="/members" onClick={() => setOpen(false)} className={itemClass}>
+                  <UsersIcon />
+                  Members
+                </Link>
+              )}
               {/* Below sm: only — the standalone icon in the header already
                   covers this on wider screens, where there's room for both a
                   theme icon and the avatar without wrapping the header. */}

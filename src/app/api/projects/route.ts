@@ -18,7 +18,6 @@ export async function GET(request: NextRequest) {
   const projects = await listProjectsForUser(userId!, {
     search: searchParams.get("search") ?? undefined,
     status: (searchParams.get("status") as ProjectStatus | null) ?? undefined,
-    owner: searchParams.get("owner") ?? undefined,
   });
 
   return NextResponse.json(projects);

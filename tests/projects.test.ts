@@ -170,36 +170,6 @@ describe("project routes", () => {
     expect(active.map((p: { code: string }) => p.code)).toEqual(["PRJ-ACTIVE"]);
   });
 
-  it("filters by owner", async () => {
-    const ownerA = await createUser("ownerA@example.com");
-    const ownerB = await createUser("ownerB@example.com");
-
-    mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
-    await createProjectRoute(
-      jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-OWNER-A",
-        name: "Owner A Project",
-        status: "DRAFT",
-      }),
-    );
-
-    mockAuth.mockResolvedValue(sessionFor(ownerB.id) as never);
-    await createProjectRoute(
-      jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-OWNER-B",
-        name: "Owner B Project",
-        status: "DRAFT",
-      }),
-    );
-
-    // ownerB is not a member of PRJ-OWNER-A, so this only proves the filter
-    // narrows within a caller's own membership set, using ownerB's own project.
-    const filtered = await (
-      await listProjects(jsonRequest(`http://test/api/projects?owner=${ownerB.id}`, "GET"))
-    ).json();
-    expect(filtered.map((p: { code: string }) => p.code)).toEqual(["PRJ-OWNER-B"]);
-  });
-
   it("returns 403 for a non-member on detail, update, archive, and restore", async () => {
     const owner = await createUser("owner5@example.com");
     const outsider = await createUser("outsider2@example.com");

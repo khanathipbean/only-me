@@ -170,7 +170,7 @@ const FILTER_LABELS: Record<keyof Filters, string> = {
   testResult: "Test Result",
   priority: "Priority",
   status: "Status",
-  assigneeId: "Assignee User ID",
+  assigneeId: "Assignee",
   tags: "Tags",
   createdFrom: "Created From",
   createdTo: "Created To",
@@ -349,7 +349,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
             <Select
               value={filters.moduleId}
               onChange={(next) => updateHierarchyFilter("moduleId", next)}
-              options={toOptions(options?.modules ?? [], "All Modules")}
+              options={toOptions(options?.modules ?? [], "All")}
               ariaLabel="Module"
             />
           </label>
@@ -358,7 +358,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
             <Select
               value={filters.requirementId}
               onChange={(next) => updateHierarchyFilter("requirementId", next)}
-              options={toOptions(requirementOptions, "All Requirements")}
+              options={toOptions(requirementOptions, "All")}
               ariaLabel="Requirement"
             />
           </label>
@@ -389,15 +389,6 @@ export function DashboardView({ projectId }: { projectId: string }) {
               ariaLabel="Status"
             />
           </label>
-          <label className={labelClass}>
-            Assignee User ID
-            <input
-              value={filters.assigneeId}
-              onChange={(event) => updateFilter("assigneeId", event.target.value)}
-              className={inputClass}
-            />
-          </label>
-
           {showMoreFilters && (
             <>
               <label className={labelClass}>
@@ -405,7 +396,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
                 <Select
                   value={filters.scenarioId}
                   onChange={(next) => updateHierarchyFilter("scenarioId", next)}
-                  options={toOptions(scenarioOptions, "All Scenarios")}
+                  options={toOptions(scenarioOptions, "All")}
                   ariaLabel="Scenario"
                 />
               </label>
@@ -414,7 +405,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
                 <Select
                   value={filters.testGroupId}
                   onChange={(next) => updateFilter("testGroupId", next)}
-                  options={toOptions(testGroupOptions, "All Test Groups")}
+                  options={toOptions(testGroupOptions, "All")}
                   ariaLabel="Test Group"
                 />
               </label>
@@ -423,6 +414,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
                 <input
                   value={filters.tags}
                   onChange={(event) => updateFilter("tags", event.target.value)}
+                  placeholder="e.g. smoke, regression"
                   className={inputClass}
                 />
               </label>
