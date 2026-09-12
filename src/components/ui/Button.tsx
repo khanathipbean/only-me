@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ButtonHTMLAttributes, ComponentProps } from "react";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -71,22 +72,32 @@ const ICON_SIZE_CLASS = {
 
 export type IconSize = keyof typeof ICON_SIZE_CLASS;
 
-/** A fixed-size, perfectly centered square button for a single icon — e.g. Edit, Delete, Log out, Clear filters. */
+/**
+ * A fixed-size, perfectly centered square button for a single icon — e.g.
+ * Edit, Delete, Log out, Clear filters.
+ *
+ * A `title` grows a styled `Tooltip` around the button instead of just
+ * sitting on the element as a bare attribute: a native title tooltip is slow
+ * to appear and styled by the OS, not this app. It's popped off `props` so it
+ * doesn't ALSO render as a native tooltip stacked behind the styled one.
+ */
 export function IconButton({
   variant = "ghost",
   iconSize = "md",
   className = "",
+  title,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   iconSize?: IconSize;
 }) {
-  return (
+  const button = (
     <button
       className={`${ICON_BUTTON_BASE_CLASS} ${ICON_SIZE_CLASS[iconSize]} ${VARIANT_CLASS[variant]} ${className}`}
       {...props}
     />
   );
+  return title ? <Tooltip label={title}>{button}</Tooltip> : button;
 }
 
 /**
@@ -100,15 +111,18 @@ export function IconLinkButton({
   variant = "ghost",
   iconSize = "md",
   className = "",
+  title,
   ...props
 }: ComponentProps<typeof Link> & {
   variant?: ButtonVariant;
   iconSize?: IconSize;
+  title?: string;
 }) {
-  return (
+  const link = (
     <Link
       className={`${ICON_BUTTON_BASE_CLASS} ${ICON_SIZE_CLASS[iconSize]} ${VARIANT_CLASS[variant]} ${className}`}
       {...props}
     />
   );
+  return title ? <Tooltip label={title}>{link}</Tooltip> : link;
 }

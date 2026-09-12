@@ -219,6 +219,8 @@ model Attachment {
   testCaseId   String
   storageKey   String
   fileName     String
+  contentType  String   @default("application/octet-stream")
+  size         Int      @default(0)
   uploadedById String
   uploadedAt   DateTime @default(now())
 

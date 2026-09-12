@@ -15,7 +15,6 @@ import {
   getTestCaseWithProjectId,
   moveTestCase,
   restoreTestCase,
-  updateAssignee,
   updateTestCase,
   updateTestResultAndNotes,
 } from "@/lib/test-cases";
@@ -23,7 +22,9 @@ import { parseStepsJson } from "@/lib/test-case-form";
 import { getTestGroupWithProjectId, listTestGroupsForProject } from "@/lib/test-groups";
 import { getScenarioById, getScenarioLocation } from "@/lib/scenarios";
 import { getProjectById } from "@/lib/projects";
-import { saveAttachment } from "@/lib/attachments";
+import { deleteAttachment, getAttachmentWithProjectId, saveAttachment } from "@/lib/attachments";
+import { canPreview } from "@/lib/project-files";
+import { FilePreview } from "@/components/FilePreview";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
@@ -37,7 +38,7 @@ import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
 import { EditIcon, TrashIcon } from "@/components/icons";
-import { inputClass, labelClass, pageClass, textareaClass } from "@/lib/ui";
+import { labelClass, pageClass, textareaClass } from "@/lib/ui";
 
 export async function generateMetadata({
   params,
@@ -168,12 +169,19 @@ export default async function TestCaseDetailPage({
     redirect(`${basePath}/${testCaseId}`);
   }
 
-  async function changeAssignee(formData: FormData) {
-    "use server";
-    const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-    await updateAssignee(testCaseId, (formData.get("assigneeId") as string) || null, session!.user.id);
-    redirect(`${basePath}/${testCaseId}`);
+  function removeAttachment(attachmentId: string) {
+    return async function remove() {
+      "use server";
+      const session = await auth();
+      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      // Checked against this Test Case too: an id from another Test Case
+      // must not be deletable just because the caller belongs to this project.
+      const attachment = await getAttachmentWithProjectId(attachmentId);
+      if (attachment && attachment.testCaseId === testCaseId) {
+        await deleteAttachment(attachmentId);
+      }
+      redirect(`${basePath}/${testCaseId}`);
+    };
   }
 
   async function move(formData: FormData) {
@@ -345,10 +353,43 @@ export default async function TestCaseDetailPage({
       <Card>
         <h2 className="text-sm font-semibold text-foreground">Attachments</h2>
         {testCase.attachments.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-1 text-sm">
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {testCase.attachments.map((attachment) => (
-              <li key={attachment.id} className="text-foreground">
-                {attachment.fileName}
+              // min-w-0: a grid item defaults to min-width: auto, sized off
+              // its content's min-content — an unbroken filename (no spaces
+              // to wrap at) could push this past the viewport on mobile,
+              // even with `truncate` on the descendant span (see Files page).
+              <li key={attachment.id} className="min-w-0">
+                <FilePreview
+                  file={{
+                    id: attachment.id,
+                    fileName: attachment.fileName,
+                    uploadedAt: attachment.uploadedAt.toISOString().slice(0, 10),
+                    size: attachment.size,
+                    href: `/api/test-cases/${testCaseId}/attachments/${attachment.id}`,
+                    previewable: canPreview(attachment.contentType),
+                    isImage: attachment.contentType.startsWith("image/"),
+                  }}
+                  deleteSlot={
+                    canEditFully ? (
+                      <ConfirmForm
+                        action={removeAttachment(attachment.id)}
+                        confirmMessage={`Remove ${attachment.fileName} from this Test Case?`}
+                        variant="danger"
+                      >
+                        <IconButton
+                          type="submit"
+                          variant="ghost"
+                          aria-label={`Remove ${attachment.fileName}`}
+                          title="Remove"
+                          className="text-muted hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                        >
+                          <TrashIcon />
+                        </IconButton>
+                      </ConfirmForm>
+                    ) : undefined
+                  }
+                />
               </li>
             ))}
           </ul>
@@ -369,16 +410,6 @@ export default async function TestCaseDetailPage({
       {canEditFully && (
         <Card className="flex flex-col gap-5">
           <h2 className="text-sm font-semibold text-foreground">Manage</h2>
-
-          <form action={changeAssignee} className="flex flex-wrap items-end gap-3">
-            <label className={`${labelClass} max-w-xs`}>
-              Assignee (User ID)
-              <input name="assigneeId" defaultValue={testCase.assigneeId ?? ""} className={inputClass} />
-            </label>
-            <Button type="submit" variant="secondary">
-              Change Assignee
-            </Button>
-          </form>
 
           {moveError && (
             <p role="alert" className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300">
