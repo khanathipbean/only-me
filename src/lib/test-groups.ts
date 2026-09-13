@@ -103,6 +103,8 @@ export async function createTestGroup(
 }
 
 export type TestGroupFilters = {
+  search?: string;
+  status?: WorkflowStatus;
   /** Show archived Test Groups instead of live ones — the only way to reach
    * one now that archiving is driven from the list rather than a detail
    * page that could be opened by URL. */
@@ -110,7 +112,14 @@ export type TestGroupFilters = {
 };
 
 function testGroupListWhere(scenarioId: string, filters: TestGroupFilters) {
-  return { scenarioId, deletedAt: filters.archived ? { not: null } : null };
+  return {
+    scenarioId,
+    deletedAt: filters.archived ? { not: null } : null,
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.search
+      ? { name: { contains: filters.search, mode: "insensitive" as const } }
+      : {}),
+  };
 }
 
 /**
