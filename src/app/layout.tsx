@@ -47,7 +47,7 @@ export const metadata: Metadata = {
     default: "Bull Terrier",
     template: "%s · Bull Terrier",
   },
-  description: "Manage Scenarios, Test Groups, and Test Cases",
+  description: "Manage Modules, Requirements, Scenarios, Test Groups, and Test Cases",
   icons: { icon: "/logo.png" },
 };
 

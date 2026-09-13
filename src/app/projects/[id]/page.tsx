@@ -164,7 +164,7 @@ export default async function ProjectDetailPage({
           ) : (
             <ConfirmForm
               action={archive}
-              confirmMessage="Archive this project? Its Scenarios, Test Groups, and Test Cases are kept and can be restored later."
+              confirmMessage="Archive this project? Its Modules, Requirements, Scenarios, Test Groups, and Test Cases are kept and can be restored later."
             >
               <Button type="submit" variant="secondary">
                 Archive
