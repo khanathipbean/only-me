@@ -1,4 +1,19 @@
-export { auth as proxy } from "@/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
+
+/**
+ * A separate, edge-safe NextAuth instance built from `authConfig` alone —
+ * not the `auth` exported by `@/auth`, which pulls in the Credentials
+ * provider and (through it) Prisma. Edge middleware only needs to read the
+ * session cookie; it never runs the sign-in flow, so `authConfig` on its own
+ * is enough for the `authorized` callback below.
+ *
+ * Assigned to a plain identifier rather than exported straight off the
+ * destructure: Next's build-time check for a valid proxy export only
+ * recognises `export const proxy = ...`, not a destructuring pattern.
+ */
+const { auth } = NextAuth(authConfig);
+export const proxy = auth;
 
 /**
  * Page routes only. `/api` is excluded because every route under it already

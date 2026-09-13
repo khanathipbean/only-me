@@ -12,10 +12,6 @@ export async function hashPassword(password: string) {
   return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-export function isAuthorized(session: { user?: unknown } | null | undefined) {
-  return Boolean(session?.user);
-}
-
 export async function authenticateWithPassword(credentials: LoginCredentials) {
   const user = await prisma.user.findUnique({
     where: { email: credentials.email },
