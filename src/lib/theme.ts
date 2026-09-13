@@ -6,6 +6,24 @@ function systemTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function storedOrSystemTheme(): Theme {
+  const stored = localStorage.getItem("theme");
+  return stored === "dark" || stored === "light" ? stored : systemTheme();
+}
+
+/**
+ * Same resolution the blocking inline script in layout.tsx does before
+ * paint — called again from a mounted effect (see ThemeSync) because that
+ * script runs before React hydrates, and on a slow enough connection a
+ * hydration mismatch elsewhere in the tree makes React discard and
+ * regenerate it from scratch, taking the attribute the script set with it.
+ * An effect re-asserting the same value survives that regeneration since it
+ * only runs after React's commit settles.
+ */
+export function applyStoredOrSystemTheme() {
+  document.documentElement.setAttribute("data-theme", storedOrSystemTheme());
+}
+
 /**
  * Shared by every place in the header that can flip the theme (the standalone
  * icon on wider screens, the menu item folded into AccountMenu on narrow
@@ -22,8 +40,7 @@ export function useTheme() {
     // nesting it in a microtask callback keeps it out of the effect's own
     // synchronous body (same pattern as Breadcrumb.tsx).
     Promise.resolve().then(() => {
-      const stored = localStorage.getItem("theme");
-      setTheme(stored === "dark" || stored === "light" ? stored : systemTheme());
+      setTheme(storedOrSystemTheme());
     });
   }, []);
 

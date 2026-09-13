@@ -9,6 +9,7 @@ import { isAdminAnywhere } from "@/lib/rbac";
 import { HeaderSearch } from "@/components/HeaderSearch";
 import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ThemeSync } from "@/components/ThemeSync";
 import { IconLinkButton } from "@/components/ui/Button";
 import { UserPlusIcon } from "@/components/icons";
 import "./globals.css";
@@ -80,6 +81,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </Script>
       </head>
       <body>
+        <ThemeSync />
         {/* Ambient backdrop: the same charcoal gradient and soft blooms the
             login page uses, so the app doesn't sit on a flat slab. Fixed and
             behind everything (`-z-10`), which works because it paints over
