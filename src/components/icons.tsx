@@ -59,6 +59,16 @@ export function UsersIcon(props: IconProps) {
   );
 }
 
+export function UserPlusIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="9" cy="7" r="4" />
+      <path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2" />
+      <path d="M19 8v6M22 11h-6" />
+    </IconBase>
+  );
+}
+
 export function ClearIcon(props: IconProps) {
   return (
     <IconBase {...props}>

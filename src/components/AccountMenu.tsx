@@ -117,15 +117,20 @@ export function AccountMenu({
                 <EditIcon />
                 Edit Profile
               </Link>
+              {/* Below sm: only, same as the theme toggle right after it —
+                  the header carries its own standalone icon for this on
+                  wider screens (see layout.tsx). */}
               {canManageMembers && (
-                <Link role="menuitem" href="/members" onClick={() => setOpen(false)} className={itemClass}>
+                <Link
+                  role="menuitem"
+                  href="/members"
+                  onClick={() => setOpen(false)}
+                  className={`sm:hidden ${itemClass}`}
+                >
                   <UsersIcon />
                   Members
                 </Link>
               )}
-              {/* Below sm: only — the standalone icon in the header already
-                  covers this on wider screens, where there's room for both a
-                  theme icon and the avatar without wrapping the header. */}
               <button
                 type="button"
                 role="menuitem"

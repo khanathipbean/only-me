@@ -9,6 +9,8 @@ import { isAdminAnywhere } from "@/lib/rbac";
 import { HeaderSearch } from "@/components/HeaderSearch";
 import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { IconLinkButton } from "@/components/ui/Button";
+import { UserPlusIcon } from "@/components/icons";
 import "./globals.css";
 
 // Always sets a concrete data-theme (falling back to system preference, not
@@ -98,9 +100,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 
               <HeaderSearch className="min-w-48 flex-1" />
 
-              {/* Hidden below sm: AccountMenu folds the same toggle into its
-                  own menu there, so the header doesn't need to fit both a
-                  theme icon and the avatar in the width a phone gives it. */}
+              {/* Hidden below sm: AccountMenu folds the same links into its
+                  own menu there, so the header doesn't need to fit an admin
+                  icon, a theme icon, and the avatar in a phone's width. */}
+              {canManageMembers && (
+                <div className="hidden sm:flex">
+                  <IconLinkButton href="/members" aria-label="Members" title="Members">
+                    <UserPlusIcon />
+                  </IconLinkButton>
+                </div>
+              )}
               <div className="hidden sm:flex">
                 <ThemeToggle />
               </div>
