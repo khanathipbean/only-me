@@ -16,6 +16,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { modulesListBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -220,28 +221,31 @@ export default async function ModulesPage({
           in, so the reason is shown against the list itself. */}
       {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
 
-      <FilterForm showClear={hasFilters}>
-        <input
-          type="text"
-          name="search"
-          placeholder="Search module name"
-          defaultValue={search}
-          className={`${inputClass} max-w-xs`}
-        />
-        <label className={labelClass}>
-          Show
-          <Select
-            name="archived"
-            defaultValue={archived ?? ""}
-            options={[
-              { value: "", label: "Active" },
-              { value: "1", label: "Archived" },
-            ]}
-            ariaLabel="Show"
-            className="max-w-36"
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search module name"
+            defaultValue={search}
+            className={`${inputClass} max-w-xs`}
           />
-        </label>
-      </FilterForm>
+          <label className={labelClass}>
+            Show
+            <Select
+              name="archived"
+              defaultValue={archived ?? ""}
+              options={[
+                { value: "", label: "Active" },
+                { value: "1", label: "Archived" },
+              ]}
+              ariaLabel="Show"
+              className="max-w-36"
+            />
+          </label>
+        </FilterForm>
+        <ResultCount total={result.total} />
+      </div>
 
       {modules.length === 0 ? (
         <p className={mutedTextClass}>

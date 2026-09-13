@@ -15,6 +15,7 @@ import { membersBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { Button } from "@/components/ui/Button";
 import { SubmitButton } from "@/components/SubmitButton";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
@@ -241,6 +242,10 @@ export default async function MembersPage({
           </Modal>
         }
       />
+
+      <div className="flex justify-end">
+        <ResultCount total={members.length} />
+      </div>
 
       {members.length === 0 ? (
         <p className={mutedTextClass}>No members yet.</p>

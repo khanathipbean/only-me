@@ -6,6 +6,7 @@ import { withToast } from "@/lib/toast";
 import { isAdminAnywhere } from "@/lib/rbac";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
@@ -101,30 +102,33 @@ export default async function ProjectsPage({
         }
       />
 
-      <FilterForm showClear={hasFilters}>
-        <input
-          type="text"
-          name="search"
-          placeholder="Search by name or code"
-          defaultValue={search}
-          className={`${inputClass} max-w-xs`}
-        />
-        <label className={labelClass}>
-          Status
-          <Select
-            name="status"
-            defaultValue={status ?? ""}
-            options={[
-              { value: "", label: "All" },
-              { value: "DRAFT", label: "Draft" },
-              { value: "ACTIVE", label: "Active" },
-              { value: "COMPLETED", label: "Completed" },
-            ]}
-            ariaLabel="Status"
-            className="max-w-40"
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search by name or code"
+            defaultValue={search}
+            className={`${inputClass} max-w-xs`}
           />
-        </label>
-      </FilterForm>
+          <label className={labelClass}>
+            Status
+            <Select
+              name="status"
+              defaultValue={status ?? ""}
+              options={[
+                { value: "", label: "All" },
+                { value: "DRAFT", label: "Draft" },
+                { value: "ACTIVE", label: "Active" },
+                { value: "COMPLETED", label: "Completed" },
+              ]}
+              ariaLabel="Status"
+              className="max-w-40"
+            />
+          </label>
+        </FilterForm>
+        <ResultCount total={result.total} />
+      </div>
 
       {projects.length === 0 ? (
         <p className={mutedTextClass}>
