@@ -63,8 +63,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     await signOut({ redirectTo: "/login" });
   }
 
+  // The theme-init script below sets data-theme on this element before React
+  // hydrates, on purpose — without suppressHydrationWarning React treats that
+  // as a server/client mismatch and aborts hydration outright, which broke
+  // every client component on the page (the theme toggle included) once the
+  // site was actually reachable in production.
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <Script id="theme-init" strategy="beforeInteractive">
           {THEME_INIT_SCRIPT}
