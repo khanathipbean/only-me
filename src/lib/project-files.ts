@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { prisma } from "@/lib/prisma";
+import { downloadFile, uploadFile } from "@/lib/storage";
 
-const UPLOAD_DIR = path.join(process.cwd(), "uploads", "project-files");
+const FOLDER = "project-files";
 
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -52,12 +51,14 @@ export async function saveProjectFile(
     );
   }
 
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-
-  // The key is a bare UUID — the uploader's filename never reaches the
-  // filesystem, so a name like "../../etc/passwd" can't steer the write.
-  const storageKey = randomUUID();
-  await fs.writeFile(path.join(UPLOAD_DIR, storageKey), Buffer.from(await file.arrayBuffer()));
+  // The key is a bare UUID — the uploader's filename never reaches storage,
+  // so a name like "../../etc/passwd" can't steer where the bytes land.
+  const storageKey = `${FOLDER}/${randomUUID()}`;
+  await uploadFile(
+    storageKey,
+    Buffer.from(await file.arrayBuffer()),
+    file.type || "application/octet-stream",
+  );
 
   return prisma.projectFile.create({
     data: {
@@ -100,11 +101,11 @@ export async function getProjectFile(id: string) {
 
 /** Reads the bytes back. Resolves through the stored key only. */
 export async function readProjectFileBytes(storageKey: string) {
-  return fs.readFile(path.join(UPLOAD_DIR, storageKey));
+  return downloadFile(storageKey);
 }
 
-/** Soft delete, matching every other level of the app — the bytes stay on
- * disk so an accidental removal is recoverable. */
+/** Soft delete, matching every other level of the app — the bytes stay in
+ * storage so an accidental removal is recoverable. */
 export async function deleteProjectFile(id: string) {
   return prisma.projectFile.update({ where: { id }, data: { deletedAt: new Date() } });
 }

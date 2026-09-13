@@ -6,6 +6,14 @@ vi.mock("@/auth", () => ({
   auth: vi.fn(),
 }));
 
+// Real Supabase Storage needs credentials this test suite doesn't have —
+// the attachment upload test only checks metadata, never the bytes.
+vi.mock("@/lib/storage", () => ({
+  uploadFile: vi.fn(),
+  downloadFile: vi.fn(),
+  deleteFile: vi.fn(),
+}));
+
 import { auth } from "@/auth";
 import { POST as createProjectRoute } from "@/app/api/projects/route";
 import { POST as createScenarioRoute } from "@/app/api/projects/[id]/scenarios/route";

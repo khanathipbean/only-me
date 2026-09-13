@@ -1,16 +1,13 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { prisma } from "@/lib/prisma";
+import { deleteFile, downloadFile, uploadFile } from "@/lib/storage";
 
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+const FOLDER = "attachments";
 
 export async function saveAttachment(testCaseId: string, file: File, uploadedById: string) {
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-
-  const storageKey = `${randomUUID()}-${file.name}`;
+  const storageKey = `${FOLDER}/${randomUUID()}-${file.name}`;
   const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(path.join(UPLOAD_DIR, storageKey), buffer);
+  await uploadFile(storageKey, buffer, file.type || "application/octet-stream");
 
   return prisma.attachment.create({
     data: {
@@ -48,7 +45,7 @@ export async function getAttachmentWithProjectId(id: string) {
 
 /** Reads the bytes back. Resolves through the stored key only. */
 export async function readAttachmentBytes(storageKey: string) {
-  return fs.readFile(path.join(UPLOAD_DIR, storageKey));
+  return downloadFile(storageKey);
 }
 
 /**
@@ -63,5 +60,5 @@ export async function deleteAttachment(id: string) {
     return;
   }
   await prisma.attachment.delete({ where: { id } });
-  await fs.rm(path.join(UPLOAD_DIR, attachment.storageKey), { force: true });
+  await deleteFile(attachment.storageKey);
 }
