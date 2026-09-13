@@ -1,12 +1,18 @@
+import { randomUUID } from "node:crypto";
 import { cache } from "react";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth-credentials";
+import { deleteFile, uploadFile } from "@/lib/storage";
 
 /** Shortest password this app will accept when someone changes it. */
 export const MIN_PASSWORD_LENGTH = 8;
 
 export class ProfileValidationError extends Error {}
+
+const AVATAR_FOLDER = "avatars";
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const AVATAR_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 
 /**
  * The signed-in user's own record.
@@ -19,7 +25,7 @@ export class ProfileValidationError extends Error {}
 export const getUserById = cache(async (id: string) => {
   return prisma.user.findUnique({
     where: { id },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, avatarKey: true },
   });
 });
 
@@ -33,6 +39,45 @@ export async function updateDisplayName(userId: string, name: string) {
     data: { name: trimmed },
     select: { id: true, name: true, email: true },
   });
+}
+
+/** Uploads a new picture and replaces whatever the user had before. */
+export async function updateAvatar(userId: string, file: File) {
+  if (!AVATAR_TYPES.has(file.type)) {
+    throw new ProfileValidationError("Profile picture must be a PNG, JPEG, WEBP, or GIF image");
+  }
+  if (file.size === 0) {
+    throw new ProfileValidationError("That file is empty");
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    throw new ProfileValidationError(
+      `Profile picture is larger than ${Math.round(MAX_AVATAR_BYTES / 1024 / 1024)} MB`,
+    );
+  }
+
+  const previous = await prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
+
+  const avatarKey = `${AVATAR_FOLDER}/${randomUUID()}`;
+  await uploadFile(avatarKey, Buffer.from(await file.arrayBuffer()), file.type);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { avatarKey, avatarContentType: file.type },
+  });
+
+  // Best-effort: the new picture is already live either way, and a leftover
+  // blob under the old key costs storage, not correctness.
+  if (previous?.avatarKey) {
+    await deleteFile(previous.avatarKey).catch(() => {});
+  }
+}
+
+export async function removeAvatar(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarKey: true } });
+  if (!user?.avatarKey) {
+    return;
+  }
+  await prisma.user.update({ where: { id: userId }, data: { avatarKey: null, avatarContentType: null } });
+  await deleteFile(user.avatarKey).catch(() => {});
 }
 
 /**

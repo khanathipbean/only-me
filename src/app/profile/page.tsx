@@ -1,19 +1,28 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import {
+  MAX_AVATAR_BYTES,
   MIN_PASSWORD_LENGTH,
   ProfileValidationError,
   changePassword,
   getUserById,
+  removeAvatar,
+  updateAvatar,
   updateDisplayName,
 } from "@/lib/users";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { profileBreadcrumb } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
+import { DismissibleAlert } from "@/components/DismissibleAlert";
+import { ConfirmForm } from "@/components/ConfirmForm";
+import { Avatar } from "@/components/ui/Avatar";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
+import { IconButton } from "@/components/ui/Button";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { RequiredMark } from "@/components/forms/RequiredMark";
+import { TrashIcon } from "@/components/icons";
 import { inputClass, labelClass, mutedTextClass, pageClass } from "@/lib/ui";
 
 export const metadata = { title: "Profile" };
@@ -21,9 +30,9 @@ export const metadata = { title: "Profile" };
 export default async function ProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ nameError?: string; passwordError?: string; saved?: string }>;
+  searchParams: Promise<{ nameError?: string; passwordError?: string; avatarError?: string }>;
 }) {
-  const { nameError, passwordError, saved } = await searchParams;
+  const { nameError, passwordError, avatarError } = await searchParams;
   const session = await auth();
   const user = await getUserById(session!.user.id);
   if (!user) {
@@ -41,7 +50,7 @@ export default async function ProfilePage({
       }
       throw err;
     }
-    redirect("/profile?saved=name");
+    redirect(withToast("/profile", "Display name updated"));
   }
 
   async function savePassword(formData: FormData) {
@@ -59,13 +68,88 @@ export default async function ProfilePage({
       }
       throw err;
     }
-    redirect("/profile?saved=password");
+    redirect(withToast("/profile", "Password changed"));
+  }
+
+  async function uploadAvatar(formData: FormData) {
+    "use server";
+    const session = await auth();
+    const file = formData.get("avatar");
+    if (!(file instanceof File) || file.size === 0) {
+      redirect(`/profile?avatarError=${encodeURIComponent("Choose a picture first")}`);
+    }
+    try {
+      await updateAvatar(session!.user.id, file);
+    } catch (err) {
+      if (err instanceof ProfileValidationError) {
+        redirect(`/profile?avatarError=${encodeURIComponent(err.message)}`);
+      }
+      throw err;
+    }
+    redirect(withToast("/profile", "Profile picture updated"));
+  }
+
+  async function removeAvatarAction() {
+    "use server";
+    const session = await auth();
+    await removeAvatar(session!.user.id);
+    redirect(withToast("/profile", "Profile picture removed"));
   }
 
   return (
     <main className={pageClass}>
       <Breadcrumb segments={profileBreadcrumb()} />
       <PageHeader title="Profile" subtitle={user.email} />
+
+      <Card className="flex flex-col gap-5">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Profile picture</h2>
+          <p className={mutedTextClass}>
+            Shown wherever your name appears. PNG, JPEG, WEBP, or GIF, up to{" "}
+            {Math.round(MAX_AVATAR_BYTES / 1024 / 1024)} MB.
+          </p>
+        </div>
+
+        {avatarError && (
+          <DismissibleAlert clearParams={["avatarError"]}>{avatarError}</DismissibleAlert>
+        )}
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Avatar
+            name={user.name}
+            src={user.avatarKey ? `/api/users/${user.id}/avatar` : null}
+            size="size-16"
+          />
+          <form action={uploadAvatar} className="flex flex-wrap items-center gap-3">
+            <input
+              type="file"
+              name="avatar"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              required
+              aria-label="Profile picture"
+              className="block text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-foreground file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-background"
+            />
+            <SubmitButton pendingLabel="Uploading…">Upload</SubmitButton>
+          </form>
+          {user.avatarKey && (
+            <ConfirmForm
+              action={removeAvatarAction}
+              confirmMessage="Remove your profile picture?"
+              variant="danger"
+            >
+              <IconButton
+                type="submit"
+                variant="ghost"
+                aria-label="Remove profile picture"
+                title="Remove"
+                className="text-muted hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+              >
+                <TrashIcon />
+              </IconButton>
+            </ConfirmForm>
+          )}
+        </div>
+      </Card>
 
       {/* Side by side at lg: and up — two max-w-xl cards stacked in a
           full-width column left most of a desktop viewport empty below them. */}
@@ -77,14 +161,7 @@ export default async function ProfilePage({
           </div>
 
           {nameError && (
-            <p role="alert" className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300">
-              {nameError}
-            </p>
-          )}
-          {saved === "name" && (
-            <p role="status" className="rounded-md bg-emerald-100 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-              Display name updated.
-            </p>
+            <DismissibleAlert clearParams={["nameError"]}>{nameError}</DismissibleAlert>
           )}
 
           <form action={saveName} className="flex flex-col gap-4">
@@ -96,7 +173,7 @@ export default async function ProfilePage({
               <input name="name" defaultValue={user.name} required className={inputClass} />
             </label>
             <div className="flex justify-end">
-              <Button type="submit">Save name</Button>
+              <SubmitButton>Save name</SubmitButton>
             </div>
           </form>
         </Card>
@@ -111,14 +188,7 @@ export default async function ProfilePage({
           </div>
 
           {passwordError && (
-            <p role="alert" className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300">
-              {passwordError}
-            </p>
-          )}
-          {saved === "password" && (
-            <p role="status" className="rounded-md bg-emerald-100 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-              Password changed.
-            </p>
+            <DismissibleAlert clearParams={["passwordError"]}>{passwordError}</DismissibleAlert>
           )}
 
           <form action={savePassword} className="flex flex-col gap-4">
@@ -150,7 +220,7 @@ export default async function ProfilePage({
               <PasswordInput name="confirmPassword" required autoComplete="new-password" />
             </label>
             <div className="flex justify-end">
-              <Button type="submit">Change password</Button>
+              <SubmitButton>Change password</SubmitButton>
             </div>
           </form>
         </Card>

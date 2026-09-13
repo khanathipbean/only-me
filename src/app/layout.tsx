@@ -129,6 +129,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               <AccountMenu
                 name={currentUser?.name ?? session.user.email ?? "Account"}
                 email={currentUser?.email ?? session.user.email ?? ""}
+                avatarUrl={currentUser?.avatarKey ? `/api/users/${currentUser.id}/avatar` : null}
                 logout={logout}
                 canManageMembers={canManageMembers}
               />

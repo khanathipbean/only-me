@@ -21,11 +21,13 @@ import { useTheme } from "@/lib/theme";
 export function AccountMenu({
   name,
   email,
+  avatarUrl,
   logout,
   canManageMembers,
 }: {
   name: string;
   email: string;
+  avatarUrl?: string | null;
   logout: () => void;
   /** ADMIN on at least one Project — not shown at all to anyone else, since
    * the page itself 404s them too (see `requireAdminAnywhereOrNotFound`). */
@@ -94,7 +96,7 @@ export function AccountMenu({
         title={email}
         className="flex rounded-full ring-offset-2 ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-brand"
       >
-        <Avatar name={name} title={email} />
+        <Avatar name={name} title={email} src={avatarUrl} />
       </button>
 
       {open &&
@@ -107,9 +109,12 @@ export function AccountMenu({
             style={{ top: box.top, right: box.right }}
             className="fixed z-50 w-64 overflow-hidden rounded-lg border border-border bg-surface text-left shadow-lg"
           >
-            <div className="border-b border-border px-4 py-3">
-              <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-              <p className="truncate text-xs text-muted">{email}</p>
+            <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+              <Avatar name={name} title={email} src={avatarUrl} size="size-9" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-foreground">{name}</p>
+                <p className="truncate text-xs text-muted">{email}</p>
+              </div>
             </div>
 
             <div className="py-1">
