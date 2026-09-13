@@ -319,6 +319,29 @@ export function DashboardView({ projectId }: { projectId: string }) {
 
   const activeFilters = Object.entries(filters).filter(([, value]) => value);
 
+  /** The hierarchy/assignee filters store a raw id in state — this resolves
+   * it back to the name the user actually picked, for the "Active:" chips.
+   * Everything else (status, priority, dates, tags…) is already
+   * human-readable and passes through unchanged. */
+  function activeFilterLabel(key: keyof Filters, value: string): string {
+    switch (key) {
+      case "moduleId":
+        return data?.options.modules.find((row) => row.id === value)?.name ?? value;
+      case "requirementId":
+        return data?.options.requirements.find((row) => row.id === value)?.name ?? value;
+      case "scenarioId":
+        return data?.options.scenarios.find((row) => row.id === value)?.name ?? value;
+      case "testGroupId":
+        return data?.options.testGroups.find((row) => row.id === value)?.name ?? value;
+      case "assigneeId":
+        return (
+          data?.testCasesByAssignee.find((row) => row.assigneeId === value)?.assigneeName ?? value
+        );
+      default:
+        return value;
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -474,7 +497,8 @@ export function DashboardView({ projectId }: { projectId: string }) {
             <span className="text-xs font-medium uppercase tracking-wide text-muted">Active:</span>
             {activeFilters.map(([key, value]) => (
               <Badge key={key} tone="blue">
-                {FILTER_LABELS[key as keyof Filters]}: {value}
+                {FILTER_LABELS[key as keyof Filters]}:{" "}
+                {activeFilterLabel(key as keyof Filters, value)}
               </Badge>
             ))}
           </div>
