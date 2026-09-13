@@ -156,7 +156,7 @@ describe("test case routes", () => {
     expect(detail.steps[0].step).toBe("Enter valid credentials");
   });
 
-  it("rejects a Tester's attempt to edit a restricted field but allows testResult/notes", async () => {
+  it("lets a Tester edit every field, same as QA_LEAD/ADMIN", async () => {
     const { owner, project, testGroup } = await setup("tc-owner2@example.com", "PRJ-TC-2");
     const tester = await createUser("tc-tester1@example.com");
     await addMember(project.id, tester.id, "TESTER");
@@ -165,7 +165,7 @@ describe("test case routes", () => {
     const created = await (
       await createTestCaseRoute(
         jsonRequest(`http://test/api/test-groups/${testGroup.id}/test-cases`, "POST", {
-          name: "Tester-restricted case",
+          name: "Tester-editable case",
           expectedResult: "Result",
           priority: "LOW",
           steps: [{ step: "Do the thing", expectedResult: "Thing happens" }],
@@ -177,25 +177,19 @@ describe("test case routes", () => {
     mockAuth.mockResolvedValue(sessionFor(tester.id) as never);
     const params = Promise.resolve({ id: created.id });
 
-    const restrictedAttempt = await patchTestCase(
+    const fullEdit = await patchTestCase(
       jsonRequest(`http://test/api/test-cases/${created.id}`, "PATCH", {
         name: "Renamed by tester",
+        expectedResult: "Result",
+        priority: "HIGH",
+        steps: [{ step: "Do the thing", expectedResult: "Thing happens" }],
       }),
       { params },
     );
-    expect(restrictedAttempt.status).toBe(400);
-
-    const allowedAttempt = await patchTestCase(
-      jsonRequest(`http://test/api/test-cases/${created.id}`, "PATCH", {
-        testResult: "PASSED",
-        notes: "Looks good",
-      }),
-      { params },
-    );
-    expect(allowedAttempt.status).toBe(200);
-    const updated = await allowedAttempt.json();
-    expect(updated.testResult).toBe("PASSED");
-    expect(updated.notes).toBe("Looks good");
+    expect(fullEdit.status).toBe(200);
+    const updated = await fullEdit.json();
+    expect(updated.name).toBe("Renamed by tester");
+    expect(updated.priority).toBe("HIGH");
     expect(updated.updatedById).toBe(tester.id);
   });
 
@@ -370,7 +364,7 @@ describe("test case routes", () => {
     ).toBe(403);
   });
 
-  it("restricts the assignee endpoint to ADMIN/QA_LEAD, rejecting a Tester", async () => {
+  it("lets a Tester set the assignee too, same as ADMIN/QA_LEAD", async () => {
     const { owner, project, testGroup } = await setup("tc-owner6@example.com", "PRJ-TC-6");
     const tester = await createUser("tc-tester2@example.com");
     await addMember(project.id, tester.id, "TESTER");
@@ -396,17 +390,8 @@ describe("test case routes", () => {
       }),
       { params },
     );
-    expect(testerAttempt.status).toBe(403);
-
-    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const ownerAttempt = await patchAssigneeRoute(
-      jsonRequest(`http://test/api/test-cases/${created.id}/assignee`, "PATCH", {
-        assigneeId: tester.id,
-      }),
-      { params },
-    );
-    expect(ownerAttempt.status).toBe(200);
-    const updated = await ownerAttempt.json();
+    expect(testerAttempt.status).toBe(200);
+    const updated = await testerAttempt.json();
     expect(updated.assigneeId).toBe(tester.id);
   });
 

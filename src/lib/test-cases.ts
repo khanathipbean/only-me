@@ -11,12 +11,6 @@ export class ConfirmRequiredError extends Error {
     super("Deleting a Test Case requires confirm: true");
   }
 }
-/** A Tester (or any caller) sent a field in the request body they aren't allowed to change. */
-export class RestrictedFieldError extends Error {
-  constructor(fields: string[]) {
-    super(`Not allowed to change: ${fields.join(", ")}`);
-  }
-}
 
 export type TestStepInput = { step: string; expectedResult: string };
 
@@ -248,10 +242,9 @@ export async function updateTestCase(
   return after;
 }
 
-/** The only fields a TESTER may ever change via the main PATCH endpoint. */
-export const TESTER_EDITABLE_FIELDS = ["testResult", "notes"] as const;
-
-/** Tester-path edit: only testResult/notes, both optional (partial update). */
+/** A lightweight partial update for the page's quick "record a result"
+ * form — testResult/notes only, both optional — kept separate from the full
+ * `updateTestCase` edit so logging a run doesn't require the whole form. */
 export async function updateTestResultAndNotes(
   id: string,
   input: { testResult?: TestResult; notes?: string | null },

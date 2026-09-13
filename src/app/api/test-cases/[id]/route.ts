@@ -3,13 +3,10 @@ import { withEntityProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
 import {
   ConfirmRequiredError,
-  RestrictedFieldError,
-  TESTER_EDITABLE_FIELDS,
   ValidationError,
   deleteTestCase,
   getTestCaseWithProjectId,
   updateTestCase,
-  updateTestResultAndNotes,
 } from "@/lib/test-cases";
 
 export const GET = withEntityProjectRole(
@@ -19,27 +16,12 @@ export const GET = withEntityProjectRole(
 );
 
 export const PATCH = withEntityProjectRole(
-  [...EDITOR_ROLES, "TESTER"],
+  EDITOR_ROLES,
   getTestCaseWithProjectId,
-  async (request, { entityId, userId, membership }) => {
+  async (request, { entityId, userId }) => {
     const body = await request.json();
 
     try {
-      if (membership?.role === "TESTER") {
-        const disallowed = Object.keys(body).filter(
-          (key) => !(TESTER_EDITABLE_FIELDS as readonly string[]).includes(key),
-        );
-        if (disallowed.length > 0) {
-          throw new RestrictedFieldError(disallowed);
-        }
-        const testCase = await updateTestResultAndNotes(
-          entityId,
-          { testResult: body.testResult, notes: body.notes },
-          userId,
-        );
-        return NextResponse.json(testCase);
-      }
-
       const testCase = await updateTestCase(
         entityId,
         {
@@ -57,7 +39,7 @@ export const PATCH = withEntityProjectRole(
       );
       return NextResponse.json(testCase);
     } catch (error) {
-      if (error instanceof ValidationError || error instanceof RestrictedFieldError) {
+      if (error instanceof ValidationError) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
       throw error;

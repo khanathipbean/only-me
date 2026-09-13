@@ -57,12 +57,23 @@ export const PROJECT_STATUS_OPTIONS = [
   { value: "COMPLETED", label: "Completed" },
 ];
 
+/** Every role the enum still allows — kept around only so a Project Member
+ * already holding QA_LEAD or VIEWER still renders and stays selectable on
+ * their own row. New assignments pick from `ASSIGNABLE_PROJECT_ROLE_OPTIONS`
+ * instead. */
 export const PROJECT_ROLE_OPTIONS = [
   { value: "ADMIN", label: "Admin" },
   { value: "QA_LEAD", label: "QA Lead" },
   { value: "TESTER", label: "Tester" },
   { value: "VIEWER", label: "Viewer" },
 ];
+
+/** QA_LEAD and VIEWER hidden for now: TESTER covers everything QA_LEAD did
+ * (see `EDITOR_ROLES`) and ADMIN covers everything VIEWER did plus more, so
+ * neither is offered for a new or changed assignment. */
+export const ASSIGNABLE_PROJECT_ROLE_OPTIONS = PROJECT_ROLE_OPTIONS.filter(
+  (option) => option.value === "ADMIN" || option.value === "TESTER",
+);
 
 export const TEST_TYPE_OPTIONS = [
   { value: "", label: "—" },

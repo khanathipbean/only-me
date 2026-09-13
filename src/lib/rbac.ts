@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 import type { ProjectRole } from "@/generated/prisma/client";
 
 export const ADMIN_ROLES: ProjectRole[] = ["ADMIN"];
-export const EDITOR_ROLES: ProjectRole[] = ["ADMIN", "QA_LEAD"];
+/** TESTER included: the only thing that still sets it apart from QA_LEAD/ADMIN
+ * is `isAdminAnywhere` (Members page, "+ New Project") — every per-project
+ * action is otherwise open to it. */
+export const EDITOR_ROLES: ProjectRole[] = ["ADMIN", "QA_LEAD", "TESTER"];
 export const ALL_MEMBER_ROLES: ProjectRole[] = [
   "ADMIN",
   "QA_LEAD",
