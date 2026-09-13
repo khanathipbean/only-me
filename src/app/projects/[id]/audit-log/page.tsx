@@ -76,16 +76,14 @@ export default async function AuditLogPage({
       <PageHeader title="Audit Trail" subtitle="All timestamps are shown in UTC." />
 
       <FilterForm showClear={hasFilters}>
-        <label className={labelClass}>
-          Actor User Name
-          <input
-            type="text"
-            name="actorName"
-            placeholder="Search by name"
-            defaultValue={actorName}
-            className={inputClass}
-          />
-        </label>
+        <input
+          type="text"
+          name="actorName"
+          placeholder="Search by name"
+          defaultValue={actorName}
+          aria-label="Actor User Name"
+          className={`${inputClass} sm:w-80`}
+        />
         <label className={labelClass}>
           Action
           <Select
