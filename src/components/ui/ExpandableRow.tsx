@@ -1,9 +1,13 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type MouseEvent, type ReactNode } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { ChevronRightIcon } from "@/components/icons";
 import { tdCenterClass, trHoverClass } from "@/lib/ui";
+
+/** Elements a row click shouldn't hijack — the name link, action buttons,
+ * and anything a row's own cells might embed (a Select, say). */
+const INTERACTIVE_SELECTOR = "a, button, input, select, label, [role='button']";
 
 /**
  * A table row that expands a detail panel underneath itself instead of
@@ -42,13 +46,24 @@ export function ExpandableRow({
   const panelId = useId();
   const toggleLabel = open ? `Hide details for ${detailLabel}` : `Show details for ${detailLabel}`;
 
+  /** Toggles from anywhere in the row's own empty space — the name link and
+   * every action button still do their own thing untouched, since a click
+   * that starts on one of those never reaches here as anything but a click
+   * on an interactive element the selector excludes. */
+  function handleRowClick(event: MouseEvent<HTMLTableRowElement>) {
+    if ((event.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) {
+      return;
+    }
+    setOpen((value) => !value);
+  }
+
   return (
     <>
       {/* The divider belongs under the panel, not under the summary: a row
           and its panel are one record, so the line goes on the last `<tr>` of
           the pair — which is also the one `.data-table`'s last-row rule can
           then drop, instead of it stacking on the wrapper's border. */}
-      <tr className={`${trHoverClass} *:border-b-0`}>
+      <tr onClick={handleRowClick} className={`${trHoverClass} cursor-pointer *:border-b-0`}>
         {cells}
         <td className={tdCenterClass}>
           {/* `inline-flex`, so the group is centred by the cell's own
