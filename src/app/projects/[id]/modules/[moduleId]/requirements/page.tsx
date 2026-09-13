@@ -17,6 +17,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
 import { nameOr, requirementsListBreadcrumb } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
@@ -140,7 +141,7 @@ export default async function RequirementsPage({
       }
       throw err;
     }
-    redirect(listHref);
+    redirect(withToast(listHref, "Requirement created"));
   }
 
   /** Bound per row: an inline Edit dialog needs one action per Requirement. */
@@ -211,7 +212,7 @@ export default async function RequirementsPage({
           }
           throw err;
         }
-        redirect(listHref);
+        redirect(withToast(listHref, "Requirement deleted"));
       },
     };
   }

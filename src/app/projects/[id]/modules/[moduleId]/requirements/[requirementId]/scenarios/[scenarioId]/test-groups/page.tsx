@@ -23,6 +23,7 @@ import {
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testGroupsListBreadcrumb } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { testGroupsListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
@@ -176,7 +177,7 @@ export default async function TestGroupsPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await deleteTestGroup(testGroupId, actorId, true);
-        redirect(listHref);
+        redirect(withToast(listHref, "Test Group deleted"));
       },
     };
   }
@@ -240,7 +241,7 @@ export default async function TestGroupsPage({
       throw err;
     }
 
-    redirect(listHref);
+    redirect(withToast(listHref, "Test Group created"));
   }
 
   async function move(id: string, delta: -1 | 1) {

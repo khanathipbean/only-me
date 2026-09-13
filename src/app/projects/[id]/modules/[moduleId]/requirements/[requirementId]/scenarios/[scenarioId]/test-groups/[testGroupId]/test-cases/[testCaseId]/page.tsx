@@ -26,7 +26,9 @@ import { canPreview } from "@/lib/project-files";
 import { FilePreview } from "@/components/FilePreview";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { testCasesListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
@@ -34,6 +36,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Button, IconButton } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
@@ -166,7 +169,7 @@ export default async function TestCaseDetailPage({
     if (file instanceof File && file.size > 0) {
       await saveAttachment(testCaseId, file, session!.user.id);
     }
-    redirect(`${basePath}/${testCaseId}`);
+    redirect(withToast(`${basePath}/${testCaseId}`, "Attachment uploaded"));
   }
 
   function removeAttachment(attachmentId: string) {
@@ -180,7 +183,7 @@ export default async function TestCaseDetailPage({
       if (attachment && attachment.testCaseId === testCaseId) {
         await deleteAttachment(attachmentId);
       }
-      redirect(`${basePath}/${testCaseId}`);
+      redirect(withToast(`${basePath}/${testCaseId}`, "Attachment deleted"));
     };
   }
 
@@ -234,7 +237,7 @@ export default async function TestCaseDetailPage({
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     await deleteTestCase(testCaseId, session!.user.id, true);
-    redirect(basePath);
+    redirect(withToast(basePath, "Test Case deleted"));
   }
 
   return (
@@ -401,9 +404,9 @@ export default async function TestCaseDetailPage({
             required
             className="text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-hover"
           />
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel="Uploading…">
             Upload Attachment
-          </Button>
+          </SubmitButton>
         </form>
       </Card>
 
@@ -412,9 +415,7 @@ export default async function TestCaseDetailPage({
           <h2 className="text-sm font-semibold text-foreground">Manage</h2>
 
           {moveError && (
-            <p role="alert" className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300">
-              {moveError}
-            </p>
+            <DismissibleAlert clearParams={["moveError"]}>{moveError}</DismissibleAlert>
           )}
           <ConfirmForm action={move} confirmMessage="Move this Test Case?">
             <div className="flex flex-wrap items-end gap-3">

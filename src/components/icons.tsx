@@ -166,3 +166,14 @@ export function FileIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+/** A 3/4 ring, not a full circle: an unbroken circle gives `animate-spin`
+ * nothing to show rotating. Callers add the spin themselves — this icon is
+ * also just a static "loading" glyph without it. */
+export function SpinnerIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 12a9 9 0 1 1-9-9" />
+    </IconBase>
+  );
+}

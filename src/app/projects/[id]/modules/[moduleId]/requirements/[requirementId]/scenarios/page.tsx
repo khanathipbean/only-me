@@ -24,6 +24,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { Pagination } from "@/components/ui/Pagination";
 import { nameOr, scenariosListBreadcrumb } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
@@ -230,7 +231,7 @@ export default async function ScenariosPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await deleteScenario(scenarioId, actorId, true);
-        redirect(listHref);
+        redirect(withToast(listHref, "Scenario deleted"));
       },
     };
   }
@@ -317,7 +318,7 @@ export default async function ScenariosPage({
       throw err;
     }
 
-    redirect(listHref);
+    redirect(withToast(listHref, "Scenario created"));
   }
 
   return (

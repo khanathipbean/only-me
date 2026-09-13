@@ -13,12 +13,15 @@ import {
 } from "@/lib/project-files";
 import { listModulesForProject } from "@/lib/modules";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { filesBreadcrumb, nameOr } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilePreview } from "@/components/FilePreview";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Button, IconButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { TrashIcon } from "@/components/icons";
@@ -70,7 +73,7 @@ export default async function ProjectFilesPage({
       }
       throw err;
     }
-    redirect(`/projects/${projectId}/files`);
+    redirect(withToast(`/projects/${projectId}/files`, "File uploaded"));
   }
 
   function removeAction(fileId: string) {
@@ -83,7 +86,7 @@ export default async function ProjectFilesPage({
       if (file && file.projectId === projectId) {
         await deleteProjectFile(fileId);
       }
-      redirect(`/projects/${projectId}/files`);
+      redirect(withToast(`/projects/${projectId}/files`, "File deleted"));
     };
   }
 
@@ -100,11 +103,7 @@ export default async function ProjectFilesPage({
       <Card className="flex flex-col gap-4">
         <h2 className="text-sm font-semibold text-foreground">Add a file</h2>
 
-        {error && (
-          <p role="alert" className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300">
-            {error}
-          </p>
-        )}
+        {error && <DismissibleAlert clearParams={["error"]}>{error}</DismissibleAlert>}
 
         {/* No `encType`/`method`: React sets both itself for a server action,
             and specifying them makes it warn that it will override them. */}
@@ -153,7 +152,7 @@ export default async function ProjectFilesPage({
               Up to {Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB. PDFs and images preview here;
               anything else downloads.
             </p>
-            <Button type="submit">Upload</Button>
+            <SubmitButton pendingLabel="Uploading…">Upload</SubmitButton>
           </div>
         </form>
       </Card>

@@ -3,7 +3,7 @@ import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { PRIORITY_OPTIONS, TEST_TYPE_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
 import { TestStepEditor, type StepDraft } from "@/components/TestStepEditor";
-import { Button } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { Priority, TestType, WorkflowStatus } from "@/generated/prisma/client";
 
@@ -112,7 +112,7 @@ export function TestCaseForm({
         </label>
         <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-3">
           <DialogCloseButton />
-          <Button type="submit">{submitLabel}</Button>
+          <SubmitButton>{submitLabel}</SubmitButton>
         </div>
       </form>
     </>

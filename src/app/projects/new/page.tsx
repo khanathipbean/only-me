@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { DuplicateCodeError, ValidationError, createProject } from "@/lib/projects";
+import { withToast } from "@/lib/toast";
 import { Card } from "@/components/ui/Card";
 import { ProjectForm } from "@/components/forms/ProjectForm";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -42,7 +43,7 @@ export default async function NewProjectPage({
       throw err;
     }
 
-    redirect(`/projects/${project.id}`);
+    redirect(withToast(`/projects/${project.id}`, "Project created"));
   }
 
   return (

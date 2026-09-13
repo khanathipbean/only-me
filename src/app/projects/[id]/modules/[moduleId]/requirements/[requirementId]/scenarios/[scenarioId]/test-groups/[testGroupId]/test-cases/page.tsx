@@ -13,6 +13,7 @@ import { getScenarioById } from "@/lib/scenarios";
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCasesListBreadcrumb } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { testCasesListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
@@ -175,7 +176,7 @@ export default async function TestCasesPage({
       throw err;
     }
 
-    redirect(`${basePath}/${testCase.id}`);
+    redirect(withToast(`${basePath}/${testCase.id}`, "Test Case created"));
   }
 
   return (
