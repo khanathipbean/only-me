@@ -152,12 +152,32 @@ export async function listTestCasesWithStepsForTestGroup(testGroupId: string) {
   });
 }
 
+export type TestCaseFilters = {
+  search?: string;
+  priority?: Priority;
+  testResult?: TestResult;
+  status?: WorkflowStatus;
+};
+
+function testCaseListWhere(testGroupId: string, filters: TestCaseFilters) {
+  return {
+    testGroupId,
+    deletedAt: null,
+    ...(filters.priority ? { priority: filters.priority } : {}),
+    ...(filters.testResult ? { testResult: filters.testResult } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.search
+      ? { name: { contains: filters.search, mode: "insensitive" as const } }
+      : {}),
+  };
+}
+
 /** One page of the list above, for the table's pager. */
 export async function listTestCasesWithStepsForTestGroupPage(
   testGroupId: string,
-  filters: PageFilters = {},
+  filters: TestCaseFilters & PageFilters = {},
 ) {
-  const where = { testGroupId, deletedAt: null };
+  const where = testCaseListWhere(testGroupId, filters);
   return paginate(
     filters,
     () => prisma.testCase.count({ where }),

@@ -18,14 +18,20 @@ import { testCasesListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterForm } from "@/components/FilterForm";
+import { Select } from "@/components/ui/Select";
 import { Pagination } from "@/components/ui/Pagination";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
 import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
+import { PRIORITY_OPTIONS, TEST_RESULT_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import {
+  inputClass,
+  labelClass,
   mutedTextClass,
   pageClass,
   tableClass,
@@ -35,6 +41,7 @@ import {
   thCenterClass,
   thClass,
 } from "@/lib/ui";
+import type { Priority, TestResult, WorkflowStatus } from "@/generated/prisma/client";
 
 export async function generateMetadata({
   params,
@@ -62,12 +69,18 @@ export default async function TestCasesPage({
     /** Which row's inline Edit modal to reopen after a failed save — without
      * it a validation error would reopen every row's modal at once. */
     editId?: string;
+    search?: string;
+    priority?: string;
+    testResult?: string;
+    status?: string;
     page?: string;
     pageSize?: string;
   }>;
 }) {
   const { id: projectId, moduleId, requirementId, scenarioId, testGroupId } = await params;
-  const { error, editId, page, pageSize } = await searchParams;
+  const { error, editId, search, priority, testResult, status, page, pageSize } =
+    await searchParams;
+  const hasFilters = Boolean(search || priority || testResult || status);
   const session = await auth();
 
   const testGroup = await getTestGroupWithProjectId(testGroupId);
@@ -84,6 +97,10 @@ export default async function TestCasesPage({
     // Steps included: each row's inline Edit modal seeds a TestStepEditor,
     // which would silently wipe the steps if it mounted with an empty list.
     listTestCasesWithStepsForTestGroupPage(testGroupId, {
+      search,
+      priority: priority as Priority | undefined,
+      testResult: testResult as TestResult | undefined,
+      status: status as WorkflowStatus | undefined,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     }),
@@ -109,6 +126,15 @@ export default async function TestCasesPage({
     scenarioId,
     testGroupId,
   });
+  /* Plain strings only: a server action may close over serialisable values,
+   * and capturing a helper function stops React encoding the action at all,
+   * which leaves the form working only once JS has loaded. */
+  const listQueryString = new URLSearchParams(
+    Object.entries({ search, priority, testResult, status }).filter(
+      (entry): entry is [string, string] => Boolean(entry[1]),
+    ),
+  ).toString();
+  const listHref = listQueryString ? `${basePath}?${listQueryString}` : basePath;
 
   /** Bound per row: an inline Edit modal on a list needs one action per Test
    * Case, unlike the detail page where a single closed-over id suffices. */
@@ -137,12 +163,15 @@ export default async function TestCasesPage({
         );
       } catch (err) {
         if (err instanceof ValidationError) {
-          redirect(`${basePath}?error=${encodeURIComponent(err.message)}&editId=${testCaseId}`);
+          const query = new URLSearchParams(listQueryString);
+          query.set("error", err.message);
+          query.set("editId", testCaseId);
+          redirect(`${basePath}?${query}`);
         }
         throw err;
       }
 
-      redirect(basePath);
+      redirect(listHref);
     };
   }
 
@@ -171,7 +200,9 @@ export default async function TestCasesPage({
       );
     } catch (err) {
       if (err instanceof ValidationError) {
-        redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+        const query = new URLSearchParams(listQueryString);
+        query.set("error", err.message);
+        redirect(`${basePath}?${query}`);
       }
       throw err;
     }
@@ -191,7 +222,12 @@ export default async function TestCasesPage({
         )}
       />
       <PageHeader
-        title={`Test Cases for ${testGroup.name}`}
+        title={
+          <>
+            Test Cases{" "}
+            <span className="text-base font-normal text-muted">({testGroup.name})</span>
+          </>
+        }
         actions={
           <Modal
             triggerLabel="+ New Test Case"
@@ -207,8 +243,55 @@ export default async function TestCasesPage({
         }
       />
 
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search by name"
+            defaultValue={search}
+            className={`${inputClass} max-w-xs`}
+          />
+          <label className={labelClass}>
+            Priority
+            <Select
+              name="priority"
+              defaultValue={priority ?? ""}
+              options={[{ value: "", label: "All" }, ...PRIORITY_OPTIONS]}
+              ariaLabel="Priority"
+              className="max-w-40"
+            />
+          </label>
+          <label className={labelClass}>
+            Test Result
+            <Select
+              name="testResult"
+              defaultValue={testResult ?? ""}
+              options={[{ value: "", label: "All" }, ...TEST_RESULT_OPTIONS]}
+              ariaLabel="Test Result"
+              className="max-w-44"
+            />
+          </label>
+          <label className={labelClass}>
+            Status
+            <Select
+              name="status"
+              defaultValue={status ?? ""}
+              options={[{ value: "", label: "All" }, ...WORKFLOW_STATUS_OPTIONS]}
+              ariaLabel="Status"
+              className="max-w-44"
+            />
+          </label>
+        </FilterForm>
+        <ResultCount total={testCasePage.total} />
+      </div>
+
       {testCases.length === 0 ? (
-        <p className={mutedTextClass}>No Test Cases yet. Create one to get started.</p>
+        <p className={mutedTextClass}>
+          {hasFilters
+            ? "No Test Cases match your search/filters."
+            : "No Test Cases yet. Create one to get started."}
+        </p>
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
