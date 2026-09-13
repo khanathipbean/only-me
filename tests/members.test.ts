@@ -179,7 +179,7 @@ describe("member routes", () => {
   });
 
   it("rejects an empty project selection", async () => {
-    await setupAsAdmin("member-admin9@example.com", "PRJ-MEM-9");
+    await setupAsAdmin("member-admin11@example.com", "PRJ-MEM-11");
 
     const response = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
@@ -309,6 +309,47 @@ describe("member routes", () => {
     expect(revoke.status).toBe(200);
     const remaining = await prisma.projectMember.findMany({ where: { userId: created.userId } });
     expect(remaining).toHaveLength(0);
+  });
+
+  it("refuses to demote the last ADMIN in the system", async () => {
+    const { admin, project } = await setupAsAdmin("member-admin12@example.com", "PRJ-MEM-12");
+
+    // Every other test in this file leaves its own ADMIN rows behind (no
+    // per-test reset), so this one clears them first — otherwise "last
+    // ADMIN" could never be true here regardless of the guard.
+    await prisma.projectMember.updateMany({
+      where: { role: "ADMIN", userId: { not: admin.id } },
+      data: { role: "TESTER" },
+    });
+
+    const response = await updateAccessRoute(
+      jsonRequest(`http://test/api/members/${admin.id}`, "PATCH", {
+        access: [{ projectId: project.id, role: "QA_LEAD" }],
+      }),
+      { params: Promise.resolve({ userId: admin.id }) },
+    );
+    expect(response.status).toBe(400);
+
+    const membership = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId: project.id, userId: admin.id } },
+    });
+    expect(membership?.role).toBe("ADMIN");
+  });
+
+  it("allows demoting an ADMIN when another one remains elsewhere", async () => {
+    const { admin, project } = await setupAsAdmin("member-admin10@example.com", "PRJ-MEM-10");
+    const otherAdmin = await createUser("member-admin10b@example.com");
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: otherAdmin.id, role: "ADMIN" },
+    });
+
+    const response = await updateAccessRoute(
+      jsonRequest(`http://test/api/members/${admin.id}`, "PATCH", {
+        access: [{ projectId: project.id, role: "QA_LEAD" }],
+      }),
+      { params: Promise.resolve({ userId: admin.id }) },
+    );
+    expect(response.status).toBe(200);
   });
 
   it("returns 403 updating access when the caller isn't ADMIN anywhere", async () => {
