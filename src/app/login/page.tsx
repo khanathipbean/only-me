@@ -2,7 +2,7 @@ import { AuthError } from "next-auth";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
-import { Button } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 
 /**
@@ -161,9 +161,9 @@ export default async function LoginPage({
                   toggleClassName={glassToggleClass}
                 />
               </label>
-              <Button type="submit" size="lg" className="mt-2 w-full">
+              <SubmitButton size="lg" className="mt-2 w-full" pendingLabel="Signing in…">
                 Sign in
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </div>
