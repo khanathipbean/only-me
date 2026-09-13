@@ -107,6 +107,8 @@ export default async function ProjectDetailPage({
             <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
               {project.name}
               <span className="text-base font-normal text-muted">({project.code})</span>
+              <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
+              {project.deletedAt && <Badge tone="gray">Archived</Badge>}
             </h1>
           </div>
 
@@ -135,18 +137,12 @@ export default async function ProjectDetailPage({
 
         <div className="border-t border-border pt-5">
           <DetailFields>
-            {/* Not `wide`: with four fields, dropping the full-width span
-                lets them fall into an even 2x2 instead of leaving Last
-                updated stranded alone on a row of its own. */}
-            <DetailField label="Description">{project.description}</DetailField>
-            {/* Status sits with the other facts rather than under the title:
-                it's another field describing this Project, not a caption. */}
-            <DetailField label="Status">
-              <span className="flex flex-wrap items-center gap-2">
-                <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
-                {project.deletedAt && <Badge tone="gray">Archived</Badge>}
-              </span>
-            </DetailField>
+            {/* Wide: free-form prose gets its own row rather than sharing one
+                with Owner/Last updated — sharing looked fine for a short
+                blurb, but a genuinely long description stretched that row's
+                height and stranded those two facts at the top with a lot of
+                empty space beneath them. */}
+            <DetailField label="Description" wide>{project.description}</DetailField>
             <DetailField label="Owner">{project.owner.name}</DetailField>
             <DetailField label="Last updated">
               {project.updatedBy?.name ?? "—"} at {project.updatedAt.toISOString()}
@@ -164,7 +160,7 @@ export default async function ProjectDetailPage({
           ) : (
             <ConfirmForm
               action={archive}
-              confirmMessage="Archive this project? Its Scenarios, Test Groups, and Test Cases are kept and can be restored later."
+              confirmMessage="Archive this project? Its Modules, Requirements, Scenarios, Test Groups, and Test Cases are kept and can be restored later."
             >
               <Button type="submit" variant="secondary">
                 Archive

@@ -22,7 +22,7 @@ import { parseStepsJson } from "@/lib/test-case-form";
 import { getTestGroupWithProjectId, listTestGroupsForProject } from "@/lib/test-groups";
 import { getScenarioById, getScenarioLocation } from "@/lib/scenarios";
 import { deleteAttachment, getAttachmentWithProjectId, saveAttachment } from "@/lib/attachments";
-import { canPreview } from "@/lib/project-files";
+import { canPreview, getFileKind } from "@/lib/project-files";
 import { FilePreview } from "@/components/FilePreview";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -366,6 +366,7 @@ export default async function TestCaseDetailPage({
                     href: `/api/test-cases/${testCaseId}/attachments/${attachment.id}`,
                     previewable: canPreview(attachment.contentType),
                     isImage: attachment.contentType.startsWith("image/"),
+                    kind: getFileKind(attachment.contentType, attachment.fileName),
                   }}
                   deleteSlot={
                     canEditFully ? (

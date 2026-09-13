@@ -113,7 +113,7 @@ export default async function LoginPage({
             end to end
           </h2>
           <p className="mt-4 max-w-xl text-base text-pretty text-white/70 italic">
-            Requirements, Scenarios, Test Groups and Test Cases — in one place.
+            Modules, Requirements, Scenarios, Test Groups and Test Cases — in one place.
           </p>
         </div>
 
@@ -124,7 +124,7 @@ export default async function LoginPage({
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight text-white">Bull Terrier</h1>
                 <p className="mt-1.5 text-sm text-white/60">
-                  Manage Scenarios, Test Groups and Test Cases
+                  Manage Modules, Requirements, Scenarios, Test Groups and Test Cases
                 </p>
               </div>
             </div>

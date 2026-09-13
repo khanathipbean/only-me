@@ -31,14 +31,20 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestGroupForm } from "@/components/forms/TestGroupForm";
 import { Badge, workflowStatusTone } from "@/components/ui/Badge";
-import { Button, LinkButton } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
+import { FilterForm } from "@/components/FilterForm";
+import { Select } from "@/components/ui/Select";
 import { Pagination } from "@/components/ui/Pagination";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
 import { EntityManageSection } from "@/components/EntityManageSection";
+import { WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import {
+  inputClass,
+  labelClass,
   mutedTextClass,
   pageClass,
   tableClass,
@@ -48,6 +54,7 @@ import {
   thCenterClass,
   thClass,
 } from "@/lib/ui";
+import type { WorkflowStatus } from "@/generated/prisma/client";
 
 export async function generateMetadata({
   params,
@@ -68,6 +75,8 @@ export default async function TestGroupsPage({
     error?: string;
     /** Surfaced inside the row's Manage section when a Move is rejected. */
     moveError?: string;
+    search?: string;
+    status?: string;
     /** `?archived=1` lists archived Test Groups so they can be restored. */
     archived?: string;
     page?: string;
@@ -78,8 +87,10 @@ export default async function TestGroupsPage({
   }>;
 }) {
   const { id: projectId, moduleId, requirementId, scenarioId } = await params;
-  const { error, moveError, archived, page, pageSize, editId } = await searchParams;
+  const { error, moveError, search, status, archived, page, pageSize, editId } =
+    await searchParams;
   const showArchived = archived === "1";
+  const hasFilters = Boolean(search || status || showArchived);
   const session = await auth();
 
   const scenario = await getScenarioById(scenarioId);
@@ -100,6 +111,8 @@ export default async function TestGroupsPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
   const result = await listTestGroupsForScenarioPage(scenarioId, {
+    search,
+    status: status as WorkflowStatus | undefined,
     archived: showArchived,
     page: page ? Number(page) : undefined,
     pageSize: pageSize ? Number(pageSize) : undefined,
@@ -116,8 +129,16 @@ export default async function TestGroupsPage({
     .filter((target) => target.id !== scenarioId)
     .map((target) => ({ value: target.id, label: target.name }));
 
+  /* Plain strings only: a server action may close over serialisable values,
+   * and capturing a helper function stops React encoding the action at all,
+   * which leaves the form working only once JS has loaded. */
+  const listQueryString = new URLSearchParams(
+    Object.entries({ search, status, archived }).filter(
+      (entry): entry is [string, string] => Boolean(entry[1]),
+    ),
+  ).toString();
   const listPath = testGroupsListHref({ projectId, moduleId, requirementId, scenarioId });
-  const listHref = showArchived ? `${listPath}?archived=1` : listPath;
+  const listHref = listQueryString ? `${listPath}?${listQueryString}` : listPath;
 
   function impact(testGroupId: string) {
     const counts = descendantCounts.get(testGroupId) ?? { testCases: 0 };
@@ -204,14 +225,15 @@ export default async function TestGroupsPage({
         );
       } catch (err) {
         if (err instanceof ValidationError) {
-          redirect(
-            `${listPath}?error=${encodeURIComponent(err.message)}&editId=${testGroupId}`,
-          );
+          const query = new URLSearchParams(listQueryString);
+          query.set("error", err.message);
+          query.set("editId", testGroupId);
+          redirect(`${listPath}?${query}`);
         }
         throw err;
       }
 
-      redirect(listPath);
+      redirect(listHref);
     };
   }
 
@@ -234,9 +256,9 @@ export default async function TestGroupsPage({
       );
     } catch (err) {
       if (err instanceof ValidationError) {
-        redirect(
-          `${listPath}?error=${encodeURIComponent(err.message)}`,
-        );
+        const query = new URLSearchParams(listQueryString);
+        query.set("error", err.message);
+        redirect(`${listPath}?${query}`);
       }
       throw err;
     }
@@ -257,7 +279,7 @@ export default async function TestGroupsPage({
       [orderedIds[index], orderedIds[swapWith]] = [orderedIds[swapWith], orderedIds[index]];
       await reorderTestGroups(scenarioId, orderedIds, session!.user.id);
     }
-    redirect(listPath);
+    redirect(listHref);
   }
 
   async function moveUp(formData: FormData) {
@@ -281,15 +303,14 @@ export default async function TestGroupsPage({
         )}
       />
       <PageHeader
-        title={`Test Groups for ${scenario.name}`}
-        actions={
+        title={
           <>
-            {/* The only route to an archived Test Group now that the detail
-                page is gone; without it "restorable later" wouldn't be true. */}
-            <LinkButton href={showArchived ? listPath : `${listPath}?archived=1`} variant="secondary">
-              {showArchived ? "Show active" : "Show archived"}
-            </LinkButton>
-            <Modal
+            Test Groups{" "}
+            <span className="text-base font-normal text-muted">({scenario.name})</span>
+          </>
+        }
+        actions={
+          <Modal
             triggerLabel="+ New Test Group"
             title="New Test Group"
             openOnMount={!!error && !editId}
@@ -299,16 +320,53 @@ export default async function TestGroupsPage({
               submitLabel="Create Test Group"
               error={editId ? undefined : error}
             />
-            </Modal>
-          </>
+          </Modal>
         }
       />
+
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search by name"
+            defaultValue={search}
+            className={`${inputClass} max-w-xs`}
+          />
+          <label className={labelClass}>
+            Status
+            <Select
+              name="status"
+              defaultValue={status ?? ""}
+              options={[{ value: "", label: "All" }, ...WORKFLOW_STATUS_OPTIONS]}
+              ariaLabel="Status"
+              className="max-w-44"
+            />
+          </label>
+          <label className={labelClass}>
+            Show
+            <Select
+              name="archived"
+              defaultValue={archived ?? ""}
+              options={[
+                { value: "", label: "Active" },
+                { value: "1", label: "Archived" },
+              ]}
+              ariaLabel="Show"
+              className="max-w-36"
+            />
+          </label>
+        </FilterForm>
+        <ResultCount total={result.total} />
+      </div>
 
       {testGroups.length === 0 ? (
         <p className={mutedTextClass}>
           {showArchived
             ? "No archived Test Groups."
-            : "No Test Groups yet. Create one to get started."}
+            : hasFilters
+              ? "No Test Groups match your search/filters."
+              : "No Test Groups yet. Create one to get started."}
         </p>
       ) : (
         <div className={tableWrapClass}>
@@ -348,6 +406,9 @@ export default async function TestGroupsPage({
                         >
                           {testGroup.name}
                         </Link>
+                        <span className="ml-2 text-xs text-muted">
+                          {descendantCounts.get(testGroup.id)?.testCases ?? 0} test case(s)
+                        </span>
                       </td>
                       <td className={tdCenterClass}>
                         <Badge tone={workflowStatusTone(testGroup.status)}>

@@ -26,6 +26,47 @@ export function canPreview(contentType: string) {
   return INLINE_TYPES.has(contentType);
 }
 
+export type FileKind = "pdf" | "word" | "excel" | "csv" | "image" | "generic";
+
+const WORD_TYPES = new Set([
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+const EXCEL_TYPES = new Set([
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+/**
+ * Which icon a file's card should show. Content type comes first, but
+ * browsers are inconsistent about what they report for office documents
+ * (`application/octet-stream` is common), so the file name's extension is
+ * the fallback rather than a second source of truth.
+ */
+export function getFileKind(contentType: string, fileName: string): FileKind {
+  if (contentType.startsWith("image/")) return "image";
+  if (contentType === "application/pdf") return "pdf";
+  if (contentType === "text/csv") return "csv";
+  if (EXCEL_TYPES.has(contentType)) return "excel";
+  if (WORD_TYPES.has(contentType)) return "word";
+
+  const ext = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase();
+  switch (ext) {
+    case "pdf":
+      return "pdf";
+    case "csv":
+      return "csv";
+    case "xls":
+    case "xlsx":
+      return "excel";
+    case "doc":
+    case "docx":
+      return "word";
+    default:
+      return "generic";
+  }
+}
+
 export class FileValidationError extends Error {}
 
 export async function saveProjectFile(

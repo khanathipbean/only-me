@@ -7,6 +7,7 @@ import {
   MAX_FILE_BYTES,
   canPreview,
   deleteProjectFile,
+  getFileKind,
   getProjectFile,
   listProjectFilesByModule,
   saveProjectFile,
@@ -181,6 +182,7 @@ export default async function ProjectFilesPage({
                       href: `/api/projects/${projectId}/files/${file.id}`,
                       previewable: canPreview(file.contentType),
                       isImage: file.contentType.startsWith("image/"),
+                      kind: getFileKind(file.contentType, file.fileName),
                     }}
                     deleteSlot={
                       <ConfirmForm

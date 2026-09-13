@@ -116,7 +116,7 @@ export function HeaderSearch({ className = "" }: { className?: string }) {
         aria-expanded={showPanel}
         aria-controls={panelId}
         aria-label="Search"
-        placeholder="Search Projects, Scenarios, Test Groups, Test Cases"
+        placeholder="Search Projects, Modules, Requirements, Scenarios, Test Groups, Test Cases"
         className="block w-full rounded-full border border-border bg-background px-4 py-1.5 text-sm text-foreground placeholder:text-muted outline-none focus:border-brand focus:ring-1 focus:ring-brand"
       />
 

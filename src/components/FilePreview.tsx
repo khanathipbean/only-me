@@ -3,7 +3,15 @@
 import { useState, type ReactNode } from "react";
 import { Dialog } from "@/components/ui/Modal";
 import { Button, LinkButton } from "@/components/ui/Button";
-import { FileIcon } from "@/components/icons";
+import {
+  FileCsvIcon,
+  FileExcelIcon,
+  FileIcon,
+  FileImageIcon,
+  FilePdfIcon,
+  FileWordIcon,
+} from "@/components/icons";
+import type { FileKind } from "@/lib/project-files";
 
 export type ProjectFileCard = {
   id: string;
@@ -13,6 +21,18 @@ export type ProjectFileCard = {
   href: string;
   previewable: boolean;
   isImage: boolean;
+  kind: FileKind;
+};
+
+/** Colour carries the type at a glance, the way Drive/Office icons do; the
+ * glyph alone still reads fine without it. */
+const KIND_ICON: Record<FileKind, { Icon: typeof FileIcon; className: string }> = {
+  pdf: { Icon: FilePdfIcon, className: "text-red-600 dark:text-red-400" },
+  word: { Icon: FileWordIcon, className: "text-blue-600 dark:text-blue-400" },
+  excel: { Icon: FileExcelIcon, className: "text-green-600 dark:text-green-400" },
+  csv: { Icon: FileCsvIcon, className: "text-green-600 dark:text-green-400" },
+  image: { Icon: FileImageIcon, className: "text-purple-600 dark:text-purple-400" },
+  generic: { Icon: FileIcon, className: "text-muted" },
 };
 
 function formatSize(bytes: number) {
@@ -39,6 +59,7 @@ export function FilePreview({
   deleteSlot?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const { Icon, className: iconClassName } = KIND_ICON[file.kind];
 
   return (
     <>
@@ -48,7 +69,7 @@ export function FilePreview({
           onClick={() => setOpen(true)}
           className="flex w-full items-start gap-3 rounded-lg p-3 pr-11 text-left transition-colors hover:bg-black/[.02] dark:hover:bg-white/[.04]"
         >
-          <FileIcon className="mt-0.5 size-5 shrink-0 text-muted" />
+          <Icon className={`mt-0.5 size-5 shrink-0 ${iconClassName}`} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium text-foreground">
               {file.fileName}

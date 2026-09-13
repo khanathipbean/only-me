@@ -22,6 +22,7 @@ import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { EntityManageSection } from "@/components/EntityManageSection";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { Pagination } from "@/components/ui/Pagination";
 import { nameOr, scenariosListBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
@@ -331,7 +332,12 @@ export default async function ScenariosPage({
         )}
       />
       <PageHeader
-        title="Scenarios"
+        title={
+          <>
+            Scenarios{" "}
+            <span className="text-base font-normal text-muted">({requirement.name})</span>
+          </>
+        }
         actions={
           <Modal
             triggerLabel="+ New Scenario"
@@ -352,88 +358,91 @@ export default async function ScenariosPage({
         }
       />
 
-      <FilterForm showClear={hasFilters}>
-        <input
-          type="text"
-          name="search"
-          placeholder="Search by name"
-          defaultValue={search}
-          className={`${inputClass} max-w-xs`}
-        />
-        <label className={labelClass}>
-          Status
-          <Select
-            name="status"
-            defaultValue={status ?? ""}
-            options={[
-              { value: "", label: "All" },
-              { value: "DRAFT", label: "Draft" },
-              { value: "READY", label: "Ready" },
-              { value: "IN_PROGRESS", label: "In Progress" },
-              { value: "COMPLETED", label: "Completed" },
-            ]}
-            ariaLabel="Status"
-            className="max-w-44"
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search by name"
+            defaultValue={search}
+            className={`${inputClass} max-w-xs`}
           />
-        </label>
-        <label className={labelClass}>
-          Priority
-          <Select
-            name="priority"
-            defaultValue={priority ?? ""}
-            options={[
-              { value: "", label: "All" },
-              { value: "CRITICAL", label: "Critical" },
-              { value: "HIGH", label: "High" },
-              { value: "MEDIUM", label: "Medium" },
-              { value: "LOW", label: "Low" },
-            ]}
-            ariaLabel="Priority"
-            className="max-w-40"
-          />
-        </label>
-        <label className={labelClass}>
-          Sort By
-          <Select
-            name="sortBy"
-            defaultValue={sortBy ?? "createdAt"}
-            options={[
-              { value: "createdAt", label: "Created date" },
-              { value: "name", label: "Name" },
-              { value: "priority", label: "Priority" },
-              { value: "status", label: "Status" },
-            ]}
-            ariaLabel="Sort By"
-            className="max-w-48"
-          />
-        </label>
-        <label className={labelClass}>
-          Show
-          <Select
-            name="archived"
-            defaultValue={archived ?? ""}
-            options={[
-              { value: "", label: "Active" },
-              { value: "1", label: "Archived" },
-            ]}
-            ariaLabel="Show"
-            className="max-w-36"
-          />
-        </label>
-        <label className={labelClass}>
-          Order
-          <Select
-            name="sortOrder"
-            defaultValue={sortOrder ?? "desc"}
-            options={[
-              { value: "desc", label: "Descending" },
-              { value: "asc", label: "Ascending" },
-            ]}
-            ariaLabel="Order"
-            className="max-w-36"
-          />
-        </label>
-      </FilterForm>
+          <label className={labelClass}>
+            Status
+            <Select
+              name="status"
+              defaultValue={status ?? ""}
+              options={[
+                { value: "", label: "All" },
+                { value: "DRAFT", label: "Draft" },
+                { value: "READY", label: "Ready" },
+                { value: "IN_PROGRESS", label: "In Progress" },
+                { value: "COMPLETED", label: "Completed" },
+              ]}
+              ariaLabel="Status"
+              className="max-w-44"
+            />
+          </label>
+          <label className={labelClass}>
+            Priority
+            <Select
+              name="priority"
+              defaultValue={priority ?? ""}
+              options={[
+                { value: "", label: "All" },
+                { value: "CRITICAL", label: "Critical" },
+                { value: "HIGH", label: "High" },
+                { value: "MEDIUM", label: "Medium" },
+                { value: "LOW", label: "Low" },
+              ]}
+              ariaLabel="Priority"
+              className="max-w-40"
+            />
+          </label>
+          <label className={labelClass}>
+            Sort By
+            <Select
+              name="sortBy"
+              defaultValue={sortBy ?? "createdAt"}
+              options={[
+                { value: "createdAt", label: "Created date" },
+                { value: "name", label: "Name" },
+                { value: "priority", label: "Priority" },
+                { value: "status", label: "Status" },
+              ]}
+              ariaLabel="Sort By"
+              className="max-w-48"
+            />
+          </label>
+          <label className={labelClass}>
+            Show
+            <Select
+              name="archived"
+              defaultValue={archived ?? ""}
+              options={[
+                { value: "", label: "Active" },
+                { value: "1", label: "Archived" },
+              ]}
+              ariaLabel="Show"
+              className="max-w-36"
+            />
+          </label>
+          <label className={labelClass}>
+            Order
+            <Select
+              name="sortOrder"
+              defaultValue={sortOrder ?? "desc"}
+              options={[
+                { value: "desc", label: "Descending" },
+                { value: "asc", label: "Ascending" },
+              ]}
+              ariaLabel="Order"
+              className="max-w-36"
+            />
+          </label>
+        </FilterForm>
+        <ResultCount total={result.total} />
+      </div>
 
       {scenarios.length === 0 ? (
         <p className={mutedTextClass}>
@@ -478,6 +487,9 @@ export default async function ScenariosPage({
                         >
                           {scenario.name}
                         </Link>
+                        <span className="ml-2 text-xs text-muted">
+                          {descendantCounts.get(scenario.id)?.testGroups ?? 0} test group(s)
+                        </span>
                       </td>
                       <td className={tdCenterClass}>
                         <Badge tone={priorityTone(scenario.priority)}>{scenario.priority}</Badge>

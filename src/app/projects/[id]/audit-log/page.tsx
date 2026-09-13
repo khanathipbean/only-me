@@ -6,6 +6,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { auditLogBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
 import {
@@ -75,53 +76,56 @@ export default async function AuditLogPage({
       />
       <PageHeader title="Audit Trail" subtitle="All timestamps are shown in UTC." />
 
-      <FilterForm showClear={hasFilters}>
-        <input
-          type="text"
-          name="actorName"
-          placeholder="Search by name"
-          defaultValue={actorName}
-          aria-label="Actor User Name"
-          className={`${inputClass} sm:w-80`}
-        />
-        <label className={labelClass}>
-          Action
-          <Select
-            name="action"
-            defaultValue={action ?? ""}
-            options={[
-              { value: "", label: "All" },
-              ...AUDIT_ACTIONS.map((value) => ({ value, label: value })),
-            ]}
-            ariaLabel="Action"
-            className="min-w-44"
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="actorName"
+            placeholder="Search by name"
+            defaultValue={actorName}
+            aria-label="Actor User Name"
+            className={`${inputClass} sm:w-80`}
           />
-        </label>
-        <label className={labelClass}>
-          Entity Type
-          <Select
-            name="entityType"
-            defaultValue={entityType ?? ""}
-            options={[
-              { value: "", label: "All" },
-              { value: "Project", label: "Project" },
-              { value: "Scenario", label: "Scenario" },
-              { value: "TestGroup", label: "Test Group" },
-              { value: "TestCase", label: "Test Case" },
-            ]}
-            ariaLabel="Entity Type"
-            className="min-w-40"
-          />
-        </label>
-        <label className={labelClass}>
-          From
-          <input type="datetime-local" name="from" defaultValue={from} className={inputClass} />
-        </label>
-        <label className={labelClass}>
-          To
-          <input type="datetime-local" name="to" defaultValue={to} className={inputClass} />
-        </label>
-      </FilterForm>
+          <label className={labelClass}>
+            Action
+            <Select
+              name="action"
+              defaultValue={action ?? ""}
+              options={[
+                { value: "", label: "All" },
+                ...AUDIT_ACTIONS.map((value) => ({ value, label: value })),
+              ]}
+              ariaLabel="Action"
+              className="min-w-44"
+            />
+          </label>
+          <label className={labelClass}>
+            Entity Type
+            <Select
+              name="entityType"
+              defaultValue={entityType ?? ""}
+              options={[
+                { value: "", label: "All" },
+                { value: "Project", label: "Project" },
+                { value: "Scenario", label: "Scenario" },
+                { value: "TestGroup", label: "Test Group" },
+                { value: "TestCase", label: "Test Case" },
+              ]}
+              ariaLabel="Entity Type"
+              className="min-w-40"
+            />
+          </label>
+          <label className={labelClass}>
+            From
+            <input type="datetime-local" name="from" defaultValue={from} className={inputClass} />
+          </label>
+          <label className={labelClass}>
+            To
+            <input type="datetime-local" name="to" defaultValue={to} className={inputClass} />
+          </label>
+        </FilterForm>
+        <ResultCount total={result.total} />
+      </div>
 
       {result.entries.length === 0 ? (
         <p className={mutedTextClass}>No matching audit log entries.</p>
