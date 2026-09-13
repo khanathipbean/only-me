@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  auditLogBreadcrumb,
+  dashboardBreadcrumb,
+  filesBreadcrumb,
+  importBreadcrumb,
+  membersBreadcrumb,
   moduleBreadcrumb,
   modulesListBreadcrumb,
-  nameOr,
+  profileBreadcrumb,
   projectBreadcrumb,
   requirementBreadcrumb,
   requirementsListBreadcrumb,
@@ -15,16 +20,16 @@ import {
 } from "@/lib/breadcrumb";
 
 const project = { id: "prj1", name: "Project A" };
-const testModule = { id: "mod1", name: "Dashboard" };
+const testModule = { id: "mod1", name: "Module A" };
 const requirement = { id: "req1", name: "Requirement A" };
 const scenario = { id: "scn1", name: "Scenario A" };
-const testGroup = { id: "grp1", name: "Navigation" };
-const testCase = { id: "tc1", name: "TC-001" };
+const testGroup = { id: "grp1", name: "Test Group A" };
+const testCase = { id: "tc1", name: "Test Case A" };
 
 const PROJECTS = { label: "Projects", href: "/projects" };
 const PROJECT = { label: "Project A", href: "/projects/prj1" };
 const MODULES = { label: "Modules", href: "/projects/prj1/modules" };
-const MODULE = { label: "Dashboard", href: "/projects/prj1/modules/mod1/requirements" };
+const MODULE = { label: "Module A", href: "/projects/prj1/modules/mod1/requirements" };
 const REQUIREMENT = {
   label: "Requirement A",
   href: "/projects/prj1/modules/mod1/requirements/req1/scenarios",
@@ -34,21 +39,55 @@ const SCENARIO = {
   href: "/projects/prj1/modules/mod1/requirements/req1/scenarios/scn1/test-groups",
 };
 const TEST_GROUP = {
-  label: "Navigation",
+  label: "Test Group A",
   href: "/projects/prj1/modules/mod1/requirements/req1/scenarios/scn1/test-groups/grp1/test-cases",
 };
 
-describe("nameOr", () => {
-  it("falls back to the id when the entity is null/undefined", () => {
-    expect(nameOr(project, "fallback-id")).toBe("Project A");
-    expect(nameOr(null, "fallback-id")).toBe("fallback-id");
-    expect(nameOr(undefined, "fallback-id")).toBe("fallback-id");
-  });
-});
-
 describe("breadcrumb path builders", () => {
+  // Every segment's label is the entity's own name — Breadcrumb truncates a
+  // long one with an ellipsis and shows the full name on hover.
   it("renders the Project-level path", () => {
     expect(projectBreadcrumb(project)).toEqual([PROJECTS, PROJECT]);
+  });
+
+  it("renders the Dashboard path", () => {
+    expect(dashboardBreadcrumb(project)).toEqual([
+      PROJECTS,
+      PROJECT,
+      { label: "Dashboard", href: "/projects/prj1/dashboard" },
+    ]);
+  });
+
+  it("renders the Audit Trail path", () => {
+    expect(auditLogBreadcrumb(project)).toEqual([
+      PROJECTS,
+      PROJECT,
+      { label: "Audit Trail", href: "/projects/prj1/audit-log" },
+    ]);
+  });
+
+  it("renders the Files path", () => {
+    expect(filesBreadcrumb(project)).toEqual([
+      PROJECTS,
+      PROJECT,
+      { label: "Files", href: "/projects/prj1/files" },
+    ]);
+  });
+
+  it("renders the Import path", () => {
+    expect(importBreadcrumb(project)).toEqual([
+      PROJECTS,
+      PROJECT,
+      { label: "Import", href: "/projects/prj1/import" },
+    ]);
+  });
+
+  it("renders the Members path", () => {
+    expect(membersBreadcrumb()).toEqual([PROJECTS, { label: "Members", href: "/members" }]);
+  });
+
+  it("renders the Profile path", () => {
+    expect(profileBreadcrumb()).toEqual([PROJECTS, { label: "Profile", href: "/profile" }]);
   });
 
   it("renders the Modules-list path", () => {
@@ -132,7 +171,7 @@ describe("breadcrumb path builders", () => {
       SCENARIO,
       TEST_GROUP,
       {
-        label: "TC-001",
+        label: "Test Case A",
         href: `${TEST_GROUP.href}/tc1`,
       },
     ]);

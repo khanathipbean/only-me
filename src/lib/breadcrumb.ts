@@ -26,6 +26,10 @@ export function nameOr(entity: { name: string } | null | undefined, fallbackId: 
  *
  * The Modules list keeps its own segment so navigating up can restore that
  * list's search/filter state, which Breadcrumb keys off the href.
+ *
+ * Every label is the entity's own name (not its level, e.g. "Module") —
+ * `Breadcrumb` truncates a long one with an ellipsis and shows the full
+ * name on hover, so nothing here needs to shorten it up front.
  */
 
 function idsFor(
@@ -44,6 +48,33 @@ function idsFor(
 
 export function projectBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [PROJECTS_ROOT, { label: project.name, href: `/projects/${project.id}` }];
+}
+
+/** Members and Profile sit outside any one Project, reached from the account
+ * menu rather than a Project tab — Projects is still the nearest thing this
+ * app has to a home page, so it's the path back from either. */
+export function membersBreadcrumb(): BreadcrumbSegment[] {
+  return [PROJECTS_ROOT, { label: "Members", href: "/members" }];
+}
+
+export function profileBreadcrumb(): BreadcrumbSegment[] {
+  return [PROJECTS_ROOT, { label: "Profile", href: "/profile" }];
+}
+
+export function dashboardBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [...projectBreadcrumb(project), { label: "Dashboard", href: `/projects/${project.id}/dashboard` }];
+}
+
+export function auditLogBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [...projectBreadcrumb(project), { label: "Audit Trail", href: `/projects/${project.id}/audit-log` }];
+}
+
+export function filesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [...projectBreadcrumb(project), { label: "Files", href: `/projects/${project.id}/files` }];
+}
+
+export function importBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [...projectBreadcrumb(project), { label: "Import", href: `/projects/${project.id}/import` }];
 }
 
 export function modulesListBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {

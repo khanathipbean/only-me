@@ -8,6 +8,7 @@ import {
   updateDisplayName,
 } from "@/lib/users";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { profileBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -63,7 +64,7 @@ export default async function ProfilePage({
 
   return (
     <main className={pageClass}>
-      <Breadcrumb segments={[{ label: "Profile", href: "/profile" }]} />
+      <Breadcrumb segments={profileBreadcrumb()} />
       <PageHeader title="Profile" subtitle={user.email} />
 
       {/* Side by side at lg: and up — two max-w-xl cards stacked in a

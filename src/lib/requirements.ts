@@ -5,6 +5,11 @@ import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
 export class RequirementValidationError extends Error {}
+export class ConfirmRequiredError extends Error {
+  constructor() {
+    super("Deleting a Requirement requires confirm: true");
+  }
+}
 
 /** Where rows with no Module/Requirement of their own land — one name shared
  *  by the backfill, the CSV import and a cross-project move. */
@@ -217,17 +222,32 @@ export async function setRequirementDeletedAt(
   });
 }
 
-/**
- * Refuses while Scenarios still hang off it. They'd keep a `requirementId`
- * pointing at something archived and vanish from the hierarchy with nothing
- * saying why — the same reason archiving a Module in use is refused.
- */
-export async function archiveRequirement(id: string, actorId: string) {
+/** Shared by archive and delete: both refuse while Scenarios still hang off
+ * this Requirement. They'd keep a `requirementId` pointing at something gone
+ * and vanish from the hierarchy with nothing saying why — the same reason
+ * archiving a Module in use is refused. */
+async function assertRequirementNotInUse(id: string) {
   const scenarios = await prisma.scenario.count({ where: { requirementId: id, deletedAt: null } });
   if (scenarios > 0) {
     throw new RequirementValidationError(
       `Still carries ${scenarios} Scenario(s). Move or archive them first.`,
     );
   }
+}
+
+export async function archiveRequirement(id: string, actorId: string) {
+  await assertRequirementNotInUse(id);
   return setRequirementDeletedAt(id, new Date(), actorId, "archive");
+}
+
+export async function restoreRequirement(id: string, actorId: string) {
+  return setRequirementDeletedAt(id, null, actorId, "restore");
+}
+
+export async function deleteRequirement(id: string, actorId: string, confirm: boolean) {
+  if (!confirm) {
+    throw new ConfirmRequiredError();
+  }
+  await assertRequirementNotInUse(id);
+  return setRequirementDeletedAt(id, new Date(), actorId, "delete");
 }

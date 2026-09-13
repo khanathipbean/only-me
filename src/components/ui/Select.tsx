@@ -1,6 +1,7 @@
 "use client";
 
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRightIcon } from "@/components/icons";
 
 export type SelectOption = { value: string; label: string };
@@ -48,6 +49,14 @@ export function Select({
 
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [listBox, setListBox] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+    above: boolean;
+  } | null>(null);
+  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -79,11 +88,50 @@ export function Select({
 
   function close() {
     setOpen(false);
+    setListBox(null);
+    setPortalTarget(null);
     triggerRef.current?.focus();
   }
 
   function openList() {
     setActiveIndex(selectedIndex);
+    const trigger = triggerRef.current;
+    if (trigger) {
+      const rect = trigger.getBoundingClientRect();
+      // Portals out to `<body>` (or the nearest open `<dialog>`) rather than
+      // sitting `absolute` inside the trigger's own wrapper: a wrapper inside
+      // a dialog clips its own overflow, so a list that opens near the bottom
+      // of one got cut short and needed its own internal scroll to reach the
+      // rest — the same fix `Tooltip` needed for the same reason.
+      const target = trigger.closest("dialog") ?? document.body;
+      const containingRect =
+        target === document.body
+          ? { top: 0, left: 0, bottom: window.innerHeight }
+          : target.getBoundingClientRect();
+
+      // Clamped to whichever box it's confined to, rather than letting it
+      // extend past that box's own edge on a fixed `max-h-60`: a `position:
+      // fixed` descendant still counts toward a filter/backdrop-filter
+      // ancestor's own scrollable area (the same reason a dialog needed the
+      // portal in the first place), so one left to overflow the dialog made
+      // the DIALOG grow a phantom scrollbar with nothing below it to reach.
+      const GAP = 4;
+      const rowHeightEstimate = 34;
+      const wantedHeight = Math.min(240, options.length * rowHeightEstimate + 8);
+      const spaceBelow = containingRect.bottom - rect.bottom - GAP;
+      const spaceAbove = rect.top - containingRect.top - GAP;
+      const above = spaceBelow < wantedHeight && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(80, Math.min(240, above ? spaceAbove : spaceBelow));
+
+      setListBox({
+        top: (above ? rect.top - GAP : rect.bottom + GAP) - containingRect.top,
+        left: rect.left - containingRect.left,
+        width: rect.width,
+        maxHeight,
+        above,
+      });
+      setPortalTarget(target);
+    }
     setOpen(true);
   }
 
@@ -110,12 +158,35 @@ export function Select({
       return;
     }
     function onPointerDown(event: MouseEvent) {
-      if (!wrapperRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      // The list is portalled out of the wrapper's own subtree, so a click
+      // on one of its options no longer counts as "inside" by DOM structure
+      // alone — checked separately here, or every option click would look
+      // like an outside click and close the list before `commit` ran.
+      if (!wrapperRef.current?.contains(target) && !listRef.current?.contains(target)) {
         setOpen(false);
       }
     }
+    // Fixed coordinates go stale as soon as anything scrolls or resizes.
+    function onScrollOrResize() {
+      setOpen(false);
+    }
     document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    // Attached next frame, not in this same tick: inserting the portalled
+    // list can itself fire a "scroll" event (a scrollable dialog ancestor's
+    // own scroll-anchoring adjusting for the newly added content) — caught
+    // immediately, that reads as a user scroll and closes the list the
+    // instant it opens.
+    const raf = requestAnimationFrame(() => {
+      window.addEventListener("scroll", onScrollOrResize, true);
+      window.addEventListener("resize", onScrollOrResize);
+    });
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
   }, [open]);
 
   // Move focus onto the list when it opens, so the arrow keys reach its own
@@ -226,38 +297,50 @@ export function Select({
         <ChevronRightIcon className="size-3.5 shrink-0 rotate-90 text-muted" />
       </button>
 
-      {open && (
-        <ul
-          ref={listRef}
-          id={listboxId}
-          role="listbox"
-          tabIndex={-1}
-          aria-activedescendant={`${listboxId}-${activeIndex}`}
-          onKeyDown={onListKeyDown}
-          className="absolute z-20 mt-1 max-h-60 w-full min-w-max overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg outline-none"
-        >
-          {options.map((option, index) => {
-            const isSelected = option.value === selected;
-            const isActive = index === activeIndex;
-            return (
-              <li
-                key={option.value}
-                id={`${listboxId}-${index}`}
-                role="option"
-                aria-selected={isSelected}
-                data-index={index}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => commit(option.value)}
-                className={`cursor-pointer px-3 py-1.5 text-sm whitespace-nowrap ${
-                  isSelected ? "font-medium text-brand" : "text-foreground"
-                } ${isActive ? "bg-black/[.05] dark:bg-white/[.08]" : ""}`}
-              >
-                {option.label}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {open &&
+        listBox &&
+        portalTarget &&
+        createPortal(
+          <ul
+            ref={listRef}
+            id={listboxId}
+            role="listbox"
+            tabIndex={-1}
+            aria-activedescendant={`${listboxId}-${activeIndex}`}
+            onKeyDown={onListKeyDown}
+            style={{
+              top: listBox.top,
+              left: listBox.left,
+              width: listBox.width,
+              maxHeight: listBox.maxHeight,
+            }}
+            className={`fixed z-20 min-w-max overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg outline-none ${
+              listBox.above ? "-translate-y-full" : ""
+            }`}
+          >
+            {options.map((option, index) => {
+              const isSelected = option.value === selected;
+              const isActive = index === activeIndex;
+              return (
+                <li
+                  key={option.value}
+                  id={`${listboxId}-${index}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  data-index={index}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => commit(option.value)}
+                  className={`cursor-pointer px-3 py-1.5 text-sm whitespace-nowrap ${
+                    isSelected ? "font-medium text-brand" : "text-foreground"
+                  } ${isActive ? "bg-black/[.05] dark:bg-white/[.08]" : ""}`}
+                >
+                  {option.label}
+                </li>
+              );
+            })}
+          </ul>,
+          portalTarget,
+        )}
     </div>
   );
 }

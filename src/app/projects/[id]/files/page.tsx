@@ -12,6 +12,8 @@ import {
   saveProjectFile,
 } from "@/lib/project-files";
 import { listModulesForProject } from "@/lib/modules";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { filesBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilePreview } from "@/components/FilePreview";
 import { Card } from "@/components/ui/Card";
@@ -40,7 +42,8 @@ export default async function ProjectFilesPage({
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
-  const [groups, modules] = await Promise.all([
+  const [project, groups, modules] = await Promise.all([
+    getProjectById(projectId),
     listProjectFilesByModule(projectId),
     listModulesForProject(projectId),
   ]);
@@ -86,6 +89,9 @@ export default async function ProjectFilesPage({
 
   return (
     <main className={pageClass}>
+      <Breadcrumb
+        segments={filesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
+      />
       <PageHeader
         title="Files"
         subtitle="Documents kept against this project, grouped by module."

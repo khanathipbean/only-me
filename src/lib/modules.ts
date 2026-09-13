@@ -4,6 +4,11 @@ import { paginate, type PageFilters } from "@/lib/pagination";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 
 export class ModuleValidationError extends Error {}
+export class ConfirmRequiredError extends Error {
+  constructor() {
+    super("Deleting a Module requires confirm: true");
+  }
+}
 
 /** Every live Module in the project, in the order the menu shows them. */
 export async function listModulesForProject(projectId: string) {
@@ -146,12 +151,10 @@ export async function setModuleDeletedAt(
   });
 }
 
-/**
- * Archives a Module, refusing while anything still points at it — a
- * Requirement or a file left behind would lose the heading it is filed
- * under, and nothing in the UI would show it had happened.
- */
-export async function archiveModule(id: string, actorId: string) {
+/** Shared by archive and delete: both refuse while anything still points at
+ * this Module — a Requirement or a file left behind would lose the heading
+ * it is filed under, and nothing in the UI would show it had happened. */
+async function assertModuleNotInUse(id: string) {
   const [requirements, files] = await Promise.all([
     prisma.requirement.count({ where: { moduleId: id, deletedAt: null } }),
     prisma.projectFile.count({ where: { moduleId: id, deletedAt: null } }),
@@ -161,5 +164,21 @@ export async function archiveModule(id: string, actorId: string) {
       `Still in use by ${requirements} requirement(s) and ${files} file(s). Move them first.`,
     );
   }
+}
+
+export async function archiveModule(id: string, actorId: string) {
+  await assertModuleNotInUse(id);
   return setModuleDeletedAt(id, new Date(), actorId, "archive");
+}
+
+export async function restoreModule(id: string, actorId: string) {
+  return setModuleDeletedAt(id, null, actorId, "restore");
+}
+
+export async function deleteModule(id: string, actorId: string, confirm: boolean) {
+  if (!confirm) {
+    throw new ConfirmRequiredError();
+  }
+  await assertModuleNotInUse(id);
+  return setModuleDeletedAt(id, new Date(), actorId, "delete");
 }

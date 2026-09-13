@@ -8,8 +8,9 @@ import {
   RequirementValidationError,
   archiveRequirement,
   createRequirement,
+  deleteRequirement,
   listRequirementsForProjectPage,
-  setRequirementDeletedAt,
+  restoreRequirement,
   updateRequirement,
 } from "@/lib/requirements";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -20,10 +21,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { RequirementForm } from "@/components/forms/RequirementForm";
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { RowActions } from "@/components/ui/RowActions";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { TrashIcon } from "@/components/icons";
 import { PRIORITY_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import {
   inputClass,
@@ -191,7 +194,23 @@ export default async function RequirementsPage({
         "use server";
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-        await setRequirementDeletedAt(requirementId, null, session!.user.id, "restore");
+        await restoreRequirement(requirementId, session!.user.id);
+        redirect(listHref);
+      },
+      async remove() {
+        "use server";
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        try {
+          await deleteRequirement(requirementId, session!.user.id, true);
+        } catch (err) {
+          if (err instanceof RequirementValidationError) {
+            const query = new URLSearchParams(listQueryString);
+            query.set("error", err.message);
+            redirect(`${listPath}?${query}`);
+          }
+          throw err;
+        }
         redirect(listHref);
       },
     };
@@ -336,6 +355,8 @@ export default async function RequirementsPage({
                             submitLabel="Save"
                             error={editId === requirement.id ? error : undefined}
                             modules={modules}
+                            formId={`edit-requirement-${requirement.id}`}
+                            hideActions
                             defaults={{
                               name: requirement.name,
                               code: requirement.code,
@@ -345,27 +366,50 @@ export default async function RequirementsPage({
                               status: requirement.status,
                             }}
                           />
-                          <section className="mt-6 flex justify-end border-t border-border pt-5">
-                            {showArchived ? (
+                          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
+                            <div className="flex items-center gap-2">
+                              {showArchived ? (
+                                <ConfirmForm
+                                  action={actions.restore}
+                                  confirmMessage="Restore this Requirement?"
+                                >
+                                  <Button type="submit" variant="secondary">
+                                    Restore
+                                  </Button>
+                                </ConfirmForm>
+                              ) : (
+                                <ConfirmForm
+                                  action={actions.archive}
+                                  confirmMessage="Archive this Requirement?"
+                                >
+                                  <Button type="submit" variant="secondary">
+                                    Archive
+                                  </Button>
+                                </ConfirmForm>
+                              )}
                               <ConfirmForm
-                                action={actions.restore}
-                                confirmMessage="Restore this Requirement?"
+                                action={actions.remove}
+                                confirmMessage="Delete this Requirement? This cannot be undone from the UI."
+                                variant="danger"
                               >
-                                <Button type="submit" variant="secondary">
-                                  Restore
-                                </Button>
+                                <IconButton
+                                  type="submit"
+                                  variant="danger"
+                                  iconSize="lg"
+                                  aria-label="Delete"
+                                  title="Delete"
+                                >
+                                  <TrashIcon />
+                                </IconButton>
                               </ConfirmForm>
-                            ) : (
-                              <ConfirmForm
-                                action={actions.archive}
-                                confirmMessage="Archive this Requirement?"
-                              >
-                                <Button type="submit" variant="secondary">
-                                  Archive
-                                </Button>
-                              </ConfirmForm>
-                            )}
-                          </section>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <DialogCloseButton />
+                              <Button type="submit" form={`edit-requirement-${requirement.id}`}>
+                                Save
+                              </Button>
+                            </div>
+                          </div>
                         </RowActions>
                       </div>
                     </td>
