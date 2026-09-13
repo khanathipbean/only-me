@@ -137,6 +137,16 @@ export function ArrowUpRightIcon(props: IconProps) {
   );
 }
 
+/** The plain funnel `FilterOffIcon` strikes through — toggling the full
+ * filter panel open, as opposed to clearing it. */
+export function FilterIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 4H3l7.2 8.5V19l3.6 2v-8.5L21 4z" />
+    </IconBase>
+  );
+}
+
 /** A funnel with a line struck through it — clearing the filters, as opposed
  * to `ClearIcon`, whose × means "close this". */
 export function FilterOffIcon(props: IconProps) {

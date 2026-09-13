@@ -7,17 +7,8 @@ export function calculateTestProgress(testCasesWithResult: number, totalTestCase
   return totalTestCases === 0 ? 0 : (testCasesWithResult / totalTestCases) * 100;
 }
 
-/** Parses a bare "YYYY-MM-DD" date-only filter value as a UTC day boundary. */
-export function parseUtcDateOnly(value: string | null | undefined, boundary: "start" | "end") {
-  if (!value) {
-    return undefined;
-  }
-  const suffix = boundary === "start" ? "T00:00:00.000Z" : "T23:59:59.999Z";
-  const date = new Date(`${value}${suffix}`);
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
 export type DashboardFilters = {
+  search?: string;
   moduleId?: string;
   requirementId?: string;
   scenarioId?: string;
@@ -27,10 +18,6 @@ export type DashboardFilters = {
   status?: WorkflowStatus;
   assigneeId?: string;
   tags?: string[];
-  createdFrom?: Date;
-  createdTo?: Date;
-  updatedFrom?: Date;
-  updatedTo?: Date;
 };
 
 export type DashboardTestCaseNode = {
@@ -120,26 +107,13 @@ export async function getProjectDashboard(
 
   const testCaseWhere = {
     deletedAt: null,
+    ...(filters.search
+      ? { name: { contains: filters.search, mode: "insensitive" as const } }
+      : {}),
     ...(filters.testResult ? { testResult: filters.testResult } : {}),
     ...(filters.priority ? { priority: filters.priority } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
-    ...(filters.createdFrom || filters.createdTo
-      ? {
-          createdAt: {
-            ...(filters.createdFrom ? { gte: filters.createdFrom } : {}),
-            ...(filters.createdTo ? { lte: filters.createdTo } : {}),
-          },
-        }
-      : {}),
-    ...(filters.updatedFrom || filters.updatedTo
-      ? {
-          updatedAt: {
-            ...(filters.updatedFrom ? { gte: filters.updatedFrom } : {}),
-            ...(filters.updatedTo ? { lte: filters.updatedTo } : {}),
-          },
-        }
-      : {}),
   };
 
   const testGroupWhere = {
