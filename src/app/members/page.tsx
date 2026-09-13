@@ -10,6 +10,7 @@ import {
   updateUserProjectAccess,
 } from "@/lib/members";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { RoleGuideTooltip } from "@/components/RoleGuideTooltip";
 import { membersBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -184,7 +185,12 @@ export default async function MembersPage({
       <Breadcrumb segments={membersBreadcrumb()} />
       <PageHeader
         title="Members"
-        subtitle="Accounts created here belong only to the Projects you give them access to."
+        subtitle={
+          <span className="inline-flex items-center gap-1.5">
+            Accounts created here belong only to the Projects you give them access to.
+            <RoleGuideTooltip />
+          </span>
+        }
         actions={
           <Modal triggerLabel="+ Add User" title="Add User" openOnMount={!!error && !erroredUserId}>
             {error && !erroredUserId && (
