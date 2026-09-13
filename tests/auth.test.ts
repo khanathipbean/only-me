@@ -1,10 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import {
-  authenticateWithPassword,
-  hashPassword,
-  isAuthorized,
-} from "@/lib/auth-credentials";
+import { authenticateWithPassword, hashPassword } from "@/lib/auth-credentials";
+import { isAuthorized } from "@/auth.config";
 
 describe("authenticateWithPassword", () => {
   beforeAll(async () => {
