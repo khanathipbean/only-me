@@ -195,6 +195,59 @@ export function FileIcon(props: IconProps) {
   );
 }
 
+/** Shared page outline for every typed-file icon below, with a short label
+ * badged across the bottom — `fill`/`stroke="none"` on the `<text>` since it
+ * sits inside `IconBase`, which sets `fill="none"` for the outline paths. */
+function FileBadgeIcon({ label, ...props }: IconProps & { label: string }) {
+  return (
+    <IconBase {...props}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <text
+        x="12"
+        y="17.6"
+        textAnchor="middle"
+        fontSize="6.2"
+        fontWeight="700"
+        letterSpacing="-0.3"
+        fill="currentColor"
+        stroke="none"
+      >
+        {label}
+      </text>
+    </IconBase>
+  );
+}
+
+export function FilePdfIcon(props: IconProps) {
+  return <FileBadgeIcon label="PDF" {...props} />;
+}
+
+export function FileWordIcon(props: IconProps) {
+  return <FileBadgeIcon label="DOC" {...props} />;
+}
+
+export function FileExcelIcon(props: IconProps) {
+  return <FileBadgeIcon label="XLS" {...props} />;
+}
+
+export function FileCsvIcon(props: IconProps) {
+  return <FileBadgeIcon label="CSV" {...props} />;
+}
+
+/** Same page outline, with a little mountain-and-sun glyph instead of a
+ * label — there's no three-letter shorthand for "image" that reads at 20px. */
+export function FileImageIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <circle cx="9.75" cy="12.75" r="1.1" fill="currentColor" stroke="none" />
+      <path d="M6.5 18l3.25-3.25a1 1 0 0 1 1.4 0L13.5 17M12 15.5l.75-.75a1 1 0 0 1 1.4 0L16.5 17" />
+    </IconBase>
+  );
+}
+
 /** A 3/4 ring, not a full circle: an unbroken circle gives `animate-spin`
  * nothing to show rotating. Callers add the spin themselves — this icon is
  * also just a static "loading" glyph without it. */
