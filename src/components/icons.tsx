@@ -85,6 +85,34 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M15 5l-7 7 7 7" />
+    </IconBase>
+  );
+}
+
+/** "Skip to first page" — a chevron pinned against a bar. */
+export function FirstPageIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M17 5l-7 7 7 7" />
+      <path d="M7 5v14" />
+    </IconBase>
+  );
+}
+
+/** "Skip to last page" — mirrors `FirstPageIcon`. */
+export function LastPageIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M7 5l7 7-7 7" />
+      <path d="M17 5v14" />
+    </IconBase>
+  );
+}
+
 export function SunIcon(props: IconProps) {
   return (
     <IconBase {...props}>
