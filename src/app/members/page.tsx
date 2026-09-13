@@ -10,6 +10,7 @@ import {
   updateUserProjectAccess,
 } from "@/lib/members";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { RoleGuideTooltip } from "@/components/RoleGuideTooltip";
 import { membersBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -23,7 +24,7 @@ import { RequiredMark } from "@/components/forms/RequiredMark";
 import { Badge, type Tone } from "@/components/ui/Badge";
 import { EditIcon } from "@/components/icons";
 import { MIN_PASSWORD_LENGTH } from "@/lib/users";
-import { PROJECT_ROLE_OPTIONS } from "@/lib/enums";
+import { ASSIGNABLE_PROJECT_ROLE_OPTIONS, PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import {
   checkboxClass,
   inputClass,
@@ -65,6 +66,13 @@ function ProjectAccessChecklist({
     <div className="flex flex-col gap-2">
       {projects.map((project) => {
         const existing = current.find((m) => m.projectId === project.id);
+        // QA_LEAD/VIEWER are hidden from new picks, but a row already holding
+        // one keeps the full list — otherwise the Select would silently show
+        // (and, on an untouched save, submit) whatever sorts first instead of
+        // the role this account actually has.
+        const roleOptions = existing && !ASSIGNABLE_PROJECT_ROLE_OPTIONS.some((o) => o.value === existing.role)
+          ? PROJECT_ROLE_OPTIONS
+          : ASSIGNABLE_PROJECT_ROLE_OPTIONS;
         return (
           <div
             key={project.id}
@@ -82,7 +90,7 @@ function ProjectAccessChecklist({
             <Select
               name={`role-${project.id}`}
               defaultValue={existing?.role ?? "TESTER"}
-              options={PROJECT_ROLE_OPTIONS}
+              options={roleOptions}
               ariaLabel={`Role on ${project.name}`}
               className="w-40"
             />
@@ -177,7 +185,12 @@ export default async function MembersPage({
       <Breadcrumb segments={membersBreadcrumb()} />
       <PageHeader
         title="Members"
-        subtitle="Accounts created here belong only to the Projects you give them access to."
+        subtitle={
+          <span className="inline-flex items-center gap-1.5">
+            Accounts created here belong only to the Projects you give them access to.
+            <RoleGuideTooltip />
+          </span>
+        }
         actions={
           <Modal triggerLabel="+ Add User" title="Add User" openOnMount={!!error && !erroredUserId}>
             {error && !erroredUserId && (

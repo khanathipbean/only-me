@@ -14,7 +14,7 @@ export const GET = withEntityProjectRole(
 );
 
 export const POST = withEntityProjectRole(
-  [...EDITOR_ROLES, "TESTER"],
+  EDITOR_ROLES,
   getTestCaseWithProjectId,
   async (request, { entityId, userId }) => {
     const formData = await request.formData();

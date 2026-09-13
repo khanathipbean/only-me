@@ -10,6 +10,11 @@ export class DuplicateEmailError extends Error {
     super("A user with this email already exists");
   }
 }
+export class LastAdminError extends ValidationError {
+  constructor() {
+    super("This would leave no Admin anywhere in the system — keep at least one");
+  }
+}
 
 /** Unfiltered, this is every membership in the system — the global Members
  * page has no one Project to scope by, since adding someone to a brand-new
@@ -78,6 +83,20 @@ export async function updateUserProjectAccess(
   const projectIds = access.map((entry) => entry.projectId);
   if (new Set(projectIds).size !== projectIds.length) {
     throw new ValidationError("Each project can only be listed once");
+  }
+
+  // "Admin somewhere" is the only thing that gates Members/project-creation
+  // (see `isAdminAnywhere`), so losing the last ADMIN row in the whole
+  // system — not just on this account — would lock everyone out of both.
+  // Skipped when this account keeps an ADMIN role itself: no other row can
+  // be at risk from this call.
+  if (!access.some((entry) => entry.role === "ADMIN")) {
+    const otherAdmins = await prisma.projectMember.count({
+      where: { role: "ADMIN", userId: { not: userId } },
+    });
+    if (otherAdmins === 0) {
+      throw new LastAdminError();
+    }
   }
 
   const before = await prisma.projectMember.findMany({ where: { userId } });

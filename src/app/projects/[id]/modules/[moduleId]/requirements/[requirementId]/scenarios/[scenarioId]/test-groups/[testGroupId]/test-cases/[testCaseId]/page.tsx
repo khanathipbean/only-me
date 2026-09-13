@@ -79,7 +79,7 @@ export default async function TestCaseDetailPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
   const membership = await getProjectMembership(session!.user.id, projectId);
-  const canEditFully = membership?.role === "ADMIN" || membership?.role === "QA_LEAD";
+  const canEditFully = !!membership && EDITOR_ROLES.includes(membership.role);
   const [project, scenario, requirement, allTestGroups] = await Promise.all([
     getProjectById(projectId),
     getScenarioById(scenarioId),
@@ -143,10 +143,7 @@ export default async function TestCaseDetailPage({
   async function updateResult(formData: FormData) {
     "use server";
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, [
-      ...EDITOR_ROLES,
-      "TESTER",
-    ]);
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     await updateTestResultAndNotes(
       testCaseId,
       {
@@ -161,10 +158,7 @@ export default async function TestCaseDetailPage({
   async function uploadAttachment(formData: FormData) {
     "use server";
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, [
-      ...EDITOR_ROLES,
-      "TESTER",
-    ]);
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const file = formData.get("file");
     if (file instanceof File && file.size > 0) {
       await saveAttachment(testCaseId, file, session!.user.id);
