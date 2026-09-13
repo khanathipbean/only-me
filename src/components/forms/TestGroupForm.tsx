@@ -2,7 +2,7 @@ import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
-import { Button } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { WorkflowStatus } from "@/generated/prisma/client";
 
@@ -72,7 +72,7 @@ export function TestGroupForm({
         {!hideActions && (
           <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
             <DialogCloseButton />
-            <Button type="submit">{submitLabel}</Button>
+            <SubmitButton>{submitLabel}</SubmitButton>
           </div>
         )}
       </form>

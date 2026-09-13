@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES } from "@/lib/rbac";
-import { getProjectDashboard, parseUtcDateOnly } from "@/lib/dashboard";
+import { getProjectDashboard } from "@/lib/dashboard";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
 import type { Priority, TestResult, WorkflowStatus } from "@/generated/prisma/client";
 
@@ -14,6 +14,7 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
   const tags = searchParams.get("tags");
 
   const result = await getProjectDashboard(projectId, {
+    search: searchParams.get("search") ?? undefined,
     moduleId: searchParams.get("moduleId") ?? undefined,
     requirementId: searchParams.get("requirementId") ?? undefined,
     scenarioId: searchParams.get("scenarioId") ?? undefined,
@@ -28,10 +29,6 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
           .map((tag) => tag.trim())
           .filter(Boolean)
       : undefined,
-    createdFrom: parseUtcDateOnly(searchParams.get("createdFrom"), "start"),
-    createdTo: parseUtcDateOnly(searchParams.get("createdTo"), "end"),
-    updatedFrom: parseUtcDateOnly(searchParams.get("updatedFrom"), "start"),
-    updatedTo: parseUtcDateOnly(searchParams.get("updatedTo"), "end"),
   });
 
   return NextResponse.json(result);

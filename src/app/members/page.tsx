@@ -11,9 +11,11 @@ import {
 } from "@/lib/members";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { membersBreadcrumb } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { Select } from "@/components/ui/Select";
 import { PasswordInput } from "@/components/ui/PasswordInput";
@@ -144,7 +146,7 @@ export default async function MembersPage({
       throw err;
     }
 
-    redirect("/members");
+    redirect(withToast("/members", "User added"));
   }
 
   function updateAccessAction(targetUserId: string) {
@@ -220,7 +222,7 @@ export default async function MembersPage({
               </div>
               <div className="mt-2 flex justify-end gap-2">
                 <DialogCloseButton />
-                <Button type="submit">Add User</Button>
+                <SubmitButton>Add User</SubmitButton>
               </div>
             </form>
           </Modal>

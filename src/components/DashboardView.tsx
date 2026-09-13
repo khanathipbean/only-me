@@ -16,7 +16,7 @@ import {
   workflowStatusTone,
 } from "@/components/ui/Badge";
 import { Button, IconButton, LinkButton } from "@/components/ui/Button";
-import { ChevronRightIcon, ClearIcon, FilterOffIcon } from "@/components/icons";
+import { ChevronRightIcon, ClearIcon, FilterIcon, FilterOffIcon } from "@/components/icons";
 
 const TEST_RESULT_LABELS: Record<string, string> = {
   NOT_RUN: "Not Run",
@@ -131,6 +131,7 @@ type DashboardData = {
 };
 
 type Filters = {
+  search: string;
   moduleId: string;
   requirementId: string;
   scenarioId: string;
@@ -140,13 +141,10 @@ type Filters = {
   status: string;
   assigneeId: string;
   tags: string;
-  createdFrom: string;
-  createdTo: string;
-  updatedFrom: string;
-  updatedTo: string;
 };
 
 const EMPTY_FILTERS: Filters = {
+  search: "",
   moduleId: "",
   requirementId: "",
   scenarioId: "",
@@ -156,13 +154,10 @@ const EMPTY_FILTERS: Filters = {
   status: "",
   assigneeId: "",
   tags: "",
-  createdFrom: "",
-  createdTo: "",
-  updatedFrom: "",
-  updatedTo: "",
 };
 
 const FILTER_LABELS: Record<keyof Filters, string> = {
+  search: "Search",
   moduleId: "Module",
   requirementId: "Requirement",
   scenarioId: "Scenario",
@@ -172,10 +167,6 @@ const FILTER_LABELS: Record<keyof Filters, string> = {
   status: "Status",
   assigneeId: "Assignee",
   tags: "Tags",
-  createdFrom: "Created From",
-  createdTo: "Created To",
-  updatedFrom: "Updated From",
-  updatedTo: "Updated To",
 };
 
 export function DashboardView({ projectId }: { projectId: string }) {
@@ -344,9 +335,29 @@ export function DashboardView({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Filters</h2>
+      <div className="flex flex-col gap-3">
+        <form
+          onSubmit={(event) => event.preventDefault()}
+          className="flex items-center gap-2"
+        >
+          <input
+            type="search"
+            value={filters.search}
+            onChange={(event) => updateFilter("search", event.target.value)}
+            placeholder="Search test cases…"
+            aria-label="Search test cases"
+            className={`${inputClass} flex-1`}
+          />
+          <IconButton
+            type="button"
+            variant={showMoreFilters ? "secondary" : "ghost"}
+            onClick={() => setShowMoreFilters((value) => !value)}
+            aria-label={showMoreFilters ? "Hide filters" : "Show all filters"}
+            aria-expanded={showMoreFilters}
+            title={showMoreFilters ? "Hide filters" : "Show all filters"}
+          >
+            <FilterIcon />
+          </IconButton>
           {/* Only when there is something to clear. */}
           {activeFilters.length > 0 && (
             <IconButton
@@ -359,141 +370,90 @@ export function DashboardView({ projectId }: { projectId: string }) {
               <FilterOffIcon />
             </IconButton>
           )}
-        </div>
-        <form
-          onSubmit={(event) => event.preventDefault()}
-          className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          {/* aria-label rather than relying on the wrapping <label>: a label
-              can only be programmatically bound to a real form control, not to
-              a custom combobox, so the visible text is decorative here. */}
-          <label className={labelClass}>
-            Module
-            <Select
-              value={filters.moduleId}
-              onChange={(next) => updateHierarchyFilter("moduleId", next)}
-              options={toOptions(options?.modules ?? [], "All")}
-              ariaLabel="Module"
-            />
-          </label>
-          <label className={labelClass}>
-            Requirement
-            <Select
-              value={filters.requirementId}
-              onChange={(next) => updateHierarchyFilter("requirementId", next)}
-              options={toOptions(requirementOptions, "All")}
-              ariaLabel="Requirement"
-            />
-          </label>
-          <label className={labelClass}>
-            Test Result
-            <Select
-              value={filters.testResult}
-              onChange={(next) => updateFilter("testResult", next)}
-              options={TEST_RESULT_OPTIONS}
-              ariaLabel="Test Result"
-            />
-          </label>
-          <label className={labelClass}>
-            Priority
-            <Select
-              value={filters.priority}
-              onChange={(next) => updateFilter("priority", next)}
-              options={PRIORITY_OPTIONS}
-              ariaLabel="Priority"
-            />
-          </label>
-          <label className={labelClass}>
-            Status
-            <Select
-              value={filters.status}
-              onChange={(next) => updateFilter("status", next)}
-              options={STATUS_OPTIONS}
-              ariaLabel="Status"
-            />
-          </label>
-          {showMoreFilters && (
-            <>
-              <label className={labelClass}>
-                Scenario
-                <Select
-                  value={filters.scenarioId}
-                  onChange={(next) => updateHierarchyFilter("scenarioId", next)}
-                  options={toOptions(scenarioOptions, "All")}
-                  ariaLabel="Scenario"
-                />
-              </label>
-              <label className={labelClass}>
-                Test Group
-                <Select
-                  value={filters.testGroupId}
-                  onChange={(next) => updateFilter("testGroupId", next)}
-                  options={toOptions(testGroupOptions, "All")}
-                  ariaLabel="Test Group"
-                />
-              </label>
-              <label className={labelClass}>
-                Tags (comma-separated)
-                <input
-                  value={filters.tags}
-                  onChange={(event) => updateFilter("tags", event.target.value)}
-                  placeholder="e.g. smoke, regression"
-                  className={inputClass}
-                />
-              </label>
-              <label className={labelClass}>
-                Created From
-                <input
-                  type="date"
-                  value={filters.createdFrom}
-                  onChange={(event) => updateFilter("createdFrom", event.target.value)}
-                  className={inputClass}
-                />
-              </label>
-              <label className={labelClass}>
-                Created To
-                <input
-                  type="date"
-                  value={filters.createdTo}
-                  onChange={(event) => updateFilter("createdTo", event.target.value)}
-                  className={inputClass}
-                />
-              </label>
-              <label className={labelClass}>
-                Updated From
-                <input
-                  type="date"
-                  value={filters.updatedFrom}
-                  onChange={(event) => updateFilter("updatedFrom", event.target.value)}
-                  className={inputClass}
-                />
-              </label>
-              <label className={labelClass}>
-                Updated To
-                <input
-                  type="date"
-                  value={filters.updatedTo}
-                  onChange={(event) => updateFilter("updatedTo", event.target.value)}
-                  className={inputClass}
-                />
-              </label>
-            </>
-          )}
         </form>
 
-        <button
-          type="button"
-          onClick={() => setShowMoreFilters((value) => !value)}
-          className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground"
-        >
-          <ChevronRightIcon
-            className={`size-3.5 transition-transform ${showMoreFilters ? "rotate-90" : ""}`}
-          />
-          {showMoreFilters ? "Fewer filters" : "More filters"}
-        </button>
+        {showMoreFilters && (
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {/* aria-label rather than relying on the wrapping <label>: a label
+                can only be programmatically bound to a real form control, not to
+                a custom combobox, so the visible text is decorative here. */}
+            <label className={labelClass}>
+              Module
+              <Select
+                value={filters.moduleId}
+                onChange={(next) => updateHierarchyFilter("moduleId", next)}
+                options={toOptions(options?.modules ?? [], "All")}
+                ariaLabel="Module"
+              />
+            </label>
+            <label className={labelClass}>
+              Requirement
+              <Select
+                value={filters.requirementId}
+                onChange={(next) => updateHierarchyFilter("requirementId", next)}
+                options={toOptions(requirementOptions, "All")}
+                ariaLabel="Requirement"
+              />
+            </label>
+            <label className={labelClass}>
+              Test Result
+              <Select
+                value={filters.testResult}
+                onChange={(next) => updateFilter("testResult", next)}
+                options={TEST_RESULT_OPTIONS}
+                ariaLabel="Test Result"
+              />
+            </label>
+            <label className={labelClass}>
+              Priority
+              <Select
+                value={filters.priority}
+                onChange={(next) => updateFilter("priority", next)}
+                options={PRIORITY_OPTIONS}
+                ariaLabel="Priority"
+              />
+            </label>
+            <label className={labelClass}>
+              Status
+              <Select
+                value={filters.status}
+                onChange={(next) => updateFilter("status", next)}
+                options={STATUS_OPTIONS}
+                ariaLabel="Status"
+              />
+            </label>
+            <label className={labelClass}>
+              Scenario
+              <Select
+                value={filters.scenarioId}
+                onChange={(next) => updateHierarchyFilter("scenarioId", next)}
+                options={toOptions(scenarioOptions, "All")}
+                ariaLabel="Scenario"
+              />
+            </label>
+            <label className={labelClass}>
+              Test Group
+              <Select
+                value={filters.testGroupId}
+                onChange={(next) => updateFilter("testGroupId", next)}
+                options={toOptions(testGroupOptions, "All")}
+                ariaLabel="Test Group"
+              />
+            </label>
+            <label className={labelClass}>
+              Tags (comma-separated)
+              <input
+                value={filters.tags}
+                onChange={(event) => updateFilter("tags", event.target.value)}
+                placeholder="e.g. smoke, regression"
+                className={inputClass}
+              />
+            </label>
+          </div>
+        )}
 
         {activeFilters.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-muted">Active:</span>
             {activeFilters.map(([key, value]) => (
               <Badge key={key} tone="blue">
@@ -503,7 +463,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
             ))}
           </div>
         )}
-      </Card>
+      </div>
 
       <SummaryWidget
         loading={loading}
@@ -765,6 +725,22 @@ function idsOf(projectId: string, scenario: TreeScenario) {
   };
 }
 
+/** Animates a branch open/closed instead of mounting/unmounting it outright.
+ * Children stay in the DOM at all times — the branch's own data is already
+ * in hand (the whole tree arrives in one response), so there's no lazy-fetch
+ * to lose by keeping a collapsed subtree rendered — and the 0fr/1fr grid-row
+ * trick animates a height that was never known ahead of time, without
+ * measuring it in JS. */
+function Collapsible({ open, children }: { open: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+    >
+      <div className="overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 function TreeWidget({
   loading,
   error,
@@ -842,7 +818,7 @@ function TreeWidget({
               levelTone="indigo"
               bold
             />
-            {expanded.has(moduleNode.id) && (
+            <Collapsible open={expanded.has(moduleNode.id)}>
               <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
                 {moduleNode.requirements.map((requirement) => (
                   <li key={requirement.id}>
@@ -859,90 +835,90 @@ function TreeWidget({
                       levelTone="cyan"
                       bold
                     />
-                    {expanded.has(requirement.id) && (
+                    <Collapsible open={expanded.has(requirement.id)}>
                       <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
                         {requirement.scenarios.map((scenario) => (
                           <li key={scenario.id}>
-            <TreeRow
-              expanded={expanded.has(scenario.id)}
-              onToggle={() => onToggle(scenario.id)}
-              onPreview={() =>
-                onPreview({
-                  type: "scenario",
-                  id: scenario.id,
-                  href: testGroupsListHref(idsOf(projectId, scenario)),
-                  name: scenario.name,
-                })
-              }
-              label={scenario.name}
-              count={scenario.testCaseCount}
-              level="Scenario"
-              levelTone="blue"
-              bold
-            />
-            {expanded.has(scenario.id) && (
-              <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
-                {scenario.testGroups.map((group) => (
-                  <li key={group.id}>
-                    <TreeRow
-                      expanded={expanded.has(group.id)}
-                      onToggle={() => onToggle(group.id)}
-                      onPreview={() =>
-                        onPreview({
-                          type: "testGroup",
-                          id: group.id,
-                          href: testCasesListHref({ ...idsOf(projectId, scenario), testGroupId: group.id }),
-                          name: group.name,
-                        })
-                      }
-                      label={group.name}
-                      count={group.testCaseCount}
-                      level="Test Group"
-                      levelTone="purple"
-                    />
-                    {expanded.has(group.id) && (
-                      <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
-                        {group.testCases.map((testCase) => (
-                          <li key={testCase.id}>
-                            <button
-                              type="button"
-                              onClick={() =>
+                            <TreeRow
+                              expanded={expanded.has(scenario.id)}
+                              onToggle={() => onToggle(scenario.id)}
+                              onPreview={() =>
                                 onPreview({
-                                  type: "testCase",
-                                  id: testCase.id,
-                                  href: testCaseHref({
-                                    ...idsOf(projectId, scenario),
-                                    testGroupId: group.id,
-                                    testCaseId: testCase.id,
-                                  }),
-                                  name: testCase.name,
-                                  assigneeName: testCase.assigneeName,
+                                  type: "scenario",
+                                  id: scenario.id,
+                                  href: testGroupsListHref(idsOf(projectId, scenario)),
+                                  name: scenario.name,
                                 })
                               }
-                              className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-[26px] text-left text-sm text-foreground hover:bg-black/[.03] hover:text-brand hover:underline dark:hover:bg-white/[.05]"
-                            >
-                              <Badge tone="gray">Test Case</Badge>
-                              <span className="min-w-0 flex-1 truncate">{testCase.name}</span>
-                              <Badge tone={testResultTone(testCase.testResult)}>
-                                {testCase.testResult.replace(/_/g, " ")}
-                              </Badge>
-                            </button>
+                              label={scenario.name}
+                              count={scenario.testCaseCount}
+                              level="Scenario"
+                              levelTone="blue"
+                              bold
+                            />
+                            <Collapsible open={expanded.has(scenario.id)}>
+                              <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
+                                {scenario.testGroups.map((group) => (
+                                  <li key={group.id}>
+                                    <TreeRow
+                                      expanded={expanded.has(group.id)}
+                                      onToggle={() => onToggle(group.id)}
+                                      onPreview={() =>
+                                        onPreview({
+                                          type: "testGroup",
+                                          id: group.id,
+                                          href: testCasesListHref({ ...idsOf(projectId, scenario), testGroupId: group.id }),
+                                          name: group.name,
+                                        })
+                                      }
+                                      label={group.name}
+                                      count={group.testCaseCount}
+                                      level="Test Group"
+                                      levelTone="purple"
+                                    />
+                                    <Collapsible open={expanded.has(group.id)}>
+                                      <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
+                                        {group.testCases.map((testCase) => (
+                                          <li key={testCase.id}>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                onPreview({
+                                                  type: "testCase",
+                                                  id: testCase.id,
+                                                  href: testCaseHref({
+                                                    ...idsOf(projectId, scenario),
+                                                    testGroupId: group.id,
+                                                    testCaseId: testCase.id,
+                                                  }),
+                                                  name: testCase.name,
+                                                  assigneeName: testCase.assigneeName,
+                                                })
+                                              }
+                                              className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-[26px] text-left text-sm text-foreground hover:bg-black/[.03] hover:text-brand hover:underline dark:hover:bg-white/[.05]"
+                                            >
+                                              <Badge tone="gray">Test Case</Badge>
+                                              <span className="min-w-0 flex-1 truncate">{testCase.name}</span>
+                                              <Badge tone={testResultTone(testCase.testResult)}>
+                                                {testCase.testResult.replace(/_/g, " ")}
+                                              </Badge>
+                                            </button>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </Collapsible>
+                                  </li>
+                                ))}
+                              </ul>
+                            </Collapsible>
                           </li>
                         ))}
                       </ul>
-                    )}
+                    </Collapsible>
                   </li>
                 ))}
               </ul>
-            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            </Collapsible>
           </li>
         ))}
       </ul>

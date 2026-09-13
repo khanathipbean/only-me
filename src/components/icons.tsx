@@ -85,6 +85,34 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M15 5l-7 7 7 7" />
+    </IconBase>
+  );
+}
+
+/** "Skip to first page" — a chevron pinned against a bar. */
+export function FirstPageIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M17 5l-7 7 7 7" />
+      <path d="M7 5v14" />
+    </IconBase>
+  );
+}
+
+/** "Skip to last page" — mirrors `FirstPageIcon`. */
+export function LastPageIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M7 5l7 7-7 7" />
+      <path d="M17 5v14" />
+    </IconBase>
+  );
+}
+
 export function SunIcon(props: IconProps) {
   return (
     <IconBase {...props}>
@@ -137,6 +165,16 @@ export function ArrowUpRightIcon(props: IconProps) {
   );
 }
 
+/** The plain funnel `FilterOffIcon` strikes through — toggling the full
+ * filter panel open, as opposed to clearing it. */
+export function FilterIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 4H3l7.2 8.5V19l3.6 2v-8.5L21 4z" />
+    </IconBase>
+  );
+}
+
 /** A funnel with a line struck through it — clearing the filters, as opposed
  * to `ClearIcon`, whose × means "close this". */
 export function FilterOffIcon(props: IconProps) {
@@ -153,6 +191,17 @@ export function FileIcon(props: IconProps) {
     <IconBase {...props}>
       <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
       <path d="M14 3v5h5" />
+    </IconBase>
+  );
+}
+
+/** A 3/4 ring, not a full circle: an unbroken circle gives `animate-spin`
+ * nothing to show rotating. Callers add the spin themselves — this icon is
+ * also just a static "loading" glyph without it. */
+export function SpinnerIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 12a9 9 0 1 1-9-9" />
     </IconBase>
   );
 }

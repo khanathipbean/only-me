@@ -13,15 +13,18 @@ import {
   restoreModule,
 } from "@/lib/modules";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
 import { modulesListBreadcrumb, nameOr } from "@/lib/breadcrumb";
+import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { RowActions } from "@/components/ui/RowActions";
 import { Button, IconButton } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { TrashIcon } from "@/components/icons";
@@ -104,7 +107,7 @@ export default async function ModulesPage({
       }
       throw err;
     }
-    redirect(listHref);
+    redirect(withToast(listHref, "Module created"));
   }
 
   /** Bound per row: an inline Edit dialog needs one action per Module. */
@@ -164,7 +167,7 @@ export default async function ModulesPage({
           }
           throw err;
         }
-        redirect(listHref);
+        redirect(withToast(listHref, "Module deleted"));
       },
     };
   }
@@ -206,7 +209,7 @@ export default async function ModulesPage({
               </label>
               <div className="mt-2 flex flex-wrap justify-end gap-2">
                 <DialogCloseButton />
-                <Button type="submit">Add module</Button>
+                <SubmitButton>Add module</SubmitButton>
               </div>
             </form>
           </Modal>
@@ -215,14 +218,7 @@ export default async function ModulesPage({
 
       {/* An archive refused for still being in use has no row dialog to land
           in, so the reason is shown against the list itself. */}
-      {error && !editId && (
-        <p
-          role="alert"
-          className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300"
-        >
-          {error}
-        </p>
-      )}
+      {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
 
       <FilterForm showClear={hasFilters}>
         <input

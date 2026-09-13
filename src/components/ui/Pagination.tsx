@@ -1,8 +1,14 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Button, LinkButton } from "@/components/ui/Button";
+import { IconButton, IconLinkButton } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  FirstPageIcon,
+  LastPageIcon,
+} from "@/components/icons";
 
 /** The first entry is the server-side default (see DEFAULT_PAGE_SIZE in
  * lib/audit-log.ts) and the last must stay within MAX_PAGE_SIZE, which clamps
@@ -10,9 +16,44 @@ import { Select } from "@/components/ui/Select";
  * Prisma, and this is a client component. */
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
+/** How many numbered buttons sit in the sliding window around the current
+ * page (excluding the pinned first/last). Five was chosen to match the
+ * reference design: on page 1 of a long list that's "1 2 3 4 5 … 466". */
+const WINDOW_SIZE = 5;
+
 /**
- * Prev/Next controls plus a rows-per-page selector for a server-paginated
- * table.
+ * The page numbers to render, with `"ellipsis"` marking a collapsed gap.
+ *
+ * First and last are always pinned so the total range stays visible no
+ * matter where `current` sits; the window slides to keep `current` inside it
+ * without ever running off either end.
+ */
+function pageNumbers(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= WINDOW_SIZE + 2) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const start = Math.min(Math.max(current - 2, 1), total - WINDOW_SIZE + 1);
+  const end = start + WINDOW_SIZE - 1;
+
+  const pages: (number | "ellipsis")[] = [];
+  if (start > 1) {
+    pages.push(1);
+    if (start > 2) pages.push("ellipsis");
+  }
+  for (let page = start; page <= end; page++) {
+    pages.push(page);
+  }
+  if (end < total) {
+    if (end < total - 1) pages.push("ellipsis");
+    pages.push(total);
+  }
+  return pages;
+}
+
+/**
+ * Numbered page controls (first/previous/…/next/last) plus a rows-per-page
+ * selector for a server-paginated table.
  *
  * Every URL is built from the *current* query string with only the paging
  * params changed, so the active filters survive both paging and resizing.
@@ -90,34 +131,88 @@ export function Pagination({
               label: String(option),
             }))}
             ariaLabel="Rows per page"
-            className="w-20 shrink-0"
+            className="w-18 shrink-0"
           />
         </label>
         <p className="shrink-0 whitespace-nowrap text-sm text-muted">
           Page {page} of {totalPages} ({total} total)
         </p>
       </div>
-      {/* A compact pair, not spread across the row: justify-between here
-          pinned Previous to the screen's left edge on its own line, which
-          read as unintentional rather than a button group. */}
-      <div className="flex items-center gap-2">
+      {/* First/Previous, the numbered window, then Next/Last — all one
+          fixed-height row of size-9 squares so the numbers lining up next to
+          the arrows reads as one control, not two glued together. Disabled
+          buttons rather than dead links at either end, same reasoning as the
+          old Previous/Next: the control can't be clicked into a page that
+          doesn't exist. */}
+      <div className="flex items-center gap-1">
         {page > 1 ? (
-          <LinkButton href={hrefForPage(page - 1)} variant="secondary">
-            Previous
-          </LinkButton>
+          <IconLinkButton href={hrefForPage(1)} variant="secondary" aria-label="First page" title="First page">
+            <FirstPageIcon />
+          </IconLinkButton>
         ) : (
-          <Button type="button" variant="secondary" disabled>
-            Previous
-          </Button>
+          <IconButton type="button" variant="secondary" aria-label="First page" title="First page" disabled>
+            <FirstPageIcon />
+          </IconButton>
+        )}
+        {page > 1 ? (
+          <IconLinkButton href={hrefForPage(page - 1)} variant="secondary" aria-label="Previous page" title="Previous page">
+            <ChevronLeftIcon />
+          </IconLinkButton>
+        ) : (
+          <IconButton type="button" variant="secondary" aria-label="Previous page" title="Previous page" disabled>
+            <ChevronLeftIcon />
+          </IconButton>
+        )}
+
+        {pageNumbers(page, totalPages).map((entry, index) =>
+          entry === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="flex size-9 items-center justify-center text-sm text-muted">
+              …
+            </span>
+          ) : entry === page ? (
+            <span
+              key={entry}
+              aria-current="page"
+              /* Neutral foreground/background, not `bg-brand`: this app's
+                 theme is charcoal, and the indigo accent reads as a leftover
+                 from an older palette everywhere it's tried against emphasis
+                 chrome (see Avatar's own note on the same trade-off) — a
+                 quiet current-page marker instead of the primary button's
+                 twin in an unrelated color. */
+              className="flex size-9 shrink-0 items-center justify-center rounded-md bg-foreground text-sm font-semibold text-background"
+            >
+              {entry}
+            </span>
+          ) : (
+            <IconLinkButton
+              key={entry}
+              href={hrefForPage(entry)}
+              variant="secondary"
+              aria-label={`Page ${entry}`}
+              className="text-sm font-medium"
+            >
+              {entry}
+            </IconLinkButton>
+          ),
+        )}
+
+        {page < totalPages ? (
+          <IconLinkButton href={hrefForPage(page + 1)} variant="secondary" aria-label="Next page" title="Next page">
+            <ChevronRightIcon />
+          </IconLinkButton>
+        ) : (
+          <IconButton type="button" variant="secondary" aria-label="Next page" title="Next page" disabled>
+            <ChevronRightIcon />
+          </IconButton>
         )}
         {page < totalPages ? (
-          <LinkButton href={hrefForPage(page + 1)} variant="secondary">
-            Next
-          </LinkButton>
+          <IconLinkButton href={hrefForPage(totalPages)} variant="secondary" aria-label="Last page" title="Last page">
+            <LastPageIcon />
+          </IconLinkButton>
         ) : (
-          <Button type="button" variant="secondary" disabled>
-            Next
-          </Button>
+          <IconButton type="button" variant="secondary" aria-label="Last page" title="Last page" disabled>
+            <LastPageIcon />
+          </IconButton>
         )}
       </div>
     </div>

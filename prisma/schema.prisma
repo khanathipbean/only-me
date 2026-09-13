@@ -13,12 +13,17 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  name              String
+  /// Random name the picture's bytes live under in storage. Null until one is
+  /// uploaded; the uploader's own filename never reaches here, same reasoning
+  /// as `ProjectFile.storageKey`.
+  avatarKey         String?  @unique
+  avatarContentType String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   ownedProjects   Project[]       @relation("ProjectOwner")
   updatedProjects Project[]       @relation("ProjectUpdatedBy")

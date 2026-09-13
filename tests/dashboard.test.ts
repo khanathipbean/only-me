@@ -205,22 +205,6 @@ describe("project dashboard", () => {
     expect(byTags.counts.testCases).toBe(2);
   });
 
-  it("filters by createdFrom/createdTo date range", async () => {
-    const owner = await createUser("dash-owner4@example.com");
-    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedDashboardFixture(owner.id, "PRJ-DASH-4");
-
-    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-    const farFuture = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
-
-    const withinRange = await dashboard(project.id, `?createdFrom=${yesterday}&createdTo=${tomorrow}`);
-    expect(withinRange.counts.testCases).toBe(3);
-
-    const outsideRange = await dashboard(project.id, `?createdFrom=${farFuture}`);
-    expect(outsideRange.counts.testCases).toBe(0);
-  });
-
   it("shows a 'no results' shape (empty tree, zero counts) when a filter matches nothing, while hasAnyData stays true", async () => {
     const owner = await createUser("dash-owner5@example.com");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { DuplicateCodeError, ValidationError, createProject, listProjectsForUserPage } from "@/lib/projects";
+import { withToast } from "@/lib/toast";
 import { isAdminAnywhere } from "@/lib/rbac";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
@@ -83,7 +84,7 @@ export default async function ProjectsPage({
       throw err;
     }
 
-    redirect(`/projects/${project.id}`);
+    redirect(withToast(`/projects/${project.id}`, "Project created"));
   }
 
   return (
