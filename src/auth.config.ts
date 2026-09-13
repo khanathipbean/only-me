@@ -15,6 +15,13 @@ export function isAuthorized(session: { user?: unknown } | null | undefined) {
 export const authConfig = {
   session: { strategy: "jwt", maxAge: 8 * 60 * 60, updateAge: 60 * 60 },
   pages: { signIn: "/login" },
+  /* Auth.js trusts the request's Host header only on Vercel/Cloudflare
+   * Pages by default (or if AUTH_URL/AUTH_TRUST_HOST is set) — anywhere
+   * else in production it's untrusted, and Netlify sets neither env var,
+   * so every request 500'd with UntrustedHost. Safe to trust unconditionally
+   * here: Netlify's own edge terminates TLS and sets Host itself, an
+   * attacker can't forge it from outside. */
+  trustHost: true,
   providers: [],
   callbacks: {
     authorized: ({ auth }) => isAuthorized(auth),
