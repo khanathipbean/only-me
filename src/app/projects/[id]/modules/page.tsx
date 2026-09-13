@@ -7,9 +7,10 @@ import {
   ModuleValidationError,
   archiveModule,
   createModule,
+  deleteModule,
   listModulesForProjectPage,
   renameModule,
-  setModuleDeletedAt,
+  restoreModule,
 } from "@/lib/modules";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConfirmForm } from "@/components/ConfirmForm";
@@ -20,9 +21,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { RowActions } from "@/components/ui/RowActions";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { TrashIcon } from "@/components/icons";
 import {
   inputClass,
   labelClass,
@@ -145,7 +147,23 @@ export default async function ModulesPage({
         "use server";
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-        await setModuleDeletedAt(moduleId, null, session!.user.id, "restore");
+        await restoreModule(moduleId, session!.user.id);
+        redirect(listHref);
+      },
+      async remove() {
+        "use server";
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        try {
+          await deleteModule(moduleId, session!.user.id, true);
+        } catch (err) {
+          if (err instanceof ModuleValidationError) {
+            const query = new URLSearchParams(listQueryString);
+            query.set("error", err.message);
+            redirect(`${listPath}?${query}`);
+          }
+          throw err;
+        }
         redirect(listHref);
       },
     };
@@ -285,7 +303,11 @@ export default async function ModulesPage({
                               {error}
                             </p>
                           )}
-                          <form action={actions.rename} className="flex flex-col gap-4">
+                          <form
+                            id={`edit-module-${module.id}`}
+                            action={actions.rename}
+                            className="flex flex-col gap-4"
+                          >
                             <label className={labelClass}>
                               <span>
                                 Module name
@@ -298,32 +320,51 @@ export default async function ModulesPage({
                                 className={inputClass}
                               />
                             </label>
-                            <div className="mt-2 flex flex-wrap justify-end gap-2">
-                              <DialogCloseButton />
-                              <Button type="submit">Save</Button>
-                            </div>
                           </form>
-                          <section className="mt-6 flex justify-end border-t border-border pt-5">
-                            {showArchived ? (
+                          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
+                            <div className="flex items-center gap-2">
+                              {showArchived ? (
+                                <ConfirmForm
+                                  action={actions.restore}
+                                  confirmMessage="Restore this Module?"
+                                >
+                                  <Button type="submit" variant="secondary">
+                                    Restore
+                                  </Button>
+                                </ConfirmForm>
+                              ) : (
+                                <ConfirmForm
+                                  action={actions.archive}
+                                  confirmMessage="Archive this Module?"
+                                >
+                                  <Button type="submit" variant="secondary">
+                                    Archive
+                                  </Button>
+                                </ConfirmForm>
+                              )}
                               <ConfirmForm
-                                action={actions.restore}
-                                confirmMessage="Restore this Module?"
+                                action={actions.remove}
+                                confirmMessage="Delete this Module? This cannot be undone from the UI."
+                                variant="danger"
                               >
-                                <Button type="submit" variant="secondary">
-                                  Restore
-                                </Button>
+                                <IconButton
+                                  type="submit"
+                                  variant="danger"
+                                  iconSize="lg"
+                                  aria-label="Delete"
+                                  title="Delete"
+                                >
+                                  <TrashIcon />
+                                </IconButton>
                               </ConfirmForm>
-                            ) : (
-                              <ConfirmForm
-                                action={actions.archive}
-                                confirmMessage="Archive this Module?"
-                              >
-                                <Button type="submit" variant="secondary">
-                                  Archive
-                                </Button>
-                              </ConfirmForm>
-                            )}
-                          </section>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <DialogCloseButton />
+                              <Button type="submit" form={`edit-module-${module.id}`}>
+                                Save
+                              </Button>
+                            </div>
+                          </div>
                         </RowActions>
                       </div>
                     </td>

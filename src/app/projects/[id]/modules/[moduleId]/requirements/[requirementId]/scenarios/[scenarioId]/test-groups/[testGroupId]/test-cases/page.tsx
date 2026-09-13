@@ -10,11 +10,11 @@ import {
 } from "@/lib/test-cases";
 import { parseStepsJson } from "@/lib/test-case-form";
 import { getScenarioById } from "@/lib/scenarios";
-import { getProjectById } from "@/lib/projects";
 import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCasesListBreadcrumb } from "@/lib/breadcrumb";
 import { testCasesListHref } from "@/lib/hrefs";
+import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";

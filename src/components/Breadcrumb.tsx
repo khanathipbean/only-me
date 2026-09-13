@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { BreadcrumbSegment } from "@/lib/breadcrumb";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 export type { BreadcrumbSegment };
 
@@ -61,22 +62,30 @@ export function Breadcrumb({ segments }: { segments: BreadcrumbSegment[] }) {
       {segments.map((segment, index) => {
         const isCurrent = index === segments.length - 1;
         return (
-          <span key={segment.href} className="flex items-center gap-1">
+          <span key={segment.href} className="flex min-w-0 items-center gap-1">
             {index > 0 && <span className="text-muted/60">/</span>}
-            {isCurrent ? (
-              // Deliberately not text-foreground/font-medium: this segment
-              // just repeats the page's own <h1> title right below it, so
-              // giving it the same strong color/weight made the two read as
-              // a duplicated heading rather than a breadcrumb trail.
-              <span aria-current="page">{segment.label}</span>
-            ) : (
-              <Link
-                href={restoredHrefs[segment.href] ?? segment.href}
-                className="hover:text-brand hover:underline"
-              >
-                {segment.label}
-              </Link>
-            )}
+            {/* Entity names can run long (a Requirement or Scenario is
+                sometimes a whole sentence) — truncated with the full name
+                on hover rather than left to wrap the whole trail across
+                lines or push everything after it off screen. */}
+            <Tooltip label={segment.label}>
+              {isCurrent ? (
+                // Deliberately not text-foreground/font-medium: this segment
+                // just repeats the page's own <h1> title right below it, so
+                // giving it the same strong color/weight made the two read as
+                // a duplicated heading rather than a breadcrumb trail.
+                <span aria-current="page" className="block max-w-40 truncate">
+                  {segment.label}
+                </span>
+              ) : (
+                <Link
+                  href={restoredHrefs[segment.href] ?? segment.href}
+                  className="block max-w-40 truncate hover:text-brand hover:underline"
+                >
+                  {segment.label}
+                </Link>
+              )}
+            </Tooltip>
           </span>
         );
       })}

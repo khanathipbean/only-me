@@ -10,6 +10,7 @@ import {
   updateUserProjectAccess,
 } from "@/lib/members";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { membersBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -171,7 +172,7 @@ export default async function MembersPage({
 
   return (
     <main className={pageClass}>
-      <Breadcrumb segments={[{ label: "Members", href: "/members" }]} />
+      <Breadcrumb segments={membersBreadcrumb()} />
       <PageHeader
         title="Members"
         subtitle="Accounts created here belong only to the Projects you give them access to."

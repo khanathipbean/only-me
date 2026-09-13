@@ -2,6 +2,8 @@ import { getProjectById } from "@/lib/projects";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { AUDIT_ACTIONS, listAuditLogForProject, parseUtcDateTimeLocal } from "@/lib/audit-log";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { auditLogBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Pagination } from "@/components/ui/Pagination";
@@ -52,19 +54,25 @@ export default async function AuditLogPage({
   // offered for them alone.
   const hasFilters = Boolean(actorId || actorName || action || entityType || from || to);
 
-  const result = await listAuditLogForProject(projectId, {
-    actorId,
-    actorName,
-    action,
-    entityType,
-    from: parseUtcDateTimeLocal(from),
-    to: parseUtcDateTimeLocal(to),
-    page: page ? Number(page) : undefined,
-    pageSize: pageSize ? Number(pageSize) : undefined,
-  });
+  const [project, result] = await Promise.all([
+    getProjectById(projectId),
+    listAuditLogForProject(projectId, {
+      actorId,
+      actorName,
+      action,
+      entityType,
+      from: parseUtcDateTimeLocal(from),
+      to: parseUtcDateTimeLocal(to),
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    }),
+  ]);
 
   return (
     <main className={pageClass}>
+      <Breadcrumb
+        segments={auditLogBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
+      />
       <PageHeader title="Audit Trail" subtitle="All timestamps are shown in UTC." />
 
       <FilterForm showClear={hasFilters}>

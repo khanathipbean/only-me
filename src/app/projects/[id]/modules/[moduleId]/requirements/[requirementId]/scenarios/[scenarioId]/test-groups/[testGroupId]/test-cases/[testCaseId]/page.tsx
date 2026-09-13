@@ -21,7 +21,6 @@ import {
 import { parseStepsJson } from "@/lib/test-case-form";
 import { getTestGroupWithProjectId, listTestGroupsForProject } from "@/lib/test-groups";
 import { getScenarioById, getScenarioLocation } from "@/lib/scenarios";
-import { getProjectById } from "@/lib/projects";
 import { deleteAttachment, getAttachmentWithProjectId, saveAttachment } from "@/lib/attachments";
 import { canPreview } from "@/lib/project-files";
 import { FilePreview } from "@/components/FilePreview";
@@ -29,6 +28,7 @@ import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
 import { testCasesListHref } from "@/lib/hrefs";
+import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";

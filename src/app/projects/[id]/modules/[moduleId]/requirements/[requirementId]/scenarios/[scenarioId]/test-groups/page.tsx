@@ -6,7 +6,6 @@ import {
   getScenarioLocation,
   listScenariosForProject,
 } from "@/lib/scenarios";
-import { getProjectById } from "@/lib/projects";
 import {
   ValidationError,
   archiveTestGroup,
@@ -25,6 +24,7 @@ import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testGroupsListBreadcrumb } from "@/lib/breadcrumb";
 import { testGroupsListHref } from "@/lib/hrefs";
+import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
@@ -98,7 +98,6 @@ export default async function TestGroupsPage({
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
-  const project = await getProjectById(projectId);
   const result = await listTestGroupsForScenarioPage(scenarioId, {
     archived: showArchived,
     page: page ? Number(page) : undefined,
@@ -107,7 +106,8 @@ export default async function TestGroupsPage({
   const testGroups = result.items;
 
   // Batched, not per row — one query per row would be N round trips.
-  const [descendantCounts, projectScenarios] = await Promise.all([
+  const [project, descendantCounts, projectScenarios] = await Promise.all([
+    getProjectById(projectId),
     getTestGroupDescendantCountsForMany(testGroups.map((testGroup) => testGroup.id)),
     listScenariosForProject(projectId),
   ]);
