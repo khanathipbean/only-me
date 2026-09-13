@@ -259,14 +259,12 @@ export default async function ModulesPage({
         <div className={tableWrapClass}>
           <table className={tableClass}>
             <colgroup>
-              <col className="w-[62%]" />
-              <col className="w-[24%]" />
+              <col className="w-[86%]" />
               <col className="w-[14%]" />
             </colgroup>
             <thead>
               <tr>
                 <th className={thClass}>Name</th>
-                <th className={thCenterClass}>Requirements</th>
                 <th className={thCenterClass}>Actions</th>
               </tr>
             </thead>
@@ -283,9 +281,9 @@ export default async function ModulesPage({
                       >
                         {module.name}
                       </Link>
-                    </td>
-                    <td className={`${tdCenterClass} text-muted`}>
-                      {module._count.requirements}
+                      <span className="ml-2 text-xs text-muted">
+                        {module._count.requirements} requirement(s)
+                      </span>
                     </td>
                     <td className={tdCenterClass}>
                       <div className="inline-flex items-center gap-1">

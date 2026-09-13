@@ -487,6 +487,9 @@ export default async function ScenariosPage({
                         >
                           {scenario.name}
                         </Link>
+                        <span className="ml-2 text-xs text-muted">
+                          {descendantCounts.get(scenario.id)?.testGroups ?? 0} test group(s)
+                        </span>
                       </td>
                       <td className={tdCenterClass}>
                         <Badge tone={priorityTone(scenario.priority)}>{scenario.priority}</Badge>

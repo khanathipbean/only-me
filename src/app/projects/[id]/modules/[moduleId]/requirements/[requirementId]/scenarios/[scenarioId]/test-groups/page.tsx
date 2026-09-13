@@ -406,6 +406,9 @@ export default async function TestGroupsPage({
                         >
                           {testGroup.name}
                         </Link>
+                        <span className="ml-2 text-xs text-muted">
+                          {descendantCounts.get(testGroup.id)?.testCases ?? 0} test case(s)
+                        </span>
                       </td>
                       <td className={tdCenterClass}>
                         <Badge tone={workflowStatusTone(testGroup.status)}>
