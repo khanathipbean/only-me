@@ -57,9 +57,37 @@ export type RequirementInput = {
   code?: string | null;
   description?: string | null;
   moduleId: string;
+  /** Optional sub-grouping inside the Module. */
+  feature?: string | null;
   priority: Priority;
   status?: WorkflowStatus;
 };
+
+/** Every distinct Feature already used in a Module, for the picker. */
+export async function listFeaturesForModule(moduleId: string) {
+  const rows = await prisma.requirement.findMany({
+    where: { moduleId, deletedAt: null, feature: { not: null } },
+    select: { feature: true },
+    distinct: ["feature"],
+    orderBy: { feature: "asc" },
+  });
+  return rows.map((row) => row.feature as string);
+}
+
+/**
+ * Keeps "Policy Center" and "policy center" from becoming two groups: if the
+ * Module already knows a Feature that differs only in case or padding, the
+ * existing spelling wins. Free text drifts otherwise — the same reason this
+ * project stopped storing a file's Module as free text.
+ */
+async function normalizeFeature(moduleId: string, raw: string | null | undefined) {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const known = await listFeaturesForModule(moduleId);
+  return known.find((value) => value.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
+}
 
 function validate(input: RequirementInput) {
   if (!input.name?.trim()) {
@@ -78,6 +106,7 @@ export type RequirementFilters = {
   status?: WorkflowStatus;
   priority?: Priority;
   moduleId?: string;
+  feature?: string;
   archived?: boolean;
 };
 
@@ -89,6 +118,7 @@ function requirementWhere(projectId: string, filters: RequirementFilters) {
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.priority ? { priority: filters.priority } : {}),
     ...(filters.moduleId ? { moduleId: filters.moduleId } : {}),
+    ...(filters.feature ? { feature: filters.feature } : {}),
     ...(filters.search
       ? {
           OR: [
@@ -156,6 +186,7 @@ export async function createRequirement(
       code: input.code?.trim() || null,
       description: input.description || null,
       moduleId: input.moduleId,
+      feature: await normalizeFeature(input.moduleId, input.feature),
       priority: input.priority,
       status: input.status ?? "DRAFT",
     },
@@ -187,6 +218,8 @@ export async function updateRequirement(
       code: input.code?.trim() || null,
       description: input.description || null,
       moduleId: input.moduleId,
+      // Against the Module it is moving to, not the one it came from.
+      feature: await normalizeFeature(input.moduleId, input.feature),
       priority: input.priority,
       status: input.status ?? "DRAFT",
     },

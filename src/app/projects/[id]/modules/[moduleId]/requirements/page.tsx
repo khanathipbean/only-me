@@ -9,6 +9,7 @@ import {
   archiveRequirement,
   createRequirement,
   deleteRequirement,
+  listFeaturesForModule,
   listRequirementsForProjectPage,
   restoreRequirement,
   updateRequirement,
@@ -64,6 +65,7 @@ export default async function RequirementsPage({
   params: Promise<{ id: string; moduleId: string }>;
   searchParams: Promise<{
     search?: string;
+    feature?: string;
     status?: string;
     priority?: string;
     archived?: string;
@@ -74,20 +76,22 @@ export default async function RequirementsPage({
   }>;
 }) {
   const { id: projectId, moduleId } = await params;
-  const { search, status, priority, archived, page, pageSize, error, editId } =
+  const { search, feature, status, priority, archived, page, pageSize, error, editId } =
     await searchParams;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
   const showArchived = archived === "1";
-  const hasFilters = Boolean(search || status || priority || showArchived);
+  const hasFilters = Boolean(search || feature || status || priority || showArchived);
 
-  const [project, module, modules, result] = await Promise.all([
+  const [project, module, modules, features, result] = await Promise.all([
     getProjectById(projectId),
     getModuleById(moduleId),
     listModulesForProject(projectId),
+    listFeaturesForModule(moduleId),
     listRequirementsForProjectPage(projectId, {
+      feature,
       search,
       status: status as WorkflowStatus | undefined,
       priority: priority as Priority | undefined,
@@ -111,7 +115,7 @@ export default async function RequirementsPage({
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
   const listQueryString = new URLSearchParams(
-    Object.entries({ search, status, priority, archived }).filter(
+    Object.entries({ search, feature, status, priority, archived }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   ).toString();
@@ -130,6 +134,7 @@ export default async function RequirementsPage({
           code: formData.get("code") as string,
           description: formData.get("description") as string,
           moduleId: formData.get("moduleId") as string,
+          feature: formData.get("feature") as string,
           priority: formData.get("priority") as never,
           status: formData.get("status") as never,
         },
@@ -161,6 +166,7 @@ export default async function RequirementsPage({
               code: formData.get("code") as string,
               description: formData.get("description") as string,
               moduleId: formData.get("moduleId") as string,
+              feature: formData.get("feature") as string,
               priority: formData.get("priority") as never,
               status: formData.get("status") as never,
             },
@@ -243,6 +249,7 @@ export default async function RequirementsPage({
           >
             <RequirementForm
               action={create}
+              features={features}
               submitLabel="Create Requirement"
               error={editId ? undefined : error}
               modules={modules}
@@ -261,6 +268,21 @@ export default async function RequirementsPage({
             defaultValue={search}
             className={`${inputClass} max-w-xs`}
           />
+          {features.length > 0 && (
+            <label className={labelClass}>
+              Feature
+              <Select
+                name="feature"
+                defaultValue={feature ?? ""}
+                options={[
+                  { value: "", label: "All" },
+                  ...features.map((value) => ({ value, label: value })),
+                ]}
+                ariaLabel="Feature"
+                className="max-w-52"
+              />
+            </label>
+          )}
           <label className={labelClass}>
             Status
             <Select
@@ -341,6 +363,11 @@ export default async function RequirementsPage({
                           >
                             {requirement.name}
                           </Link>
+                          {requirement.feature && (
+                            <span className="ml-2 align-middle">
+                              <Badge tone="cyan">{requirement.feature}</Badge>
+                            </span>
+                          )}
                           <span className="ml-2 text-xs text-muted">
                             {requirement._count.scenarios} scenario(s)
                           </span>
@@ -366,6 +393,7 @@ export default async function RequirementsPage({
                       >
                         <RequirementForm
                           action={actions.update}
+                          features={features}
                           submitLabel="Save"
                           error={editId === requirement.id ? error : undefined}
                           modules={modules}
@@ -373,6 +401,7 @@ export default async function RequirementsPage({
                           hideActions
                           defaults={{
                             name: requirement.name,
+                            feature: requirement.feature,
                             code: requirement.code,
                             description: requirement.description,
                             moduleId: requirement.moduleId,

@@ -82,6 +82,7 @@ type TreeRequirement = {
   id: string;
   name: string;
   code: string | null;
+  feature: string | null;
   testCaseCount: number;
   scenarios: TreeScenario[];
 };
@@ -124,6 +125,7 @@ type DashboardData = {
   tree: TreeModule[];
   options: {
     modules: Array<{ id: string; name: string }>;
+    features: Array<{ name: string; moduleId: string }>;
     requirements: Array<{ id: string; name: string; moduleId: string }>;
     scenarios: Array<{ id: string; name: string; requirementId: string }>;
     testGroups: Array<{ id: string; name: string; scenarioId: string }>;
@@ -133,6 +135,7 @@ type DashboardData = {
 type Filters = {
   search: string;
   moduleId: string;
+  feature: string;
   requirementId: string;
   scenarioId: string;
   testGroupId: string;
@@ -146,6 +149,7 @@ type Filters = {
 const EMPTY_FILTERS: Filters = {
   search: "",
   moduleId: "",
+  feature: "",
   requirementId: "",
   scenarioId: "",
   testGroupId: "",
@@ -159,6 +163,7 @@ const EMPTY_FILTERS: Filters = {
 const FILTER_LABELS: Record<keyof Filters, string> = {
   search: "Search",
   moduleId: "Module",
+  feature: "Feature",
   requirementId: "Requirement",
   scenarioId: "Scenario",
   testGroupId: "Test Group",
@@ -243,14 +248,20 @@ export function DashboardView({ projectId }: { projectId: string }) {
   /* The four hierarchy filters are one chain, so choosing a Module has to
    * drop a Requirement chosen under a different one — left alone the two
    * would contradict each other and the result would always be empty. */
-  function updateHierarchyFilter(key: "moduleId" | "requirementId" | "scenarioId", value: string) {
+  function updateHierarchyFilter(
+    key: "moduleId" | "feature" | "requirementId" | "scenarioId",
+    value: string,
+  ) {
     setLoading(true);
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "moduleId") {
+        next.feature = "";
+      }
+      if (key === "moduleId" || key === "feature") {
         next.requirementId = "";
       }
-      if (key === "moduleId" || key === "requirementId") {
+      if (key === "moduleId" || key === "feature" || key === "requirementId") {
         next.scenarioId = "";
       }
       next.testGroupId = "";
@@ -281,6 +292,9 @@ export function DashboardView({ projectId }: { projectId: string }) {
   }
 
   const options = data?.options;
+  const featureOptions = (options?.features ?? []).filter(
+    (row) => !filters.moduleId || row.moduleId === filters.moduleId,
+  );
   const requirementOptions = (options?.requirements ?? []).filter(
     (requirement) => !filters.moduleId || requirement.moduleId === filters.moduleId,
   );
@@ -386,6 +400,22 @@ export function DashboardView({ projectId }: { projectId: string }) {
                 ariaLabel="Module"
               />
             </label>
+            {/* Only the Modules big enough to have sub-features use this,
+                so the control stays out of the way when none do. */}
+            {featureOptions.length > 0 && (
+              <label className={labelClass}>
+                Feature
+                <Select
+                  value={filters.feature}
+                  onChange={(next) => updateHierarchyFilter("feature", next)}
+                  options={toOptions(
+                    featureOptions.map((row) => ({ id: row.name, name: row.name })),
+                    "All",
+                  )}
+                  ariaLabel="Feature"
+                />
+              </label>
+            )}
             <label className={labelClass}>
               Requirement
               <Select
@@ -605,6 +635,7 @@ function SummaryWidget({
             ))}
           </ul>
         </div>
+        )}
       </div>
     </WidgetShell>
   );
@@ -830,6 +861,7 @@ function TreeWidget({
                           ? `${requirement.code} — ${requirement.name}`
                           : requirement.name
                       }
+                      tag={requirement.feature}
                       count={requirement.testCaseCount}
                       level="Requirement"
                       levelTone="cyan"
@@ -931,6 +963,7 @@ function TreeRow({
   onToggle,
   onPreview,
   label,
+  tag,
   count,
   level,
   levelTone,
@@ -942,6 +975,9 @@ function TreeRow({
    *  clicking the name expands the row instead. */
   onPreview?: () => void;
   label: string;
+  /** Shown after the label. Used for a Requirement's Feature, which groups
+   *  rows inside a Module without being a level of its own. */
+  tag?: string | null;
   count: number;
   level: string;
   levelTone: Tone;
@@ -965,6 +1001,7 @@ function TreeRow({
       >
         {label}
       </button>
+      {tag && <Badge tone="cyan">{tag}</Badge>}
       <Badge tone="gray">{count}</Badge>
     </div>
   );

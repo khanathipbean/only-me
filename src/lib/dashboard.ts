@@ -10,6 +10,8 @@ export function calculateTestProgress(testCasesWithResult: number, totalTestCase
 export type DashboardFilters = {
   search?: string;
   moduleId?: string;
+  /** A label inside a Module, not a level — see `Requirement.feature`. */
+  feature?: string;
   requirementId?: string;
   scenarioId?: string;
   testGroupId?: string;
@@ -49,6 +51,7 @@ export type DashboardRequirementNode = {
   id: string;
   name: string;
   code: string | null;
+  feature: string | null;
   testCaseCount: number;
   scenarios: DashboardScenarioNode[];
 };
@@ -67,6 +70,7 @@ export type DashboardModuleNode = {
  */
 export type DashboardFilterOptions = {
   modules: Array<{ id: string; name: string }>;
+  features: Array<{ name: string; moduleId: string }>;
   requirements: Array<{ id: string; name: string; moduleId: string }>;
   scenarios: Array<{ id: string; name: string; requirementId: string }>;
   testGroups: Array<{ id: string; name: string; scenarioId: string }>;
@@ -127,7 +131,14 @@ export async function getProjectDashboard(
       deletedAt: null,
       ...(filters.scenarioId ? { id: filters.scenarioId } : {}),
       ...(filters.requirementId ? { requirementId: filters.requirementId } : {}),
-      ...(filters.moduleId ? { requirement: { moduleId: filters.moduleId } } : {}),
+      ...(filters.moduleId || filters.feature
+        ? {
+            requirement: {
+              ...(filters.moduleId ? { moduleId: filters.moduleId } : {}),
+              ...(filters.feature ? { feature: filters.feature } : {}),
+            },
+          }
+        : {}),
       ...(filters.tags && filters.tags.length > 0 ? { tags: { hasSome: filters.tags } } : {}),
       testGroups: { some: { ...testGroupWhere, testCases: { some: testCaseWhere } } },
     },
@@ -137,6 +148,7 @@ export async function getProjectDashboard(
           id: true,
           name: true,
           code: true,
+          feature: true,
           moduleId: true,
           module: { select: { id: true, name: true, sequence: true } },
         },
@@ -231,6 +243,7 @@ export async function getProjectDashboard(
         id: requirement.id,
         name: requirement.name,
         code: requirement.code,
+        feature: requirement.feature,
         testCaseCount: 0,
         scenarios: [],
       };
@@ -245,7 +258,7 @@ export async function getProjectDashboard(
 
   const tree = Array.from(moduleNodes.values());
 
-  const [moduleOptions, requirementOptions, scenarioOptions, testGroupOptions] =
+  const [moduleOptions, requirementOptions, featureRows, scenarioOptions, testGroupOptions] =
     await Promise.all([
       prisma.module.findMany({
         where: { projectId, deletedAt: null },
@@ -256,6 +269,12 @@ export async function getProjectDashboard(
         where: { projectId, deletedAt: null },
         select: { id: true, name: true, moduleId: true },
         orderBy: [{ code: "asc" }, { name: "asc" }],
+      }),
+      prisma.requirement.findMany({
+        where: { projectId, deletedAt: null, feature: { not: null } },
+        select: { feature: true, moduleId: true },
+        distinct: ["moduleId", "feature"],
+        orderBy: { feature: "asc" },
       }),
       prisma.scenario.findMany({
         where: { projectId, deletedAt: null },
@@ -285,6 +304,7 @@ export async function getProjectDashboard(
     tree,
     options: {
       modules: moduleOptions,
+      features: featureRows.map((row) => ({ name: row.feature as string, moduleId: row.moduleId })),
       requirements: requirementOptions,
       scenarios: scenarioOptions,
       testGroups: testGroupOptions,

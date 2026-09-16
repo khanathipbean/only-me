@@ -308,6 +308,10 @@ model Requirement {
   code        String?
   name        String
   description String?
+  /// Optional sub-grouping inside a Module, for the ones big enough to have
+  /// features of their own (Policy Center, Policy Template …). A label, not a
+  /// level: it has no URL and adds no depth to the hierarchy.
+  feature     String?
   priority    Priority       @default(MEDIUM)
   status      WorkflowStatus @default(DRAFT)
   deletedAt   DateTime?
@@ -319,4 +323,5 @@ model Requirement {
   scenarios Scenario[]
 
   @@index([projectId, moduleId])
+  @@index([moduleId, feature])
 }

@@ -11,6 +11,7 @@ export type RequirementFormDefaults = {
   code?: string | null;
   description?: string | null;
   moduleId?: string;
+  feature?: string | null;
   priority?: Priority;
   status?: WorkflowStatus;
 };
@@ -21,6 +22,7 @@ export function RequirementForm({
   submitLabel,
   error,
   modules,
+  features = [],
   formId,
   hideActions = false,
 }: {
@@ -30,6 +32,8 @@ export function RequirementForm({
   error?: string;
   /** Every Module in the project, so a Requirement can be moved between them. */
   modules: { id: string; name: string }[];
+  /** Features already used in this Module, offered as suggestions. */
+  features?: string[];
   formId?: string;
   hideActions?: boolean;
 }) {
@@ -85,6 +89,25 @@ export function RequirementForm({
             options={modules.map((module) => ({ value: module.id, label: module.name }))}
             ariaLabel="Module"
           />
+        </label>
+        <label className={labelClass}>
+          Feature
+          {/* A suggestion list, not a closed set: a Module's first Requirement
+              has nothing to pick from, and only the ones big enough to have
+              sub-features use this at all. Matching an existing entry is
+              re-spelled to it server-side so case can't split a group. */}
+          <input
+            name="feature"
+            defaultValue={defaults?.feature ?? ""}
+            list={`${formId ?? "requirement"}-features`}
+            placeholder="Sub-area of the module, e.g. Policy Center"
+            className={inputClass}
+          />
+          <datalist id={`${formId ?? "requirement"}-features`}>
+            {features.map((feature) => (
+              <option key={feature} value={feature} />
+            ))}
+          </datalist>
         </label>
         <label className={labelClass}>
           <span>
