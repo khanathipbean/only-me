@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -66,6 +67,7 @@ describe("scenario routes", () => {
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const response = await createScenarioRoute(
       jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+        requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
         name: "Login flow",
         expectedResult: "User is redirected to dashboard",
         priority: "HIGH",
@@ -92,6 +94,7 @@ describe("scenario routes", () => {
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const missingName = await createScenarioRoute(
       jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+        requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
         expectedResult: "Something",
         priority: "LOW",
       }),
@@ -101,6 +104,7 @@ describe("scenario routes", () => {
 
     const missingExpected = await createScenarioRoute(
       jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+        requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
         name: "No expected result",
         priority: "LOW",
       }),
@@ -117,6 +121,7 @@ describe("scenario routes", () => {
     const created = await (
       await createScenarioRoute(
         jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+          requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
           name: "Checkout flow",
           expectedResult: "Order is placed",
           priority: "CRITICAL",
@@ -153,6 +158,7 @@ describe("scenario routes", () => {
     const created = await (
       await createScenarioRoute(
         jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+          requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
           name: "Archivable scenario",
           expectedResult: "Result",
           priority: "MEDIUM",
@@ -207,6 +213,7 @@ describe("scenario routes", () => {
     const created = await (
       await createScenarioRoute(
         jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+          requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
           name: "Restricted scenario",
           expectedResult: "Result",
           priority: "LOW",
@@ -223,6 +230,7 @@ describe("scenario routes", () => {
       (
         await createScenarioRoute(
           jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+            requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
             name: "x",
             expectedResult: "x",
             priority: "LOW",
@@ -280,6 +288,7 @@ describe("scenario routes", () => {
     const scenario = await (
       await createScenarioRoute(
         jsonRequest(`http://test/api/projects/${projectA.id}/scenarios`, "POST", {
+          requirementId: await findOrCreateUnassignedRequirement(projectA.id, ownerA.id),
           name: "Project A scenario",
           expectedResult: "Result",
           priority: "LOW",

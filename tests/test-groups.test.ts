@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -63,6 +64,7 @@ async function setup(ownerEmail: string, code: string) {
   const scenario = await (
     await createScenarioRoute(
       jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+        requirementId: await findOrCreateUnassignedRequirement(project.id, owner.id),
         name: `Scenario for ${code}`,
         expectedResult: "Result",
         priority: "MEDIUM",
@@ -285,6 +287,7 @@ describe("test group routes", () => {
     const otherScenario = await (
       await createScenarioRoute(
         jsonRequest(`http://test/api/projects/${otherProject.id}/scenarios`, "POST", {
+          requirementId: await findOrCreateUnassignedRequirement(otherProject.id, owner.id),
           name: "Other scenario",
           expectedResult: "Result",
           priority: "LOW",

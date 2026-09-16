@@ -109,12 +109,13 @@ describe("global search", () => {
   it("finds a Test Group by name, with position naming its Scenario", async () => {
     const owner = await createUser("search-owner3@example.com");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { scenario, testGroup } = await seedHierarchy(owner.id, "PRJ-SRCH-3");
+    const { requirement, scenario, testGroup } = await seedHierarchy(owner.id, "PRJ-SRCH-3");
 
     const results = await searchAll(owner.id, "Navigation Group PRJ-SRCH-3");
     const result = results.find((r) => r.type === "TestGroup" && r.id === testGroup.id);
     expect(result).toBeDefined();
-    expect(result?.position).toBe(scenario.name);
+    // Position names the chain above it, which now starts at the Requirement.
+    expect(result?.position).toBe(`${requirement.name} > ${scenario.name}`);
   });
 
   it("finds a Test Case by name and by id, with position naming its Scenario and Test Group", async () => {
