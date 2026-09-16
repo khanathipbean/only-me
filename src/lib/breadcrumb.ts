@@ -69,6 +69,17 @@ export function auditLogBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [...projectBreadcrumb(project), { label: "Audit Trail", href: `/projects/${project.id}/audit-log` }];
 }
 
+export function testRunsBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [...projectBreadcrumb(project), { label: "Test Runs", href: `/projects/${project.id}/runs` }];
+}
+
+export function testRunBreadcrumb(project: NamedEntity, run: NamedEntity): BreadcrumbSegment[] {
+  return [
+    ...testRunsBreadcrumb(project),
+    { label: run.name, href: `/projects/${project.id}/runs/${run.id}` },
+  ];
+}
+
 export function filesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [...projectBreadcrumb(project), { label: "Files", href: `/projects/${project.id}/files` }];
 }

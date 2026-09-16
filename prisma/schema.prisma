@@ -37,6 +37,8 @@ model User {
   uploadedAttachments Attachment[]
   performedImports    ImportLog[]
   uploadedFiles       ProjectFile[]
+  createdTestRuns     TestRun[]     @relation("TestRunCreatedBy")
+  ranTestRunCases     TestRunCase[] @relation("TestRunCaseRanBy")
 }
 
 enum ProjectStatus {
@@ -75,6 +77,7 @@ model Project {
   files         ProjectFile[]
   modules       Module[]
   requirements  Requirement[]
+  testRuns      TestRun[]
 }
 
 model ProjectMember {
@@ -207,6 +210,58 @@ model TestCase {
   updatedBy   User?        @relation("TestCaseUpdatedBy", fields: [updatedById], references: [id])
   steps       TestStep[]
   attachments Attachment[]
+  runCases    TestRunCase[]
+}
+
+/// A round of testing — a Sprint's regression pass, a release check. Exists so
+/// re-running a Test Case records a new result instead of overwriting the last
+/// one: the result of a round belongs to that round, not to the Test Case.
+model TestRun {
+  id          String        @id @default(cuid())
+  projectId   String
+  name        String
+  /// Both optional: a round can be opened before its dates are settled.
+  startsOn    DateTime?
+  endsOn      DateTime?
+  status      TestRunStatus @default(OPEN)
+  closedAt    DateTime?
+  createdById String
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  project   Project       @relation(fields: [projectId], references: [id])
+  createdBy User          @relation("TestRunCreatedBy", fields: [createdById], references: [id])
+  cases     TestRunCase[]
+
+  @@unique([projectId, name])
+  @@index([projectId, status])
+}
+
+enum TestRunStatus {
+  OPEN
+  CLOSED
+}
+
+/// One Test Case inside one round, and the result it got there. The row stays
+/// even if the Test Case is archived later — it is what happened.
+model TestRunCase {
+  id         String     @id @default(cuid())
+  testRunId  String
+  testCaseId String
+  testResult TestResult @default(NOT_RUN)
+  notes      String?
+  ranById    String?
+  ranAt      DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  testRun  TestRun  @relation(fields: [testRunId], references: [id])
+  testCase TestCase @relation(fields: [testCaseId], references: [id])
+  ranBy    User?    @relation("TestRunCaseRanBy", fields: [ranById], references: [id])
+
+  @@unique([testRunId, testCaseId])
+  @@index([testCaseId])
 }
 
 model TestStep {

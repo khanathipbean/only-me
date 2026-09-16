@@ -10,6 +10,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
   const tabs = [
     { label: "Overview", href: overviewHref },
     { label: "Modules", href: `${overviewHref}/modules` },
+    { label: "Test Runs", href: `${overviewHref}/runs` },
     { label: "Dashboard", href: `${overviewHref}/dashboard` },
     { label: "Audit Trail", href: `${overviewHref}/audit-log` },
     { label: "Files", href: `${overviewHref}/files` },
