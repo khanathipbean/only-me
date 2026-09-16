@@ -78,7 +78,22 @@ export type DashboardFilterOptions = {
 
 export type ProjectDashboard = {
   hasAnyData: boolean;
+  /** What the filtered tree contains — i.e. what has Test Cases under it. */
   counts: {
+    modules: number;
+    requirements: number;
+    scenarios: number;
+    testGroups: number;
+    testCases: number;
+  };
+  /**
+   * Every live row in the project, whether or not anything is filed under it
+   * and regardless of the filters. Without this the panel could only ever
+   * report what already has tests: a Module with no Requirements yet is
+   * absent from the tree, so "3 Modules" was being shown for a project that
+   * has 17 of them.
+   */
+  totals: {
     modules: number;
     requirements: number;
     scenarios: number;
@@ -258,8 +273,19 @@ export async function getProjectDashboard(
 
   const tree = Array.from(moduleNodes.values());
 
-  const [moduleOptions, requirementOptions, featureRows, scenarioOptions, testGroupOptions] =
-    await Promise.all([
+  const live = { deletedAt: null } as const;
+  const [
+    moduleOptions,
+    requirementOptions,
+    featureRows,
+    scenarioOptions,
+    testGroupOptions,
+    totalModules,
+    totalRequirements,
+    totalScenarios,
+    totalTestGroups,
+    projectTestCases,
+  ] = await Promise.all([
       prisma.module.findMany({
         where: { projectId, deletedAt: null },
         select: { id: true, name: true },
@@ -286,6 +312,13 @@ export async function getProjectDashboard(
         select: { id: true, name: true, scenarioId: true },
         orderBy: { sequence: "asc" },
       }),
+      prisma.module.count({ where: { projectId, ...live } }),
+      prisma.requirement.count({ where: { projectId, ...live } }),
+      prisma.scenario.count({ where: { projectId, ...live } }),
+      prisma.testGroup.count({ where: { ...live, scenario: { projectId, ...live } } }),
+      prisma.testCase.count({
+        where: { ...live, testGroup: { ...live, scenario: { projectId, ...live } } },
+      }),
     ]);
 
   return {
@@ -296,6 +329,13 @@ export async function getProjectDashboard(
       scenarios: scenarios.length,
       testGroups: scenarios.reduce((sum, scenario) => sum + scenario.testGroups.length, 0),
       testCases: totalTestCases,
+    },
+    totals: {
+      modules: totalModules,
+      requirements: totalRequirements,
+      scenarios: totalScenarios,
+      testGroups: totalTestGroups,
+      testCases: projectTestCases,
     },
     testCasesByResult,
     testCasesByPriority,

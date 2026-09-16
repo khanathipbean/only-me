@@ -158,6 +158,24 @@ describe("project dashboard", () => {
     expect(scenarioANode.testGroups[0].testCaseCount).toBe(2);
   });
 
+  it("counts an empty Module in the project totals but not in the tree counts", async () => {
+    const owner = await createUser("dash-owner-empty@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id, "PRJ-DASH-EMPTY");
+
+    // A Module nobody has filed anything under yet. The tree is built from
+    // Test Cases upwards, so this one can never appear in it — which is how
+    // the panel came to report "3 Modules" for a project that had 17.
+    await prisma.module.create({ data: { projectId: project.id, name: "Planned but empty" } });
+
+    const result = await dashboard(project.id);
+
+    expect(result.counts.modules).toBe(1);
+    expect(result.totals.modules).toBe(2);
+    // Everything else is fully populated by the fixture, so the two agree.
+    expect(result.totals.testCases).toBe(result.counts.testCases);
+  });
+
   it("applies one filter consistently across counts, breakdowns, and the tree", async () => {
     const owner = await createUser("dash-owner2@example.com");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);

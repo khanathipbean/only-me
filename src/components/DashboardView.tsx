@@ -119,6 +119,13 @@ type DashboardData = {
     testGroups: number;
     testCases: number;
   };
+  totals: {
+    modules: number;
+    requirements: number;
+    scenarios: number;
+    testGroups: number;
+    testCases: number;
+  };
   testCasesByResult: Record<string, number>;
   testCasesByPriority: Record<string, number>;
   testCasesByAssignee: Array<{ assigneeId: string | null; assigneeName: string; count: number }>;
@@ -600,14 +607,21 @@ function SummaryWidget({
           (a Module holds Requirements, which hold Scenarios ...), and five
           equal cards said they were five unrelated measures. */}
       <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm text-muted">
-        <CountItem label="Modules" value={data.counts.modules} />
-        <CountItem label="Requirements" value={data.counts.requirements} />
-        <CountItem label="Scenarios" value={data.counts.scenarios} />
-        <CountItem label="Test Groups" value={data.counts.testGroups} />
-        <CountItem label="Test Cases" value={data.counts.testCases} />
+        <CountItem label="Modules" value={data.counts.modules} of={data.totals.modules} />
+        <CountItem
+          label="Requirements"
+          value={data.counts.requirements}
+          of={data.totals.requirements}
+        />
+        <CountItem label="Scenarios" value={data.counts.scenarios} of={data.totals.scenarios} />
+        <CountItem label="Test Groups" value={data.counts.testGroups} of={data.totals.testGroups} />
+        <CountItem label="Test Cases" value={data.counts.testCases} of={data.totals.testCases} />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-x-10 gap-y-8 border-t border-border pt-5 lg:grid-cols-2">
+      {/* Each table keeps its own width instead of splitting whatever the
+          card happens to be: stretched across a wide screen the bars ran on
+          for hundreds of pixels and the numbers drifted away from them. */}
+      <div className="mt-6 grid grid-cols-1 gap-x-12 gap-y-8 border-t border-border pt-5 lg:grid-cols-[repeat(2,minmax(0,380px))] xl:grid-cols-[repeat(3,minmax(0,380px))]">
         <BreakdownTable
           title="Test Result"
           entries={Object.entries(data.testCasesByResult)}
@@ -622,6 +636,7 @@ function SummaryWidget({
           onClick={(key) => onDrillDown("priority", key)}
           barClass={(key) => PRIORITY_BAR_CLASS[key] ?? PRIORITY_BAR_CLASS.LOW}
         />
+        <ModuleProgressTable tree={data.tree} onDrillDown={onDrillDown} />
       </div>
 
       {ASSIGNEE_ENABLED && (
@@ -704,12 +719,96 @@ function StatusBanner({ data }: { data: DashboardData }) {
   );
 }
 
-function CountItem({ label, value }: { label: string; value: number }) {
+/**
+ * Shows "3 of 17" whenever the two differ. `value` counts what has Test Cases
+ * under it and moves with the filters; `of` is how many the project has at
+ * all. Printing only the first read as a project inventory and wasn't one.
+ */
+function CountItem({ label, value, of }: { label: string; value: number; of: number }) {
   return (
     <span className="flex items-baseline gap-1.5">
       <b className="text-base font-semibold tabular-nums text-foreground">{value}</b>
+      {of > value && <span className="tabular-nums">of {of}</span>}
       {label}
     </span>
+  );
+}
+
+/**
+ * Which part of the system under test is furthest behind — the question asked
+ * of a test plan far more often than "how many test cases are there". Derived
+ * from the tree the panel already has, so it costs no extra query.
+ */
+function ModuleProgressTable({
+  tree,
+  onDrillDown,
+}: {
+  tree: TreeModule[];
+  onDrillDown: (key: keyof Filters, value: string) => void;
+}) {
+  const rows = tree
+    .map((moduleNode) => {
+      let run = 0;
+      for (const requirement of moduleNode.requirements) {
+        for (const scenario of requirement.scenarios) {
+          for (const group of scenario.testGroups) {
+            for (const testCase of group.testCases) {
+              if (testCase.testResult !== "NOT_RUN") {
+                run += 1;
+              }
+            }
+          }
+        }
+      }
+      return { id: moduleNode.id, name: moduleNode.name, total: moduleNode.testCaseCount, run };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <table className="w-full max-w-[380px] border-collapse text-sm">
+      <thead>
+        <tr className="text-xs font-semibold uppercase tracking-wide text-muted">
+          <th className="w-[88px] pb-2 text-left font-semibold">Module</th>
+          <th className="pb-2" />
+          <th className="w-14 pb-2 text-right font-semibold">Cases</th>
+          <th className="w-14 pb-2 text-right font-semibold">Run</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => {
+          const pct = row.total > 0 ? Math.round((row.run / row.total) * 100) : 0;
+          return (
+            <tr
+              key={row.id}
+              onClick={() => onDrillDown("moduleId", row.id)}
+              className="cursor-pointer border-t border-border hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+            >
+              <td className="py-1.5 pr-3 truncate" title={row.name}>
+                {row.name}
+              </td>
+              <td className="px-2">
+                <span className="block h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
+                  <span
+                    className="block h-full rounded-full bg-emerald-600 dark:bg-emerald-500"
+                    style={{ width: `${Math.max(pct, row.run > 0 ? 4 : 0)}%` }}
+                  />
+                </span>
+              </td>
+              <td className="py-1.5 text-right font-semibold tabular-nums text-foreground">
+                {row.total}
+              </td>
+              <td className="py-1.5 text-right tabular-nums text-muted">
+                {row.run > 0 ? `${pct}%` : "\u2014"}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -733,13 +832,13 @@ function BreakdownTable({
   barClass: (key: string) => string;
 }) {
   return (
-    <table className="w-full border-collapse text-sm">
+    <table className="w-full max-w-[380px] border-collapse text-sm">
       <thead>
         <tr className="text-xs font-semibold uppercase tracking-wide text-muted">
-          <th className="pb-2 text-left font-semibold">{title}</th>
+          <th className="w-[88px] pb-2 text-left font-semibold">{title}</th>
           <th className="pb-2" />
-          <th className="pb-2 text-right font-semibold">Cases</th>
-          <th className="w-16 pb-2 text-right font-semibold">Share</th>
+          <th className="w-14 pb-2 text-right font-semibold">Cases</th>
+          <th className="w-14 pb-2 text-right font-semibold">Share</th>
         </tr>
       </thead>
       <tbody>
@@ -751,10 +850,10 @@ function BreakdownTable({
               onClick={() => onClick(key)}
               className="cursor-pointer border-t border-border hover:bg-black/[.03] dark:hover:bg-white/[.05]"
             >
-              <td className="py-2 pr-3 whitespace-nowrap capitalize">
+              <td className="py-1.5 pr-3 whitespace-nowrap capitalize">
                 {key.replace(/_/g, " ").toLowerCase()}
               </td>
-              <td className="w-1/2 px-3">
+              <td className="px-2">
                 <span className="block h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
                   <span
                     className={`block h-full rounded-full ${barClass(key)}`}
@@ -762,8 +861,8 @@ function BreakdownTable({
                   />
                 </span>
               </td>
-              <td className="py-2 text-right font-semibold tabular-nums text-foreground">{count}</td>
-              <td className="py-2 text-right tabular-nums text-muted">
+              <td className="py-1.5 text-right font-semibold tabular-nums text-foreground">{count}</td>
+              <td className="py-1.5 text-right tabular-nums text-muted">
                 {count > 0 ? `${pct}%` : "\u2014"}
               </td>
             </tr>
