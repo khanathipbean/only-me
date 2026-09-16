@@ -119,13 +119,6 @@ type DashboardData = {
     testGroups: number;
     testCases: number;
   };
-  totals: {
-    modules: number;
-    requirements: number;
-    scenarios: number;
-    testGroups: number;
-    testCases: number;
-  };
   testCasesByResult: Record<string, number>;
   testCasesByPriority: Record<string, number>;
   testCasesByAssignee: Array<{ assigneeId: string | null; assigneeName: string; count: number }>;
@@ -601,46 +594,34 @@ function SummaryWidget({
 
   return (
     <WidgetShell label="Overview">
-      <StatusBanner data={data} />
-
-      {/* One line, not five tiles: these are a chain of containment
-          (a Module holds Requirements, which hold Scenarios ...), and five
-          equal cards said they were five unrelated measures. */}
-      <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm text-muted">
-        <CountItem label="Modules" value={data.counts.modules} of={data.totals.modules} />
-        <CountItem
-          label="Requirements"
-          value={data.counts.requirements}
-          of={data.totals.requirements}
-        />
-        <CountItem label="Scenarios" value={data.counts.scenarios} of={data.totals.scenarios} />
-        <CountItem label="Test Groups" value={data.counts.testGroups} of={data.totals.testGroups} />
-        <CountItem label="Test Cases" value={data.counts.testCases} of={data.totals.testCases} />
+      {/* Six stats: 2 / 3 / 6 per row divides evenly at every width, where
+          the old 4-column grid would leave a ragged last row. */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
+        <Stat label="Modules" value={data.counts.modules} />
+        <Stat label="Requirements" value={data.counts.requirements} />
+        <Stat label="Scenarios" value={data.counts.scenarios} />
+        <Stat label="Test Groups" value={data.counts.testGroups} />
+        <Stat label="Test Cases" value={data.counts.testCases} />
+        <Stat label="Test Progress" value={`${data.testProgress.toFixed(1)}%`} />
       </div>
 
-      {/* Each table keeps its own width instead of splitting whatever the
-          card happens to be: stretched across a wide screen the bars ran on
-          for hundreds of pixels and the numbers drifted away from them. */}
-      <div className="mt-6 grid grid-cols-1 gap-x-12 gap-y-8 border-t border-border pt-5 lg:grid-cols-[repeat(2,minmax(0,380px))] xl:grid-cols-[repeat(3,minmax(0,380px))]">
-        <BreakdownTable
-          title="Test Result"
+      <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3">
+        <BreakdownList
+          title="By Test Result"
           entries={Object.entries(data.testCasesByResult)}
           total={data.counts.testCases}
           onClick={(key) => onDrillDown("testResult", key)}
-          barClass={(key) => toneBarClass(testResultTone(key))}
+          tone={testResultTone}
         />
-        <BreakdownTable
-          title="Priority"
+        <BreakdownList
+          title="By Priority"
           entries={Object.entries(data.testCasesByPriority)}
           total={data.counts.testCases}
           onClick={(key) => onDrillDown("priority", key)}
-          barClass={(key) => PRIORITY_BAR_CLASS[key] ?? PRIORITY_BAR_CLASS.LOW}
+          tone={priorityTone}
         />
-        <ModuleProgressTable tree={data.tree} onDrillDown={onDrillDown} />
-      </div>
-
-      {ASSIGNEE_ENABLED && (
-        <div className="mt-8">
+        {ASSIGNEE_ENABLED && (
+        <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">By Assignee</h3>
           <ul className="mt-3 flex flex-col gap-2">
             {data.testCasesByAssignee.map((entry) => (
@@ -656,220 +637,61 @@ function SummaryWidget({
             ))}
           </ul>
         </div>
-      )}
+        )}
+      </div>
     </WidgetShell>
   );
 }
 
-/**
- * Priority is an ordered scale, so it gets one hue stepped by rank rather
- * than four unrelated colours. The steps run dark-to-light as importance
- * falls on a light ground and the reverse on a dark one, so the top of the
- * scale is always the step furthest from the surface. Both sets were checked
- * for monotone lightness, visible gaps between steps, and contrast at the
- * pale end rather than picked by eye.
- */
-const PRIORITY_BAR_CLASS: Record<string, string> = {
-  CRITICAL: "bg-[#184f95] dark:bg-[#86b6ef]",
-  HIGH: "bg-[#256abf] dark:bg-[#5598e7]",
-  MEDIUM: "bg-[#3987e5] dark:bg-[#2a78d6]",
-  LOW: "bg-[#86b6ef] dark:bg-[#184f95]",
-};
-
-/** Leads with what needs a person, so the panel opens on a decision rather
- *  than an inventory. */
-function StatusBanner({ data }: { data: DashboardData }) {
-  const total = data.counts.testCases;
-  const failed = data.testCasesByResult.FAILED ?? 0;
-  const blocked = data.testCasesByResult.BLOCKED ?? 0;
-  const notRun = data.testCasesByResult.NOT_RUN ?? 0;
-  const critical = data.testCasesByPriority.CRITICAL ?? 0;
-  const run = total - notRun;
-
-  let accent = "border-l-emerald-500";
-  let headline = "Everything has passed";
-  let detail = `All ${total} test cases have a result.`;
-
-  if (failed > 0 || blocked > 0) {
-    accent = "border-l-red-500";
-    const parts = [failed > 0 ? `${failed} failed` : null, blocked > 0 ? `${blocked} blocked` : null]
-      .filter(Boolean)
-      .join(" and ");
-    headline = `${parts} - needs attention`;
-    detail = `${run} of ${total} test cases run, ${data.testProgress.toFixed(1)}% complete.`;
-  } else if (run === 0) {
-    accent = "border-l-amber-500";
-    headline = "Nothing has been run yet";
-    detail = `${total} test cases are waiting on a first result${
-      critical > 0 ? `, ${critical} of them Critical` : ""
-    }.`;
-  } else if (notRun > 0) {
-    accent = "border-l-amber-500";
-    headline = `${notRun} still to run`;
-    detail = `${run} of ${total} test cases run, ${data.testProgress.toFixed(1)}% complete.`;
-  }
-
+function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div
-      className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border border-border border-l-[3px] ${accent} bg-black/[.02] px-4 py-3 dark:bg-white/[.03]`}
-    >
-      <span className="text-sm font-semibold text-foreground">{headline}</span>
-      <span className="text-sm text-muted">{detail}</span>
+    // A glass pane, not a flat tint: a soft gradient fill plus blur reads as
+    // a pane sitting just above the Card's surface, and the hairline top
+    // edge (brighter than the border's other three sides) is what sells
+    // "glass" rather than "tinted box" — light catching the top of a bevel.
+    <div className="relative overflow-hidden rounded-xl border border-black/[.06] bg-gradient-to-b from-black/[.05] to-black/[.015] p-4 shadow-sm backdrop-blur-sm dark:border-white/10 dark:from-white/[.08] dark:to-white/[.02]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 dark:bg-white/15" />
+      {/* Proportional figures, not tabular-nums: these sit alone, not in a
+          column that needs to align digit-for-digit, and tabular-nums makes
+          a standalone number like "5" look loose at display size. */}
+      <p className="text-3xl font-semibold text-foreground">{value}</p>
+      <p className="mt-0.5 text-xs font-semibold tracking-wide text-muted uppercase">
+        {label}
+      </p>
     </div>
   );
 }
 
-/**
- * Shows "3 of 17" whenever the two differ. `value` counts what has Test Cases
- * under it and moves with the filters; `of` is how many the project has at
- * all. Printing only the first read as a project inventory and wasn't one.
- */
-function CountItem({ label, value, of }: { label: string; value: number; of: number }) {
-  return (
-    <span className="flex items-baseline gap-1.5">
-      <b className="text-base font-semibold tabular-nums text-foreground">{value}</b>
-      {of > value && <span className="tabular-nums">of {of}</span>}
-      {label}
-    </span>
-  );
-}
-
-/**
- * Which part of the system under test is furthest behind — the question asked
- * of a test plan far more often than "how many test cases are there". Derived
- * from the tree the panel already has, so it costs no extra query.
- */
-function ModuleProgressTable({
-  tree,
-  onDrillDown,
-}: {
-  tree: TreeModule[];
-  onDrillDown: (key: keyof Filters, value: string) => void;
-}) {
-  const rows = tree
-    .map((moduleNode) => {
-      let run = 0;
-      for (const requirement of moduleNode.requirements) {
-        for (const scenario of requirement.scenarios) {
-          for (const group of scenario.testGroups) {
-            for (const testCase of group.testCases) {
-              if (testCase.testResult !== "NOT_RUN") {
-                run += 1;
-              }
-            }
-          }
-        }
-      }
-      return { id: moduleNode.id, name: moduleNode.name, total: moduleNode.testCaseCount, run };
-    })
-    .sort((a, b) => b.total - a.total);
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  return (
-    <table className="w-full max-w-[380px] border-collapse text-sm">
-      <thead>
-        <tr className="text-xs font-semibold uppercase tracking-wide text-muted">
-          <th className="w-[88px] pb-2 text-left font-semibold">Module</th>
-          <th className="pb-2" />
-          <th className="w-14 pb-2 text-right font-semibold">Cases</th>
-          <th className="w-14 pb-2 text-right font-semibold">Run</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => {
-          const pct = row.total > 0 ? Math.round((row.run / row.total) * 100) : 0;
-          return (
-            <tr
-              key={row.id}
-              onClick={() => onDrillDown("moduleId", row.id)}
-              className="cursor-pointer border-t border-border hover:bg-black/[.03] dark:hover:bg-white/[.05]"
-            >
-              <td className="py-1.5 pr-3 truncate" title={row.name}>
-                {row.name}
-              </td>
-              <td className="px-2">
-                <span className="block h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
-                  <span
-                    className="block h-full rounded-full bg-emerald-600 dark:bg-emerald-500"
-                    style={{ width: `${Math.max(pct, row.run > 0 ? 4 : 0)}%` }}
-                  />
-                </span>
-              </td>
-              <td className="py-1.5 text-right font-semibold tabular-nums text-foreground">
-                {row.total}
-              </td>
-              <td className="py-1.5 text-right tabular-nums text-muted">
-                {row.run > 0 ? `${pct}%` : "\u2014"}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-/**
- * The same numbers as the old meter list, read as a table: a share column
- * answers "how much of the whole" without the reader estimating bar lengths,
- * and a dash for an empty class says "none" more plainly than an empty bar
- * beside a zero.
- */
-function BreakdownTable({
+function BreakdownList({
   title,
   entries,
   total,
   onClick,
-  barClass,
+  tone,
 }: {
   title: string;
   entries: [string, number][];
   total: number;
   onClick: (key: string) => void;
-  barClass: (key: string) => string;
+  tone: (value: string) => Tone;
 }) {
   return (
-    <table className="w-full max-w-[380px] border-collapse text-sm">
-      <thead>
-        <tr className="text-xs font-semibold uppercase tracking-wide text-muted">
-          <th className="w-[88px] pb-2 text-left font-semibold">{title}</th>
-          <th className="pb-2" />
-          <th className="w-14 pb-2 text-right font-semibold">Cases</th>
-          <th className="w-14 pb-2 text-right font-semibold">Share</th>
-        </tr>
-      </thead>
-      <tbody>
-        {entries.map(([key, count]) => {
-          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-          return (
-            <tr
-              key={key}
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
+      <ul className="mt-3 flex flex-col gap-2">
+        {entries.map(([key, count]) => (
+          <li key={key}>
+            <MeterRow
+              label={key.replace(/_/g, " ")}
+              count={count}
+              total={total}
+              tone={tone(key)}
               onClick={() => onClick(key)}
-              className="cursor-pointer border-t border-border hover:bg-black/[.03] dark:hover:bg-white/[.05]"
-            >
-              <td className="py-1.5 pr-3 whitespace-nowrap capitalize">
-                {key.replace(/_/g, " ").toLowerCase()}
-              </td>
-              <td className="px-2">
-                <span className="block h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
-                  <span
-                    className={`block h-full rounded-full ${barClass(key)}`}
-                    style={{ width: `${Math.max(pct, count > 0 ? 4 : 0)}%` }}
-                  />
-                </span>
-              </td>
-              <td className="py-1.5 text-right font-semibold tabular-nums text-foreground">{count}</td>
-              <td className="py-1.5 text-right tabular-nums text-muted">
-                {count > 0 ? `${pct}%` : "\u2014"}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+            />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
