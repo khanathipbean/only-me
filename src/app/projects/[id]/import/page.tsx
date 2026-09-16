@@ -30,11 +30,21 @@ export default async function ImportPage({
         segments={importBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
       <PageHeader
-        title="Import Scenarios / Test Groups / Test Cases"
+        title="Import"
         subtitle={
-          <a href="/api/import/template" className="text-brand hover:underline">
-            Download the import template
-          </a>
+          <span className="flex flex-col gap-1">
+            {/* Naming all five levels in the title made it wrap; the sheet
+                fills the whole hierarchy, so the title just says Import and
+                the levels are spelled out here. */}
+            <span>
+              One sheet fills the whole hierarchy — Modules, Requirements, Scenarios, Test
+              Groups and Test Cases. Existing rows are matched by name; the Module and
+              Requirement columns may be left blank.
+            </span>
+            <a href="/api/import/template" className="text-brand hover:underline">
+              Download the import template
+            </a>
+          </span>
         }
       />
 
