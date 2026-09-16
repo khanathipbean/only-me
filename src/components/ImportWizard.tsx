@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
+import { TrashIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
 import { checkboxClass, inputClass, textareaClass } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
@@ -104,6 +105,10 @@ export function ImportWizard({ projectId }: { projectId: string }) {
   // of whether anything actually changed.
   const [bulkActionMessage, setBulkActionMessage] = useState<string | null>(null);
   const bulkActionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Needed to reset the native input: clearing `file` state alone leaves the
+  // browser still showing the chosen filename, and re-picking the same file
+  // fires no change event, so the page would look stuck.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -112,6 +117,60 @@ export function ImportWizard({ projectId }: { projectId: string }) {
       }
     };
   }, []);
+
+  /** Recomputed after a row is dropped, so the totals above the list keep
+   *  describing what is actually still there. */
+  function summarise(rows: PreviewRow[]) {
+    return {
+      total: rows.length,
+      valid: rows.filter((row) => row.valid).length,
+      invalid: rows.filter((row) => !row.valid).length,
+      duplicates: rows.filter((row) => row.duplicate).length,
+    };
+  }
+
+  /**
+   * Takes the row out of the list entirely, unlike "Skip this row" which
+   * keeps it visible and reports it as skipped. A removed row is never sent
+   * to confirm at all, so its choices go with it.
+   */
+  function removeRow(rowNumber: number) {
+    const remaining = (preview?.rows ?? []).filter((row) => row.rowNumber !== rowNumber);
+
+    // Nothing left to import: back to the file picker rather than an empty
+    // list with a Confirm button that would write nothing.
+    if (remaining.length === 0) {
+      resetImport();
+      return;
+    }
+
+    setPreview({ rows: remaining, summary: summarise(remaining) });
+    setRowChoices((prev) => {
+      const next = { ...prev };
+      delete next[rowNumber];
+      return next;
+    });
+    setRowData((prev) => {
+      const next = { ...prev };
+      delete next[rowNumber];
+      return next;
+    });
+  }
+
+  /** Back to an empty form: drops the parsed rows and every per-row choice
+   *  made on them, so nothing from the discarded file can reach a confirm. */
+  function resetImport() {
+    setFile(null);
+    setPreview(null);
+    setRowChoices({});
+    setRowData({});
+    setSummary(null);
+    setError(null);
+    setBulkActionMessage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
 
   async function handlePreview() {
     if (!file) {
@@ -270,6 +329,10 @@ export function ImportWizard({ projectId }: { projectId: string }) {
             <p className="text-xs text-muted">Skipped</p>
           </div>
         </div>
+        {/* Otherwise this screen is a dead end until the page is reloaded. */}
+        <Button type="button" variant="secondary" onClick={resetImport} className="mt-4">
+          Import another file
+        </Button>
       </Card>
     );
   }
@@ -279,6 +342,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
       <Card>
         <div className="flex flex-wrap items-center gap-3">
           <input
+            ref={fileInputRef}
             type="file"
             accept=".csv,.xlsx"
             disabled={loading}
@@ -288,6 +352,13 @@ export function ImportWizard({ projectId }: { projectId: string }) {
           <Button type="button" onClick={handlePreview} disabled={!file || loading}>
             {loading && !preview ? "Loading…" : "Preview"}
           </Button>
+          {/* Only once there is something to clear, like every other list's
+              Clear control in the app. */}
+          {(file || preview) && (
+            <Button type="button" variant="secondary" onClick={resetImport} disabled={loading}>
+              Clear
+            </Button>
+          )}
         </div>
         {error && (
           <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -358,6 +429,16 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                     {row.valid && row.duplicate && <Badge tone="amber">Duplicate</Badge>}
                     {row.valid && !row.duplicate && <Badge tone="green">New</Badge>}
                     {!row.valid && <Badge tone="red">Invalid — fix below or skip</Badge>}
+                    <IconButton
+                      type="button"
+                      onClick={() => removeRow(row.rowNumber)}
+                      disabled={loading}
+                      title="Remove this row from the import"
+                      aria-label={`Remove row ${row.rowNumber} from the import`}
+                      className="ml-auto"
+                    >
+                      <TrashIcon />
+                    </IconButton>
                   </div>
 
                   {row.errors.length > 0 && (
@@ -468,14 +549,16 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                 {error}
               </p>
             )}
-            <Button
-              type="button"
-              onClick={handleConfirm}
-              disabled={loading}
-              className="self-start"
-            >
-              {loading ? "Importing…" : "Confirm Import"}
-            </Button>
+            {/* Repeated at the foot of the list: after scrolling through the
+                rows, the Clear button at the top is far out of sight. */}
+            <div className="flex flex-wrap gap-2 self-start">
+              <Button type="button" onClick={handleConfirm} disabled={loading}>
+                {loading ? "Importing…" : "Confirm Import"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={resetImport} disabled={loading}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </>
       )}
