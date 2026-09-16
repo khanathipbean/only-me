@@ -167,8 +167,14 @@ export function Select({
         setOpen(false);
       }
     }
-    // Fixed coordinates go stale as soon as anything scrolls or resizes.
-    function onScrollOrResize() {
+    // Fixed coordinates go stale as soon as an ancestor scrolls or the window
+    // resizes — but the list scrolling inside itself moves nothing, and the
+    // capture-phase listener sees that too. Without this guard, scrolling a
+    // list long enough to need scrolling closed it on the first wheel tick.
+    function onScrollOrResize(event: Event) {
+      if (event.type === "scroll" && listRef.current?.contains(event.target as Node)) {
+        return;
+      }
       setOpen(false);
     }
     document.addEventListener("mousedown", onPointerDown);
