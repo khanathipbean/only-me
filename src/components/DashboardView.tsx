@@ -594,34 +594,38 @@ function SummaryWidget({
 
   return (
     <WidgetShell label="Overview">
-      {/* Six stats: 2 / 3 / 6 per row divides evenly at every width, where
-          the old 4-column grid would leave a ragged last row. */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Modules" value={data.counts.modules} />
-        <Stat label="Requirements" value={data.counts.requirements} />
-        <Stat label="Scenarios" value={data.counts.scenarios} />
-        <Stat label="Test Groups" value={data.counts.testGroups} />
-        <Stat label="Test Cases" value={data.counts.testCases} />
-        <Stat label="Test Progress" value={`${data.testProgress.toFixed(1)}%`} />
+      <StatusBanner data={data} />
+
+      {/* One line, not five tiles: these are a chain of containment
+          (a Module holds Requirements, which hold Scenarios ...), and five
+          equal cards said they were five unrelated measures. */}
+      <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm text-muted">
+        <CountItem label="Modules" value={data.counts.modules} />
+        <CountItem label="Requirements" value={data.counts.requirements} />
+        <CountItem label="Scenarios" value={data.counts.scenarios} />
+        <CountItem label="Test Groups" value={data.counts.testGroups} />
+        <CountItem label="Test Cases" value={data.counts.testCases} />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3">
-        <BreakdownList
-          title="By Test Result"
+      <div className="mt-6 grid grid-cols-1 gap-x-10 gap-y-8 border-t border-border pt-5 lg:grid-cols-2">
+        <BreakdownTable
+          title="Test Result"
           entries={Object.entries(data.testCasesByResult)}
           total={data.counts.testCases}
           onClick={(key) => onDrillDown("testResult", key)}
-          tone={testResultTone}
+          barClass={(key) => toneBarClass(testResultTone(key))}
         />
-        <BreakdownList
-          title="By Priority"
+        <BreakdownTable
+          title="Priority"
           entries={Object.entries(data.testCasesByPriority)}
           total={data.counts.testCases}
           onClick={(key) => onDrillDown("priority", key)}
-          tone={priorityTone}
+          barClass={(key) => PRIORITY_BAR_CLASS[key] ?? PRIORITY_BAR_CLASS.LOW}
         />
-        {ASSIGNEE_ENABLED && (
-        <div>
+      </div>
+
+      {ASSIGNEE_ENABLED && (
+        <div className="mt-8">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">By Assignee</h3>
           <ul className="mt-3 flex flex-col gap-2">
             {data.testCasesByAssignee.map((entry) => (
@@ -637,61 +641,136 @@ function SummaryWidget({
             ))}
           </ul>
         </div>
-        )}
-      </div>
+      )}
     </WidgetShell>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+/**
+ * Priority is an ordered scale, so it gets one hue stepped by rank rather
+ * than four unrelated colours. The steps run dark-to-light as importance
+ * falls on a light ground and the reverse on a dark one, so the top of the
+ * scale is always the step furthest from the surface. Both sets were checked
+ * for monotone lightness, visible gaps between steps, and contrast at the
+ * pale end rather than picked by eye.
+ */
+const PRIORITY_BAR_CLASS: Record<string, string> = {
+  CRITICAL: "bg-[#184f95] dark:bg-[#86b6ef]",
+  HIGH: "bg-[#256abf] dark:bg-[#5598e7]",
+  MEDIUM: "bg-[#3987e5] dark:bg-[#2a78d6]",
+  LOW: "bg-[#86b6ef] dark:bg-[#184f95]",
+};
+
+/** Leads with what needs a person, so the panel opens on a decision rather
+ *  than an inventory. */
+function StatusBanner({ data }: { data: DashboardData }) {
+  const total = data.counts.testCases;
+  const failed = data.testCasesByResult.FAILED ?? 0;
+  const blocked = data.testCasesByResult.BLOCKED ?? 0;
+  const notRun = data.testCasesByResult.NOT_RUN ?? 0;
+  const critical = data.testCasesByPriority.CRITICAL ?? 0;
+  const run = total - notRun;
+
+  let accent = "border-l-emerald-500";
+  let headline = "Everything has passed";
+  let detail = `All ${total} test cases have a result.`;
+
+  if (failed > 0 || blocked > 0) {
+    accent = "border-l-red-500";
+    const parts = [failed > 0 ? `${failed} failed` : null, blocked > 0 ? `${blocked} blocked` : null]
+      .filter(Boolean)
+      .join(" and ");
+    headline = `${parts} - needs attention`;
+    detail = `${run} of ${total} test cases run, ${data.testProgress.toFixed(1)}% complete.`;
+  } else if (run === 0) {
+    accent = "border-l-amber-500";
+    headline = "Nothing has been run yet";
+    detail = `${total} test cases are waiting on a first result${
+      critical > 0 ? `, ${critical} of them Critical` : ""
+    }.`;
+  } else if (notRun > 0) {
+    accent = "border-l-amber-500";
+    headline = `${notRun} still to run`;
+    detail = `${run} of ${total} test cases run, ${data.testProgress.toFixed(1)}% complete.`;
+  }
+
   return (
-    // A glass pane, not a flat tint: a soft gradient fill plus blur reads as
-    // a pane sitting just above the Card's surface, and the hairline top
-    // edge (brighter than the border's other three sides) is what sells
-    // "glass" rather than "tinted box" — light catching the top of a bevel.
-    <div className="relative overflow-hidden rounded-xl border border-black/[.06] bg-gradient-to-b from-black/[.05] to-black/[.015] p-4 shadow-sm backdrop-blur-sm dark:border-white/10 dark:from-white/[.08] dark:to-white/[.02]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 dark:bg-white/15" />
-      {/* Proportional figures, not tabular-nums: these sit alone, not in a
-          column that needs to align digit-for-digit, and tabular-nums makes
-          a standalone number like "5" look loose at display size. */}
-      <p className="text-3xl font-semibold text-foreground">{value}</p>
-      <p className="mt-0.5 text-xs font-semibold tracking-wide text-muted uppercase">
-        {label}
-      </p>
+    <div
+      className={`flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border border-border border-l-[3px] ${accent} bg-black/[.02] px-4 py-3 dark:bg-white/[.03]`}
+    >
+      <span className="text-sm font-semibold text-foreground">{headline}</span>
+      <span className="text-sm text-muted">{detail}</span>
     </div>
   );
 }
 
-function BreakdownList({
+function CountItem({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="flex items-baseline gap-1.5">
+      <b className="text-base font-semibold tabular-nums text-foreground">{value}</b>
+      {label}
+    </span>
+  );
+}
+
+/**
+ * The same numbers as the old meter list, read as a table: a share column
+ * answers "how much of the whole" without the reader estimating bar lengths,
+ * and a dash for an empty class says "none" more plainly than an empty bar
+ * beside a zero.
+ */
+function BreakdownTable({
   title,
   entries,
   total,
   onClick,
-  tone,
+  barClass,
 }: {
   title: string;
   entries: [string, number][];
   total: number;
   onClick: (key: string) => void;
-  tone: (value: string) => Tone;
+  barClass: (key: string) => string;
 }) {
   return (
-    <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
-      <ul className="mt-3 flex flex-col gap-2">
-        {entries.map(([key, count]) => (
-          <li key={key}>
-            <MeterRow
-              label={key.replace(/_/g, " ")}
-              count={count}
-              total={total}
-              tone={tone(key)}
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="text-xs font-semibold uppercase tracking-wide text-muted">
+          <th className="pb-2 text-left font-semibold">{title}</th>
+          <th className="pb-2" />
+          <th className="pb-2 text-right font-semibold">Cases</th>
+          <th className="w-16 pb-2 text-right font-semibold">Share</th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map(([key, count]) => {
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          return (
+            <tr
+              key={key}
               onClick={() => onClick(key)}
-            />
-          </li>
-        ))}
-      </ul>
-    </div>
+              className="cursor-pointer border-t border-border hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+            >
+              <td className="py-2 pr-3 whitespace-nowrap capitalize">
+                {key.replace(/_/g, " ").toLowerCase()}
+              </td>
+              <td className="w-1/2 px-3">
+                <span className="block h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
+                  <span
+                    className={`block h-full rounded-full ${barClass(key)}`}
+                    style={{ width: `${Math.max(pct, count > 0 ? 4 : 0)}%` }}
+                  />
+                </span>
+              </td>
+              <td className="py-2 text-right font-semibold tabular-nums text-foreground">{count}</td>
+              <td className="py-2 text-right tabular-nums text-muted">
+                {count > 0 ? `${pct}%` : "\u2014"}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
