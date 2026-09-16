@@ -14,7 +14,8 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { projectBreadcrumb } from "@/lib/breadcrumb";
 import { Card } from "@/components/ui/Card";
 import { DetailField, DetailFields } from "@/components/ui/DetailFields";
-import { Button } from "@/components/ui/Button";
+
+import { SubmitButton } from "@/components/SubmitButton";
 import { Modal } from "@/components/ui/Modal";
 import { ProjectForm } from "@/components/forms/ProjectForm";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
@@ -153,18 +154,18 @@ export default async function ProjectDetailPage({
         <div className="flex justify-end border-t border-border pt-4">
           {project.deletedAt ? (
             <ConfirmForm action={restore} confirmMessage="Restore this project?">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel="Restoring…">
                 Restore
-              </Button>
+              </SubmitButton>
             </ConfirmForm>
           ) : (
             <ConfirmForm
               action={archive}
               confirmMessage="Archive this project? Its Modules, Requirements, Scenarios, Test Groups, and Test Cases are kept and can be restored later."
             >
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel="Archiving…">
                 Archive
-              </Button>
+              </SubmitButton>
             </ConfirmForm>
           )}
         </div>

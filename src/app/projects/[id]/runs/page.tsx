@@ -21,7 +21,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { RowActions } from "@/components/ui/RowActions";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+
+import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import {
@@ -225,7 +226,7 @@ export default async function TestRunsPage({
               </label>
               <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
                 <DialogCloseButton />
-                <Button type="submit">Create Run</Button>
+                <SubmitButton pendingLabel="Creating…">Create Run</SubmitButton>
               </div>
             </form>
           </Modal>
@@ -392,9 +393,9 @@ export default async function TestRunsPage({
                             </label>
                             <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
                               <DialogCloseButton />
-                              <Button type="submit" disabled={run.status === "CLOSED"}>
+                              <SubmitButton disabled={run.status === "CLOSED"}>
                                 Save
-                              </Button>
+                              </SubmitButton>
                             </div>
                           </form>
 
@@ -404,18 +405,18 @@ export default async function TestRunsPage({
                                 action={actions.close}
                                 confirmMessage="Close this run? Its results can't be changed until it is reopened."
                               >
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary" pendingLabel="Closing…">
                                   Close run
-                                </Button>
+                                </SubmitButton>
                               </ConfirmForm>
                             ) : (
                               <ConfirmForm
                                 action={actions.reopen}
                                 confirmMessage="Reopen this run so its results can be changed again?"
                               >
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary" pendingLabel="Reopening…">
                                   Reopen run
-                                </Button>
+                                </SubmitButton>
                               </ConfirmForm>
                             )}
                             {showArchived ? (
@@ -423,18 +424,18 @@ export default async function TestRunsPage({
                                 action={actions.restore}
                                 confirmMessage="Restore this run?"
                               >
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary" pendingLabel="Restoring…">
                                   Restore
-                                </Button>
+                                </SubmitButton>
                               </ConfirmForm>
                             ) : (
                               <ConfirmForm
                                 action={actions.archive}
                                 confirmMessage="Archive this run? Its results are kept."
                               >
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary" pendingLabel="Archiving…">
                                   Archive
-                                </Button>
+                                </SubmitButton>
                               </ConfirmForm>
                             )}
                           </section>

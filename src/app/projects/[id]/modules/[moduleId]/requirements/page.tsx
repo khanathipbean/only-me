@@ -30,6 +30,7 @@ import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { TrashIcon } from "@/components/icons";
 import { PRIORITY_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
@@ -416,18 +417,18 @@ export default async function RequirementsPage({
                                 action={actions.restore}
                                 confirmMessage="Restore this Requirement?"
                               >
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary" pendingLabel="Restoring…">
                                   Restore
-                                </Button>
+                                </SubmitButton>
                               </ConfirmForm>
                             ) : (
                               <ConfirmForm
                                 action={actions.archive}
                                 confirmMessage="Archive this Requirement?"
                               >
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary" pendingLabel="Archiving…">
                                   Archive
-                                </Button>
+                                </SubmitButton>
                               </ConfirmForm>
                             )}
                             <ConfirmForm

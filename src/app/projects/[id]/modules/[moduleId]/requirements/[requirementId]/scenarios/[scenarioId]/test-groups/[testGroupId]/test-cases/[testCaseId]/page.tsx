@@ -36,7 +36,7 @@ import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
-import { Button, IconButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
@@ -344,9 +344,9 @@ export default async function TestCaseDetailPage({
             Notes
             <textarea name="notes" defaultValue={testCase.notes ?? ""} className={textareaClass} />
           </label>
-          <Button type="submit" className="self-start">
+          <SubmitButton className="self-start">
             Update Result
-          </Button>
+          </SubmitButton>
         </form>
       </Card>
 
@@ -433,33 +433,33 @@ export default async function TestCaseDetailPage({
                   ariaLabel="Move to another Test Group"
                 />
               </label>
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel="Moving…">
                 Move
-              </Button>
+              </SubmitButton>
             </div>
           </ConfirmForm>
 
           <div className="flex flex-wrap gap-2 border-t border-border pt-4">
             <ConfirmForm action={duplicate} confirmMessage="Duplicate this Test Case?">
-              <Button type="submit" variant="secondary">
+              <SubmitButton variant="secondary" pendingLabel="Duplicating…">
                 Duplicate
-              </Button>
+              </SubmitButton>
             </ConfirmForm>
 
             {testCase.deletedAt ? (
               <ConfirmForm action={restore} confirmMessage="Restore this Test Case?">
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel="Restoring…">
                   Restore
-                </Button>
+                </SubmitButton>
               </ConfirmForm>
             ) : (
               <ConfirmForm
                 action={archive}
                 confirmMessage="Archive this Test Case? It can be restored later."
               >
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel="Archiving…">
                   Archive
-                </Button>
+                </SubmitButton>
               </ConfirmForm>
             )}
 

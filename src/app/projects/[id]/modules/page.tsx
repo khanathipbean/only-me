@@ -326,18 +326,18 @@ export default async function ModulesPage({
                                   action={actions.restore}
                                   confirmMessage="Restore this Module?"
                                 >
-                                  <Button type="submit" variant="secondary">
+                                  <SubmitButton variant="secondary" pendingLabel="Restoring…">
                                     Restore
-                                  </Button>
+                                  </SubmitButton>
                                 </ConfirmForm>
                               ) : (
                                 <ConfirmForm
                                   action={actions.archive}
                                   confirmMessage="Archive this Module?"
                                 >
-                                  <Button type="submit" variant="secondary">
+                                  <SubmitButton variant="secondary" pendingLabel="Archiving…">
                                     Archive
-                                  </Button>
+                                  </SubmitButton>
                                 </ConfirmForm>
                               )}
                               <ConfirmForm

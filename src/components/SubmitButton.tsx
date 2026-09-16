@@ -17,12 +17,13 @@ import { SpinnerIcon } from "@/components/icons";
 export function SubmitButton({
   children,
   pendingLabel = "Saving…",
+  disabled = false,
   ...props
-}: Omit<ComponentProps<typeof Button>, "type" | "disabled"> & { pendingLabel?: ReactNode }) {
+}: Omit<ComponentProps<typeof Button>, "type"> & { pendingLabel?: ReactNode }) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" disabled={pending} {...props}>
+    <Button type="submit" disabled={disabled || pending} {...props}>
       {pending && <SpinnerIcon className="size-4 animate-spin" />}
       {pending ? pendingLabel : children}
     </Button>

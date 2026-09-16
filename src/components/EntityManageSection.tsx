@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ConfirmForm } from "@/components/ConfirmForm";
-import { Button, IconButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { TrashIcon } from "@/components/icons";
 import { labelClass } from "@/lib/ui";
@@ -79,9 +80,9 @@ export function EntityManageSection({
                 ariaLabel={moveLabel}
               />
             </label>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel="Moving…">
               Move
-            </Button>
+            </SubmitButton>
           </div>
         </ConfirmForm>
       )}
@@ -89,22 +90,22 @@ export function EntityManageSection({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
         <ConfirmForm action={duplicateAction} confirmMessage={duplicateConfirm}>
-          <Button type="submit" variant="secondary">
+          <SubmitButton variant="secondary" pendingLabel="Duplicating…">
             Duplicate
-          </Button>
+          </SubmitButton>
         </ConfirmForm>
 
         {isArchived ? (
           <ConfirmForm action={restoreAction} confirmMessage={restoreConfirm}>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel="Restoring…">
               Restore
-            </Button>
+            </SubmitButton>
           </ConfirmForm>
         ) : (
           <ConfirmForm action={archiveAction} confirmMessage={archiveConfirm}>
-            <Button type="submit" variant="secondary">
+            <SubmitButton variant="secondary" pendingLabel="Archiving…">
               Archive
-            </Button>
+            </SubmitButton>
           </ConfirmForm>
         )}
 

@@ -21,7 +21,8 @@ import { nameOr, testRunBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+
+import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { TEST_RESULT_OPTIONS, PRIORITY_OPTIONS } from "@/lib/enums";
@@ -330,7 +331,7 @@ export default async function TestRunPage({
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
                       <DialogCloseButton />
-                      <Button type="submit">Add to run</Button>
+                      <SubmitButton pendingLabel="Adding…">Add to run</SubmitButton>
                     </div>
                   </form>
                 )}
@@ -341,15 +342,15 @@ export default async function TestRunPage({
                 action={closeRun}
                 confirmMessage="Close this run? Its results can't be changed until it is reopened."
               >
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel="Closing…">
                   Close run
-                </Button>
+                </SubmitButton>
               </ConfirmForm>
             ) : (
               <ConfirmForm action={reopenRun} confirmMessage="Reopen this run?">
-                <Button type="submit" variant="secondary">
+                <SubmitButton variant="secondary" pendingLabel="Reopening…">
                   Reopen run
-                </Button>
+                </SubmitButton>
               </ConfirmForm>
             )}
           </>
@@ -433,9 +434,9 @@ export default async function TestRunPage({
                                   value={row.notes ?? ""}
                                   readOnly
                                 />
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary">
                                   Save
-                                </Button>
+                                </SubmitButton>
                               </form>
                             ) : (
                               <Badge tone={testResultTone(row.testResult)}>
@@ -455,9 +456,9 @@ export default async function TestRunPage({
                                 action={actions.remove}
                                 confirmMessage="Take this case out of the run?"
                               >
-                                <Button type="submit" variant="secondary">
+                                <SubmitButton variant="secondary" pendingLabel="Removing…">
                                   Remove
-                                </Button>
+                                </SubmitButton>
                               </ConfirmForm>
                             ) : (
                               "—"

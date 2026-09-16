@@ -16,7 +16,7 @@ import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { ResultCount } from "@/components/ui/ResultCount";
-import { Button } from "@/components/ui/Button";
+
 import { SubmitButton } from "@/components/SubmitButton";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { Select } from "@/components/ui/Select";
@@ -301,7 +301,7 @@ export default async function MembersPage({
                         <ProjectAccessChecklist projects={projects} current={member.memberships} />
                         <div className="mt-2 flex justify-end gap-2">
                           <DialogCloseButton />
-                          <Button type="submit">Save</Button>
+                          <SubmitButton>Save</SubmitButton>
                         </div>
                       </form>
                     </Modal>
