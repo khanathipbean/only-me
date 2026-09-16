@@ -79,6 +79,8 @@ export default async function TestRunPage({
     notFound();
   }
 
+  // `picking` only survives a filter change so the dialog reopens after the
+  // navigation it causes; it no longer decides whether the list is loaded.
   const isPicking = picking === "1";
   const hasFilters = Boolean(moduleId || requirementId || priority || lastResult || search);
 
@@ -86,15 +88,13 @@ export default async function TestRunPage({
     listCasesInRun(runId),
     listModulesForProject(projectId),
     listRequirementsForProject(projectId),
-    isPicking
-      ? listCandidateCases(projectId, runId, {
-          moduleId,
-          requirementId,
-          priority,
-          lastResult: lastResult as TestResult | undefined,
-          search,
-        })
-      : Promise.resolve([]),
+    listCandidateCases(projectId, runId, {
+      moduleId,
+      requirementId,
+      priority,
+      lastResult: lastResult as TestResult | undefined,
+      search,
+    }),
   ]);
 
   const isOpen = run.status === "OPEN";
@@ -224,17 +224,28 @@ export default async function TestRunPage({
                 triggerLabel="+ Add test cases"
                 triggerVariant="secondary"
                 title="Add test cases to this run"
+                width="lg"
                 openOnMount={isPicking}
               >
-                <FilterForm showClear={hasFilters} action={basePath}>
+                {/* A fixed four-column grid rather than flex-wrap: the fields
+                    have different natural widths, so wrapping left one field
+                    stranded on a row of its own. */}
+                <FilterForm
+                  showClear={hasFilters}
+                  action={basePath}
+                  className="!grid grid-cols-2 gap-3 sm:grid-cols-4"
+                >
                   <input type="hidden" name="picking" value="1" />
-                  <input
-                    type="text"
-                    name="search"
-                    placeholder="Search case name"
-                    defaultValue={search}
-                    className={`${inputClass} max-w-xs`}
-                  />
+                  <label className={`${labelClass} col-span-2 sm:col-span-4`}>
+                    Search
+                    <input
+                      type="text"
+                      name="search"
+                      placeholder="Search case name"
+                      defaultValue={search}
+                      className={inputClass}
+                    />
+                  </label>
                   <label className={labelClass}>
                     Module
                     <Select
@@ -245,7 +256,6 @@ export default async function TestRunPage({
                         ...modules.map((row) => ({ value: row.id, label: row.name })),
                       ]}
                       ariaLabel="Module"
-                      className="max-w-44"
                     />
                   </label>
                   <label className={labelClass}>
@@ -263,7 +273,6 @@ export default async function TestRunPage({
                           })),
                       ]}
                       ariaLabel="Requirement"
-                      className="max-w-56"
                     />
                   </label>
                   <label className={labelClass}>
@@ -273,7 +282,6 @@ export default async function TestRunPage({
                       defaultValue={priority ?? ""}
                       options={[{ value: "", label: "All" }, ...PRIORITY_OPTIONS]}
                       ariaLabel="Priority"
-                      className="max-w-36"
                     />
                   </label>
                   <label className={labelClass}>
@@ -283,23 +291,21 @@ export default async function TestRunPage({
                       defaultValue={lastResult ?? ""}
                       options={[{ value: "", label: "All" }, ...TEST_RESULT_OPTIONS]}
                       ariaLabel="Last result"
-                      className="max-w-40"
                     />
                   </label>
                 </FilterForm>
 
-                {!isPicking ? (
-                  <p className={`${mutedTextClass} mt-4`}>
-                    Choose filters above, then Apply to list the cases that match.
-                  </p>
-                ) : candidates.length === 0 ? (
-                  <p className={`${mutedTextClass} mt-4`}>
-                    Nothing left to add — every case matching those filters is already in this run.
+                {candidates.length === 0 ? (
+                  <p className={`${mutedTextClass} mt-5 border-t border-border pt-5`}>
+                    {hasFilters
+                      ? "No case matches those filters, or every one that does is already in this run."
+                      : "Every test case in this project is already in this run."}
                   </p>
                 ) : (
-                  <form action={addCases} className="mt-4 flex flex-col gap-3">
+                  <form action={addCases} className="mt-5 flex flex-col gap-3 border-t border-border pt-5">
                     <p className={mutedTextClass}>
-                      {candidates.length} case(s) match. Untick any you don&apos;t want.
+                      {candidates.length} case{candidates.length === 1 ? "" : "s"} available
+                      {hasFilters ? " for these filters" : ""}. Untick any you don&apos;t want.
                     </p>
                     <div className="max-h-80 overflow-y-auto rounded-md border border-border">
                       {candidates.map((candidate) => (
@@ -329,9 +335,11 @@ export default async function TestRunPage({
                         </label>
                       ))}
                     </div>
-                    <div className="flex flex-wrap justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <DialogCloseButton />
-                      <SubmitButton pendingLabel="Adding…">Add to run</SubmitButton>
+                      <SubmitButton pendingLabel="Adding…">
+                        Add {candidates.length} to run
+                      </SubmitButton>
                     </div>
                   </form>
                 )}

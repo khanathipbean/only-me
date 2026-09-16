@@ -83,6 +83,7 @@ export function Modal({
   triggerVariant = "primary",
   triggerIcon,
   title,
+  width = "md",
   openOnMount,
   children,
 }: {
@@ -91,6 +92,8 @@ export function Modal({
   /** Renders instead of the visible `triggerLabel` text; `triggerLabel` still becomes the button's accessible name. */
   triggerIcon?: ReactNode;
   title: string;
+  /** Same fixed set as `Dialog`, for the same reason. */
+  width?: keyof typeof DIALOG_WIDTH_CLASS;
   openOnMount?: boolean;
   children: ReactNode;
 }) {
@@ -120,10 +123,7 @@ export function Modal({
         </Button>
       )}
 
-      <dialog
-        ref={dialogRef}
-        className={`${dialogClass} max-w-2xl`}
-      >
+      <dialog ref={dialogRef} className={`${dialogClass} ${DIALOG_WIDTH_CLASS[width]}`}>
         <div className="max-h-[85vh] overflow-y-auto p-6">
           <div className="mb-4 flex items-center justify-between gap-4">
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
