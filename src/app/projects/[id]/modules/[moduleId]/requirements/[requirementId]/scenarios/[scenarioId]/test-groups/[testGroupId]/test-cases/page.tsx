@@ -17,6 +17,7 @@ import { withToast } from "@/lib/toast";
 import { testCasesListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
+import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FilterForm } from "@/components/FilterForm";
 import { Select } from "@/components/ui/Select";
@@ -383,9 +384,11 @@ export default async function TestCasesPage({
                       <DetailField label="Preconditions">{testCase.preconditions}</DetailField>
                       <DetailField label="Test Data">{testCase.testData}</DetailField>
                       <DetailField label="Test Type">{testCase.testType}</DetailField>
-                      <DetailField label="Assignee">
-                        {testCase.assigneeId ?? "Unassigned"}
-                      </DetailField>
+                      {ASSIGNEE_ENABLED && (
+                        <DetailField label="Assignee">
+                          {testCase.assigneeId ?? "Unassigned"}
+                        </DetailField>
+                      )}
                       <DetailField label="Notes">{testCase.notes}</DetailField>
                       <DetailField label="Test Steps" wide>
                         {testCase.steps.length === 0 ? null : (

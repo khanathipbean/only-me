@@ -32,6 +32,7 @@ import { withToast } from "@/lib/toast";
 import { testCasesListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
+import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
@@ -299,9 +300,11 @@ export default async function TestCaseDetailPage({
         <p>
           <span className="text-muted">Expected Result:</span> {testCase.expectedResult}
         </p>
-        <p>
-          <span className="text-muted">Assignee:</span> {testCase.assigneeId ?? "Unassigned"}
-        </p>
+        {ASSIGNEE_ENABLED && (
+          <p>
+            <span className="text-muted">Assignee:</span> {testCase.assigneeId ?? "Unassigned"}
+          </p>
+        )}
       </Card>
 
       <Card>

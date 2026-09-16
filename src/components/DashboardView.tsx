@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
 import { dialogClass, inputClass, labelClass } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
+import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { testCaseHref, testCasesListHref, testGroupsListHref } from "@/lib/hrefs";
 import { Card } from "@/components/ui/Card";
 import {
@@ -619,6 +620,7 @@ function SummaryWidget({
           onClick={(key) => onDrillDown("priority", key)}
           tone={priorityTone}
         />
+        {ASSIGNEE_ENABLED && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">By Assignee</h3>
           <ul className="mt-3 flex flex-col gap-2">
@@ -1177,7 +1179,9 @@ function PreviewBody({ target, data }: { target: PreviewTarget; data: Record<str
         <Badge tone={workflowStatusTone(d.status)}>{d.status.replace(/_/g, " ")}</Badge>
         <Badge tone={testResultTone(d.testResult)}>{d.testResult.replace(/_/g, " ")}</Badge>
       </div>
-      <PreviewField label="Assignee" value={target.assigneeName ?? d.assigneeId} />
+      {ASSIGNEE_ENABLED && (
+        <PreviewField label="Assignee" value={target.assigneeName ?? d.assigneeId} />
+      )}
       <PreviewField label="Preconditions" value={d.preconditions} />
       <PreviewField label="Test Data" value={d.testData} />
       <PreviewField label="Expected Result" value={d.expectedResult} />
