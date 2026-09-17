@@ -112,7 +112,10 @@ export function FilterForm({
           onClick={clear}
           aria-label="Clear filters"
           title="Clear filters"
-          className={fieldButtonClass}
+          // `justify-self-start` for the grid layouts: a grid item stretches
+          // to its whole column by default, which turned a square icon button
+          // into a wide empty slab. Inert when the form is a flex row.
+          className={`${fieldButtonClass} justify-self-start`}
         >
           <FilterOffIcon />
         </button>
