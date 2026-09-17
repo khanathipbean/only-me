@@ -184,3 +184,50 @@ input[type="datetime-local"]:focus::-webkit-calendar-picker-indicator {
     border-bottom-width: 0;
   }
 }
+
+/* The toast in the top-right corner: it slides in from the edge it belongs to
+ * and runs a bar showing the time it has left. Written here rather than as
+ * Tailwind utilities because both need @keyframes, and the bar's duration is
+ * set per message from the component. Motion is dropped entirely for anyone
+ * who asked for that — the toast still appears, it just doesn't travel. */
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem) translateX(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.toast-enter {
+  animation: toast-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.toast-progress {
+  animation-name: toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter {
+    animation: none;
+  }
+
+  /* The bar stays — it is information, not decoration — but as a step rather
+   * than a slide, so nothing on screen is continuously moving. */
+  .toast-progress {
+    animation-timing-function: step-end;
+  }
+}
