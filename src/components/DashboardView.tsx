@@ -1003,7 +1003,13 @@ function TreeRow({
       >
         {label}
       </button>
-      {tag && <Badge tone="cyan">{tag}</Badge>}
+      {/* Outline, not cyan: cyan is the Requirement level's own badge, and the
+          two sat side by side on the same row meaning different things. */}
+      {tag && (
+        <Badge tone="gray" variant="outline">
+          {tag}
+        </Badge>
+      )}
       <Badge tone="gray">{count}</Badge>
     </div>
   );

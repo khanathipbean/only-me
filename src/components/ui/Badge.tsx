@@ -29,10 +29,33 @@ export function toneBarClass(tone: Tone): string {
   return TONE_BAR_CLASS[tone];
 }
 
-export function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
+/**
+ * A filled pill says "this is a state" — a status, a priority, a result. The
+ * outline is for something that is only a name: a Feature, which groups
+ * Requirements inside a Module without meaning anything on its own.
+ *
+ * The distinction is not decoration. Every filled tone in this file is spoken
+ * for (red is FAILED and CRITICAL, amber is BLOCKED, and so on), so a label
+ * wearing one borrows a meaning it doesn't have — and a Requirement row showed
+ * two cyan pills side by side, one naming the level and one naming the
+ * Feature.
+ */
+const OUTLINE_CLASS = "border border-border bg-transparent text-muted";
+
+export function Badge({
+  tone,
+  variant = "solid",
+  children,
+}: {
+  tone: Tone;
+  variant?: "solid" | "outline";
+  children: ReactNode;
+}) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${TONE_CLASS[tone]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${
+        variant === "outline" ? OUTLINE_CLASS : TONE_CLASS[tone]
+      }`}
     >
       {children}
     </span>

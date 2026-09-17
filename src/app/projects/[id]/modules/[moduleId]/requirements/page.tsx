@@ -389,7 +389,9 @@ export default async function RequirementsPage({
                           </Link>
                           {requirement.feature && (
                             <span className="ml-2 align-middle">
-                              <Badge tone="cyan">{requirement.feature}</Badge>
+                              <Badge tone="gray" variant="outline">
+                                {requirement.feature}
+                              </Badge>
                             </span>
                           )}
                           <span className="ml-2 text-xs text-muted">
