@@ -59,7 +59,19 @@ export const textareaClass = `${inputClass} min-h-24`;
 export const dialogClass =
   "m-auto w-full rounded-2xl border border-border bg-surface/75 p-0 text-left text-foreground shadow-2xl ring-1 ring-white/5 backdrop-blur-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm";
 
-export const checkboxClass = "size-4 rounded border-border text-brand focus:ring-brand";
+/**
+ * A checkbox drawn by the app rather than the OS. `text-brand` and
+ * `focus:ring-brand` did nothing here — those only reach a native control
+ * through the Tailwind forms plugin, which this project doesn't use — so what
+ * showed was the browser's own grey box, ignoring the palette around it.
+ *
+ * `appearance-none` hands the box over, and the tick is a rotated corner of a
+ * pseudo-element rather than an image, so it inherits colour and stays sharp
+ * at any zoom. The checked variants are emitted after the base utilities they
+ * override, which is what makes the pair safe.
+ */
+export const checkboxClass =
+  "relative size-4 shrink-0 cursor-pointer appearance-none rounded border border-border bg-surface transition-colors checked:border-brand checked:bg-brand hover:border-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 after:absolute after:top-1/2 after:left-1/2 after:h-2 after:w-1 after:-translate-x-1/2 after:-translate-y-[60%] after:rotate-45 after:border-r-2 after:border-b-2 after:border-white after:opacity-0 after:transition-opacity after:content-[''] checked:after:opacity-100";
 
 export const labelClass = "flex flex-col gap-1.5 text-sm font-medium text-foreground";
 
