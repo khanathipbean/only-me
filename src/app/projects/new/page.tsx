@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { requireAdminAnywhereOrNotFound } from "@/lib/rbac";
 import { DuplicateCodeError, ValidationError, createProject } from "@/lib/projects";
 import { withToast } from "@/lib/toast";
 import { Card } from "@/components/ui/Card";
@@ -16,12 +17,24 @@ export default async function NewProjectPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const session = await auth();
+
+  /* Same rule the Modal on /projects enforces. This page is not linked from
+   * anywhere — it is what that Modal replaced — but the URL still answers,
+   * and without this any signed-in account, a VIEWER included, could create a
+   * Project by typing it. */
+  await requireAdminAnywhereOrNotFound(session!.user.id);
 
   async function create(formData: FormData) {
     "use server";
     invalidateRouteCache();
 
+    // Checked again inside the action, not just above: a Server Action is its
+    // own endpoint. Whether the page that renders the form refused to draw it
+    // decides nothing about whether the action can be called.
     const session = await auth();
+    await requireAdminAnywhereOrNotFound(session!.user.id);
+
     const startDate = formData.get("startDate") as string;
     const endDate = formData.get("endDate") as string;
 

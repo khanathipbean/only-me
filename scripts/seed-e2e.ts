@@ -1,6 +1,11 @@
 import { hashPassword } from "@/lib/auth-credentials";
 import { prisma } from "@/lib/prisma";
-import { E2E_EMAIL, E2E_PASSWORD } from "../e2e/support/credentials";
+import {
+  E2E_EMAIL,
+  E2E_PASSWORD,
+  E2E_VIEWER_EMAIL,
+  E2E_VIEWER_PASSWORD,
+} from "../e2e/support/credentials";
 
 /**
  * The least this suite needs to be able to do anything at all.
@@ -48,7 +53,25 @@ export async function seedBaseline() {
     create: { projectId: project.id, userId: user.id, role: "ADMIN" },
   });
 
-  return { user, project };
+  // Someone the permission tests can be refused as: a member of the project,
+  // so they can sign in and see it, but an ADMIN of nothing.
+  const viewer =
+    (await prisma.user.findUnique({ where: { email: E2E_VIEWER_EMAIL } })) ??
+    (await prisma.user.create({
+      data: {
+        email: E2E_VIEWER_EMAIL,
+        passwordHash: await hashPassword(E2E_VIEWER_PASSWORD),
+        name: "E2E Viewer",
+      },
+    }));
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: viewer.id } },
+    update: { role: "VIEWER" },
+    create: { projectId: project.id, userId: viewer.id, role: "VIEWER" },
+  });
+
+  return { user, viewer, project };
 }
 
 async function main() {
