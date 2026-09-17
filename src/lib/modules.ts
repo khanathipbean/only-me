@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { purgeModule } from "@/lib/hard-delete";
 import { writeAuditLog } from "@/lib/audit";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -179,6 +180,27 @@ export async function deleteModule(id: string, actorId: string, confirm: boolean
   if (!confirm) {
     throw new ConfirmRequiredError();
   }
-  await assertModuleNotInUse(id);
-  return setModuleDeletedAt(id, new Date(), actorId, "delete");
+  // Requirements go with it; files do not. A file filed under a Module is not
+  // a descendant of it — it is a document that happens to be shelved there,
+  // and deleting the shelf is no reason to burn the document.
+  const files = await prisma.projectFile.count({ where: { moduleId: id, deletedAt: null } });
+  if (files > 0) {
+    throw new ModuleValidationError(
+      `Still holds ${files} file(s). Move them to another Module first.`,
+    );
+  }
+
+  const before = await prisma.module.findUniqueOrThrow({ where: { id } });
+
+  await writeAuditLog({
+    entityType: "Module",
+    entityId: id,
+    action: "delete",
+    actorId,
+    projectId: before.projectId,
+    oldValue: before,
+  });
+  const purged = await purgeModule(id);
+
+  return { ...before, purged };
 }

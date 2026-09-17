@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { purgeTestCase } from "@/lib/hard-delete";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -364,7 +365,25 @@ export async function deleteTestCase(id: string, actorId: string, confirm: boole
   if (!confirm) {
     throw new ConfirmRequiredError();
   }
-  return setTestCaseDeletedAt(id, actorId, "delete", new Date());
+  const before = await getTestCaseWithProjectId(id);
+  if (!before) {
+    throw new ConfirmRequiredError();
+  }
+
+  // Really gone, with its steps, its attachments and its result in every round
+  // it was ever part of. The audit entry is written first: it is the only
+  // record that will be left.
+  await writeAuditLog({
+    entityType: "TestCase",
+    entityId: id,
+    action: "delete",
+    actorId,
+    projectId: before.projectId,
+    oldValue: before,
+  });
+  const counts = await purgeTestCase(id);
+
+  return { ...before, purged: counts };
 }
 
 /** A Test Case is a leaf: no descendants, so no descendant-count retrofit is needed on archive/delete. */

@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { purgeTestGroup } from "@/lib/hard-delete";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -345,11 +346,19 @@ export async function deleteTestGroup(id: string, actorId: string, confirm: bool
   if (!confirm) {
     throw new ConfirmRequiredError();
   }
-  const [testGroup, descendantCounts] = await Promise.all([
-    setTestGroupDeletedAt(id, actorId, "delete", new Date()),
-    getTestGroupDescendantCounts(id),
-  ]);
-  return { ...testGroup, descendantCounts };
+  const before = await prisma.testGroup.findUniqueOrThrow({
+    where: { id },
+    include: { scenario: { select: { projectId: true } } },
+  });
+  const descendantCounts = await getTestGroupDescendantCounts(id);
+
+  // Written before the rows go, since it is what will be left of them.
+  await logTestGroupEvent("delete", before, before.scenario.projectId, actorId, {
+    oldValue: before,
+  });
+  const purged = await purgeTestGroup(id);
+
+  return { ...before, descendantCounts, purged };
 }
 
 export async function moveTestGroup(id: string, targetScenarioId: string, actorId: string) {

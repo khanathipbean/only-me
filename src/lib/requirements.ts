@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { purgeRequirement } from "@/lib/hard-delete";
 import { writeAuditLog } from "@/lib/audit";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -295,6 +296,19 @@ export async function deleteRequirement(id: string, actorId: string, confirm: bo
   if (!confirm) {
     throw new ConfirmRequiredError();
   }
-  await assertRequirementNotInUse(id);
-  return setRequirementDeletedAt(id, new Date(), actorId, "delete");
+  // No "still carries Scenarios" guard here any more: that is what archive is
+  // for. Delete takes the subtree with it.
+  const before = await prisma.requirement.findUniqueOrThrow({ where: { id } });
+
+  await writeAuditLog({
+    entityType: "Requirement",
+    entityId: id,
+    action: "delete",
+    actorId,
+    projectId: before.projectId,
+    oldValue: before,
+  });
+  const purged = await purgeRequirement(id);
+
+  return { ...before, purged };
 }

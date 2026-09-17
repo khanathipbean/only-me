@@ -505,7 +505,7 @@ export default async function TestCaseDetailPage({
 
             <ConfirmForm
               action={removeForever}
-              confirmMessage="Delete this Test Case? This cannot be undone from the UI."
+              confirmMessage="Delete this Test Case? Its steps, attachments and its result in every past Test Run go with it. This cannot be undone from the UI."
               variant="danger"
             >
               <IconButton

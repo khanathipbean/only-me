@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
+import { purgeScenario } from "@/lib/hard-delete";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { writeAuditLog } from "@/lib/audit";
@@ -323,11 +324,14 @@ export async function deleteScenario(id: string, actorId: string, confirm: boole
   if (!confirm) {
     throw new ConfirmRequiredError();
   }
-  const [scenario, descendantCounts] = await Promise.all([
-    setScenarioDeletedAt(id, actorId, "delete", new Date()),
-    getScenarioDescendantCounts(id),
-  ]);
-  return { ...scenario, descendantCounts };
+  const before = await prisma.scenario.findUniqueOrThrow({ where: { id } });
+  const descendantCounts = await getScenarioDescendantCounts(id);
+
+  // Written before the rows go, since it is what will be left of them.
+  await logScenarioEvent("delete", before, actorId, { oldValue: before });
+  const purged = await purgeScenario(id);
+
+  return { ...before, descendantCounts, purged };
 }
 
 /**

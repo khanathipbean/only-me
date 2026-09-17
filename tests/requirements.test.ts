@@ -73,16 +73,20 @@ describe("requirements", () => {
       ConfirmRequiredError,
     );
 
-    const deleted = await deleteRequirement(requirement.id, owner.id, true);
-    expect(deleted.deletedAt).not.toBeNull();
+    await deleteRequirement(requirement.id, owner.id, true);
 
+    // Gone, not hidden: delete used to be the same soft delete as archive.
+    expect(await prisma.requirement.findUnique({ where: { id: requirement.id } })).toBeNull();
+
+    // The audit entry outlives the row, and carries what was there.
     const logs = await prisma.auditLog.findMany({
       where: { entityId: requirement.id, action: "delete" },
     });
     expect(logs).toHaveLength(1);
+    expect(logs[0].oldValue).toMatchObject({ name: "Req A" });
   });
 
-  it("refuses to delete a Requirement that still carries a live Scenario", async () => {
+  it("takes a Requirement's Scenarios with it", async () => {
     const { owner, project, testModule } = await setup("requirement-owner2@example.com", "PRJ-REQ-2");
     const requirement = await createRequirement(
       project.id,
@@ -99,19 +103,25 @@ describe("requirements", () => {
       { params: Promise.resolve({ id: project.id }) },
     );
 
-    await expect(deleteRequirement(requirement.id, owner.id, true)).rejects.toThrow(
-      RequirementValidationError,
-    );
+    const scenarios = await prisma.scenario.findMany({ where: { requirementId: requirement.id } });
+    expect(scenarios).toHaveLength(1);
+
+    // Archive is the one that refuses while children are live; delete is the
+    // one that means it.
+    await deleteRequirement(requirement.id, owner.id, true);
+
+    expect(await prisma.requirement.findUnique({ where: { id: requirement.id } })).toBeNull();
+    expect(await prisma.scenario.findUnique({ where: { id: scenarios[0].id } })).toBeNull();
   });
 
-  it("restores a deleted Requirement", async () => {
+  it("restores an archived Requirement", async () => {
     const { owner, project, testModule } = await setup("requirement-owner3@example.com", "PRJ-REQ-3");
     const requirement = await createRequirement(
       project.id,
       { name: "Req A", moduleId: testModule.id, priority: "MEDIUM" },
       owner.id,
     );
-    await deleteRequirement(requirement.id, owner.id, true);
+    await archiveRequirement(requirement.id, owner.id);
 
     const restored = await restoreRequirement(requirement.id, owner.id);
     expect(restored.deletedAt).toBeNull();

@@ -458,7 +458,7 @@ export default async function RequirementsPage({
                             )}
                             <ConfirmForm
                               action={actions.remove}
-                              confirmMessage="Delete this Requirement? This cannot be undone from the UI."
+                              confirmMessage={`Delete this Requirement? It carries ${requirement._count.scenarios} scenario(s), and everything under them goes too. This cannot be undone from the UI.`}
                               variant="danger"
                             >
                               <IconButton

@@ -352,7 +352,7 @@ export default async function ModulesPage({
                               )}
                               <ConfirmForm
                                 action={actions.remove}
-                                confirmMessage="Delete this Module? This cannot be undone from the UI."
+                                confirmMessage={`Delete this Module? It carries ${module._count.requirements} requirement(s), and everything under them goes too. This cannot be undone from the UI.`}
                                 variant="danger"
                               >
                                 <IconButton

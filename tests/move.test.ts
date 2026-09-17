@@ -27,6 +27,7 @@ import {
 import { POST as moveTestCaseRoute } from "@/app/api/test-cases/[id]/move/route";
 
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+import { deleteScenario } from "@/lib/scenarios";
 
 const mockAuth = vi.mocked(auth);
 
@@ -366,5 +367,61 @@ describe("move operations", () => {
       { params: Promise.resolve({ id: scenario.id }) },
     );
     expect(response.status).toBe(404);
+  });
+
+  it("deleting a Scenario really removes its whole subtree", async () => {
+    const owner = await createUser("mv-purge@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+
+    const project = await createProject("PRJ-MV-PURGE");
+    const scenario = await createScenario(project.id, "Doomed scenario");
+    const testGroup = await createTestGroup(scenario.id, "Doomed group");
+    const testCase = await createTestCase(testGroup.id, "Doomed case");
+
+    // An attachment and a run result, so the two things that hang off a Test
+    // Case from outside the hierarchy are covered too.
+    await prisma.attachment.create({
+      data: {
+        testCaseId: testCase.id,
+        storageKey: `attachments/${testCase.id}`,
+        fileName: "evidence.png",
+        contentType: "image/png",
+        size: 8,
+        uploadedById: owner.id,
+      },
+    });
+    const run = await prisma.testRun.create({
+      data: { projectId: project.id, name: "Round 1", createdById: owner.id },
+    });
+    await prisma.testRunCase.create({
+      data: { testRunId: run.id, testCaseId: testCase.id },
+    });
+
+    // An archived descendant goes too: it is part of the subtree whatever its
+    // deletedAt says, and leaving it would strand it under nothing.
+    const archivedGroup = await createTestGroup(scenario.id, "Archived group");
+    await prisma.testGroup.update({
+      where: { id: archivedGroup.id },
+      data: { deletedAt: new Date() },
+    });
+
+    await deleteScenario(scenario.id, owner.id, true);
+
+    expect(await prisma.scenario.findUnique({ where: { id: scenario.id } })).toBeNull();
+    expect(await prisma.testGroup.findUnique({ where: { id: testGroup.id } })).toBeNull();
+    expect(await prisma.testGroup.findUnique({ where: { id: archivedGroup.id } })).toBeNull();
+    expect(await prisma.testCase.findUnique({ where: { id: testCase.id } })).toBeNull();
+    expect(await prisma.testStep.count({ where: { testCaseId: testCase.id } })).toBe(0);
+    expect(await prisma.attachment.count({ where: { testCaseId: testCase.id } })).toBe(0);
+    expect(await prisma.testRunCase.count({ where: { testCaseId: testCase.id } })).toBe(0);
+
+    // The run itself is not a descendant of the Scenario and stays.
+    expect(await prisma.testRun.findUnique({ where: { id: run.id } })).not.toBeNull();
+
+    // And the trail survives what it describes.
+    const logs = await prisma.auditLog.findMany({
+      where: { entityId: scenario.id, action: "delete" },
+    });
+    expect(logs).toHaveLength(1);
   });
 });
