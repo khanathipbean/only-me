@@ -1,6 +1,7 @@
 import { hashPassword } from "@/lib/auth-credentials";
 import { prisma } from "@/lib/prisma";
 import {
+  MISSING_FILE_NAME,
   E2E_EMAIL,
   E2E_PASSWORD,
   E2E_VIEWER_EMAIL,
@@ -24,6 +25,7 @@ import {
  * which this repo already seeds with — does.
  */
 const FIXTURE_PROJECT_CODE = "E2E-FIXTURE";
+const MISSING_FILE_KEY = "project-files/deliberately-absent";
 
 export async function seedBaseline() {
   const user =
@@ -69,6 +71,24 @@ export async function seedBaseline() {
     where: { projectId_userId: { projectId: project.id, userId: viewer.id } },
     update: { role: "VIEWER" },
     create: { projectId: project.id, userId: viewer.id, role: "VIEWER" },
+  });
+
+  // A file row whose object was never in storage — the state the app is
+  // actually in, where the storage key layout changed and old rows were left
+  // pointing at nothing. Seeded rather than produced, because there is no way
+  // to upload a file and then take its bytes away from outside.
+  await prisma.projectFile.upsert({
+    where: { storageKey: MISSING_FILE_KEY },
+    update: {},
+    create: {
+      projectId: project.id,
+      module: "Fixtures",
+      fileName: MISSING_FILE_NAME,
+      storageKey: MISSING_FILE_KEY,
+      contentType: "application/pdf",
+      size: 1234,
+      uploadedById: user.id,
+    },
   });
 
   return { user, viewer, project };

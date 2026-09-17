@@ -11,3 +11,6 @@ export const E2E_PASSWORD = process.env.E2E_PASSWORD ?? "changeme123";
  *  of anything, so the permission tests have someone to be refused as. */
 export const E2E_VIEWER_EMAIL = "viewer@example.com";
 export const E2E_VIEWER_PASSWORD = "changeme123";
+
+/** The fixture file the seed points at an object that was never uploaded. */
+export const MISSING_FILE_NAME = "gone-from-storage.pdf";
