@@ -202,7 +202,14 @@ export default async function ScenariosPage({
         await requireProjectRoleOrNotFound(actorId, targetProjectId, EDITOR_ROLES);
         await moveScenario(scenarioId, targetProjectId, actorId);
         // Re-filed on arrival, so its new home is that project's Modules list.
-        redirect(`/projects/${targetProjectId}/modules`);
+        // A different project's Modules list looks nothing like where the user
+        // pressed the button, so the toast has to say where they ended up.
+        redirect(
+          withToast(
+            `/projects/${targetProjectId}/modules`,
+            `Scenario moved to ${targetProject.name}`,
+          ),
+        );
       },
       async duplicate() {
         "use server";
@@ -211,7 +218,9 @@ export default async function ScenariosPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await duplicateScenario(scenarioId, actorId);
-        redirect(listHref);
+        // The copy sorts wherever its name puts it, which on a filtered or
+        // paged list is often not on the page you are looking at.
+        redirect(withToast(listHref, "Scenario duplicated"));
       },
       async archive() {
         "use server";
@@ -220,7 +229,7 @@ export default async function ScenariosPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await archiveScenario(scenarioId, actorId);
-        redirect(listHref);
+        redirect(withToast(listHref, "Scenario archived"));
       },
       async restore() {
         "use server";
@@ -229,7 +238,7 @@ export default async function ScenariosPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await restoreScenario(scenarioId, actorId);
-        redirect(listHref);
+        redirect(withToast(listHref, "Scenario restored"));
       },
       async removeForever() {
         "use server";
@@ -283,6 +292,21 @@ export default async function ScenariosPage({
           redirect(`${listPath}?${query}`);
         }
         throw err;
+      }
+
+      // Everything else the form changed is visible in the row the user lands
+      // back on — except a change of Requirement, which takes the row out of
+      // this list altogether. Looked up here rather than read off the page's
+      // own list: an action may only close over serialisable values.
+      const nextRequirementId = formData.get("requirementId") as string;
+      if (nextRequirementId && nextRequirementId !== requirementId) {
+        const target = await getRequirementById(nextRequirementId);
+        redirect(
+          withToast(
+            listHref,
+            target ? `Moved to ${target.code ?? target.name}` : "Moved to another Requirement",
+          ),
+        );
       }
 
       redirect(listHref);

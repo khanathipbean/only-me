@@ -202,10 +202,16 @@ export default async function TestCaseDetailPage({
     await requireProjectRoleOrNotFound(session!.user.id, targetTestGroup.projectId, EDITOR_ROLES);
     await moveTestCase(testCaseId, targetTestGroupId, session!.user.id);
     const location = await getScenarioLocation(targetTestGroup.scenarioId);
+    // The page looks the same either way — only the breadcrumb changes — so
+    // the toast is what tells the user the move actually happened.
+    const message = `Moved to ${targetTestGroup.name}`;
     redirect(
       location
-        ? `${testCasesListHref({ ...location, testGroupId: targetTestGroupId })}/${testCaseId}`
-        : `${basePath}/${testCaseId}`,
+        ? withToast(
+            `${testCasesListHref({ ...location, testGroupId: targetTestGroupId })}/${testCaseId}`,
+            message,
+          )
+        : withToast(`${basePath}/${testCaseId}`, message),
     );
   }
 
@@ -215,7 +221,9 @@ export default async function TestCaseDetailPage({
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const copy = await duplicateTestCase(testCaseId, session!.user.id);
-    redirect(`${basePath}/${copy.id}`);
+    // The copy is identical to what was on screen a moment ago, so without
+    // this the user has no way to tell they are now editing the copy.
+    redirect(withToast(`${basePath}/${copy.id}`, "Duplicated — you are on the copy"));
   }
 
   async function archive() {

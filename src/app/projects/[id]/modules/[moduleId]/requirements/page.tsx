@@ -186,6 +186,20 @@ export default async function RequirementsPage({
           }
           throw err;
         }
+        // The rest of the form shows up in the row on the way back; a change
+        // of Module does not, because the row is no longer in this list.
+        // Looked up here, not read off the page's own `modules`: an action may
+        // only close over serialisable values.
+        const nextModuleId = formData.get("moduleId") as string;
+        if (nextModuleId && nextModuleId !== moduleId) {
+          const target = await getModuleById(nextModuleId);
+          redirect(
+            withToast(
+              listHref,
+              target ? `Moved to ${target.name}` : "Moved to another Module",
+            ),
+          );
+        }
         redirect(listHref);
       },
       async archive() {
@@ -203,7 +217,9 @@ export default async function RequirementsPage({
           }
           throw err;
         }
-        redirect(listHref);
+        // The row leaves the default view entirely — without this it reads
+        // like a delete, or like nothing happened.
+        redirect(withToast(listHref, "Requirement archived"));
       },
       async restore() {
         "use server";
@@ -211,7 +227,7 @@ export default async function RequirementsPage({
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await restoreRequirement(requirementId, session!.user.id);
-        redirect(listHref);
+        redirect(withToast(listHref, "Requirement restored"));
       },
       async remove() {
         "use server";

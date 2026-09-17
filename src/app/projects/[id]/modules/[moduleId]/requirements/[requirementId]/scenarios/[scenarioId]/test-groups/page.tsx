@@ -169,7 +169,12 @@ export default async function TestGroupsPage({
         // The target Scenario may sit under a different Requirement, so its
         // path is resolved rather than rebuilt from this page's ids.
         const location = await getScenarioLocation(targetScenarioId);
-        redirect(location ? testGroupsListHref(location) : listPath);
+        // Another Scenario's list is a different page under a possibly
+        // different Requirement — the toast names where the group went.
+        const message = `Moved to ${target.name}`;
+        redirect(
+          location ? withToast(testGroupsListHref(location), message) : withToast(listPath, message),
+        );
       },
       async duplicate() {
         "use server";
@@ -178,7 +183,9 @@ export default async function TestGroupsPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await duplicateTestGroup(testGroupId, actorId);
-        redirect(listHref);
+        // The copy takes its own place in the order, which on a paged list is
+        // often not the page in front of you.
+        redirect(withToast(listHref, "Test Group duplicated"));
       },
       async archive() {
         "use server";
@@ -187,7 +194,7 @@ export default async function TestGroupsPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await archiveTestGroup(testGroupId, actorId);
-        redirect(listHref);
+        redirect(withToast(listHref, "Test Group archived"));
       },
       async restore() {
         "use server";
@@ -196,7 +203,7 @@ export default async function TestGroupsPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
         await restoreTestGroup(testGroupId, actorId);
-        redirect(listHref);
+        redirect(withToast(listHref, "Test Group restored"));
       },
       async removeForever() {
         "use server";

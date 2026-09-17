@@ -150,7 +150,10 @@ export default async function ModulesPage({
           }
           throw err;
         }
-        redirect(listHref);
+        // Unlike a rename, nothing on the page you land on says this worked:
+        // with the archived filter off, the row simply vanishes, which reads
+        // exactly like a delete.
+        redirect(withToast(listHref, "Module archived"));
       },
       async restore() {
         "use server";
@@ -158,7 +161,7 @@ export default async function ModulesPage({
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await restoreModule(moduleId, session!.user.id);
-        redirect(listHref);
+        redirect(withToast(listHref, "Module restored"));
       },
       async remove() {
         "use server";

@@ -14,6 +14,7 @@ import {
   setRunCaseResult,
   setRunStatus,
 } from "@/lib/test-runs";
+import { withToast } from "@/lib/toast";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { CasePicker } from "@/components/CasePicker";
 import { ConfirmForm } from "@/components/ConfirmForm";
@@ -128,15 +129,26 @@ export default async function TestRunPage({
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
+    let added = 0;
     try {
-      await addCasesToRun(runId, ids, session!.user.id);
+      ({ added } = await addCasesToRun(runId, ids, session!.user.id));
     } catch (err) {
       if (err instanceof TestRunValidationError) {
         redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
       }
       throw err;
     }
-    redirect(basePath);
+    // The service's own count, not `ids.length`: a case already in the round,
+    // or one since archived, is skipped. And the count is the point — added to
+    // a long grouped list, a dozen new rows are not something anyone can spot.
+    redirect(
+      withToast(
+        basePath,
+        added === 0
+          ? "Nothing added — those Test Cases are already in this run"
+          : `Added ${added} Test Case${added === 1 ? "" : "s"}`,
+      ),
+    );
   }
 
   async function closeRun() {
@@ -196,7 +208,9 @@ export default async function TestRunPage({
           }
           throw err;
         }
-        redirect(basePath);
+        // Dropping the round's record of a case is not reversible by putting
+        // it back — a re-added case starts with no result.
+        redirect(withToast(basePath, "Test Case removed from this run"));
       },
     };
   }
