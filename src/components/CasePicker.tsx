@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Pagination } from "@/components/ui/Pagination";
@@ -31,6 +30,11 @@ export type CaseCandidate = {
  *  columns — a flex row would let each row's own content set the widths. */
 const ROW_GRID = "grid grid-cols-[1rem_minmax(0,1fr)_5.5rem_6.5rem] items-center gap-3";
 
+/** Reads as a link, behaves as a button. Greyed rather than hidden when it
+ *  would do nothing, so the pair doesn't shift about as rows are ticked. */
+const TEXT_ACTION =
+  "rounded text-brand underline-offset-2 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none disabled:cursor-not-allowed disabled:text-muted disabled:no-underline";
+
 export function CasePicker({
   candidates,
   action,
@@ -57,6 +61,10 @@ export function CasePicker({
     [candidates, currentPage, pageSize],
   );
 
+  function selectAll() {
+    setSelected(new Set(candidates.map((candidate) => candidate.id)));
+  }
+
   function toggle(id: string, checked: boolean) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -81,23 +89,25 @@ export function CasePicker({
       ))}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setSelected(new Set(candidates.map((candidate) => candidate.id)))}
-            disabled={allSelected}
-          >
+        {/* Text, not buttons: these only change what is ticked, and a pair
+            of solid buttons read as heavily as Add to run, which is the one
+            that actually writes something. Still real <button>s, so they stay
+            reachable by keyboard. */}
+        <div className="flex items-center gap-3 text-sm">
+          <button type="button" className={TEXT_ACTION} onClick={selectAll} disabled={allSelected}>
             Select all
-          </Button>
-          <Button
+          </button>
+          <span aria-hidden="true" className="text-border">
+            |
+          </span>
+          <button
             type="button"
-            variant="secondary"
+            className={TEXT_ACTION}
             onClick={() => setSelected(new Set())}
             disabled={selected.size === 0}
           >
             Clear all
-          </Button>
+          </button>
         </div>
         {/* The same count pill every other list uses. What the number means
             is a sentence, not a label, so it lives in a tooltip rather than
