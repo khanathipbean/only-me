@@ -99,7 +99,7 @@ export default async function TestRunsPage({
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all. */
   const listQueryString = new URLSearchParams(
-    Object.entries({ search, status, archived }).filter(
+    Object.entries({ search, status, archived, page, pageSize }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   ).toString();

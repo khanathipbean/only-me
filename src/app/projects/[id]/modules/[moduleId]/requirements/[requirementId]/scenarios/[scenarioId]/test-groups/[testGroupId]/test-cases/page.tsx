@@ -131,7 +131,7 @@ export default async function TestCasesPage({
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
   const listQueryString = new URLSearchParams(
-    Object.entries({ search, priority, testResult, status }).filter(
+    Object.entries({ search, priority, testResult, status, page, pageSize }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   ).toString();

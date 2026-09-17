@@ -88,7 +88,7 @@ export default async function ModulesPage({
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
   const listQueryString = new URLSearchParams(
-    Object.entries({ search, archived }).filter(
+    Object.entries({ search, archived, page, pageSize }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   ).toString();

@@ -161,7 +161,7 @@ export default async function ScenariosPage({
   /** The list URL with the active filters/sort kept, so an inline save (or a
    * failed one) returns to the same view the user was looking at. */
   const listQuery = new URLSearchParams(
-    Object.entries({ search, status, priority, sortBy, sortOrder, archived }).filter(
+    Object.entries({ search, status, priority, sortBy, sortOrder, archived, page, pageSize }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   );
