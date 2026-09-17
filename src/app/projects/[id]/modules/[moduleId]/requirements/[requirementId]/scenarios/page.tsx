@@ -47,6 +47,7 @@ import {
   thClass,
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({
   params,
@@ -186,6 +187,7 @@ export default async function ScenariosPage({
     return {
       async move(formData: FormData) {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -204,6 +206,7 @@ export default async function ScenariosPage({
       },
       async duplicate() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -212,6 +215,7 @@ export default async function ScenariosPage({
       },
       async archive() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -220,6 +224,7 @@ export default async function ScenariosPage({
       },
       async restore() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -228,6 +233,7 @@ export default async function ScenariosPage({
       },
       async removeForever() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -242,6 +248,7 @@ export default async function ScenariosPage({
   function updateAction(scenarioId: string) {
     return async function update(formData: FormData) {
       "use server";
+      invalidateRouteCache();
 
       const session = await auth();
       await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
@@ -284,6 +291,7 @@ export default async function ScenariosPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);

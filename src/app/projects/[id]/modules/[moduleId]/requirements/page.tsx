@@ -48,6 +48,7 @@ import {
   thClass,
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({
   params,
@@ -126,6 +127,7 @@ export default async function RequirementsPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     try {
@@ -158,6 +160,7 @@ export default async function RequirementsPage({
     return {
       async update(formData: FormData) {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {
@@ -187,6 +190,7 @@ export default async function RequirementsPage({
       },
       async archive() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {
@@ -203,6 +207,7 @@ export default async function RequirementsPage({
       },
       async restore() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await restoreRequirement(requirementId, session!.user.id);
@@ -210,6 +215,7 @@ export default async function RequirementsPage({
       },
       async remove() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {

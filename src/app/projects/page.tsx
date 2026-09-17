@@ -27,6 +27,7 @@ import {
   trHoverClass,
 } from "@/lib/ui";
 import type { ProjectStatus } from "@/generated/prisma/client";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export const metadata = { title: "Projects" };
 
@@ -56,6 +57,7 @@ export default async function ProjectsPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     const session = await auth();
     if (!(await isAdminAnywhere(session!.user.id))) {

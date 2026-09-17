@@ -27,6 +27,7 @@ import { Select } from "@/components/ui/Select";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { TrashIcon } from "@/components/icons";
 import { labelClass, mutedTextClass, pageClass } from "@/lib/ui";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,6 +55,7 @@ export default async function ProjectFilesPage({
 
   async function upload(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
 
@@ -80,6 +82,7 @@ export default async function ProjectFilesPage({
   function removeAction(fileId: string) {
     return async function remove() {
       "use server";
+      invalidateRouteCache();
       const session = await auth();
       await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
       // Checked against this project so an id from elsewhere can't be deleted.

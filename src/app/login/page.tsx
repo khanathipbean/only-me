@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 /**
  * The out-of-focus words drifting behind the brand panel. Purely decorative —
@@ -66,6 +67,7 @@ export default async function LoginPage({
 
   async function login(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     try {
       await signIn("credentials", {

@@ -39,6 +39,7 @@ import {
   trHoverClass,
 } from "@/lib/ui";
 import type { ProjectRole } from "@/generated/prisma/client";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export const metadata = { title: "Members" };
 
@@ -133,6 +134,7 @@ export default async function MembersPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireAdminAnywhereOrNotFound(session!.user.id);
 
@@ -161,6 +163,7 @@ export default async function MembersPage({
   function updateAccessAction(targetUserId: string) {
     return async function updateAccess(formData: FormData) {
       "use server";
+      invalidateRouteCache();
       const session = await auth();
       await requireAdminAnywhereOrNotFound(session!.user.id);
 

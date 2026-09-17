@@ -14,6 +14,7 @@ import { ToastListener } from "@/components/ToastListener";
 import { IconLinkButton } from "@/components/ui/Button";
 import { UserPlusIcon } from "@/components/icons";
 import "./globals.css";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 // Always sets a concrete data-theme (falling back to system preference, not
 // just applying a stored override) before first paint — every dark: utility
@@ -62,6 +63,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 
   async function logout() {
     "use server";
+    invalidateRouteCache();
     await signOut({ redirectTo: "/login" });
   }
 

@@ -43,6 +43,7 @@ import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
 import { EditIcon, TrashIcon } from "@/components/icons";
 import { labelClass, pageClass, textareaClass } from "@/lib/ui";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({
   params,
@@ -111,6 +112,7 @@ export default async function TestCaseDetailPage({
 
   async function update(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
@@ -143,6 +145,7 @@ export default async function TestCaseDetailPage({
 
   async function updateResult(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     await updateTestResultAndNotes(
@@ -158,6 +161,7 @@ export default async function TestCaseDetailPage({
 
   async function uploadAttachment(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const file = formData.get("file");
@@ -170,6 +174,7 @@ export default async function TestCaseDetailPage({
   function removeAttachment(attachmentId: string) {
     return async function remove() {
       "use server";
+      invalidateRouteCache();
       const session = await auth();
       await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
       // Checked against this Test Case too: an id from another Test Case
@@ -184,6 +189,7 @@ export default async function TestCaseDetailPage({
 
   async function move(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const targetTestGroupId = formData.get("targetTestGroupId") as string;
@@ -205,6 +211,7 @@ export default async function TestCaseDetailPage({
 
   async function duplicate() {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const copy = await duplicateTestCase(testCaseId, session!.user.id);
@@ -213,6 +220,7 @@ export default async function TestCaseDetailPage({
 
   async function archive() {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     await archiveTestCase(testCaseId, session!.user.id);
@@ -221,6 +229,7 @@ export default async function TestCaseDetailPage({
 
   async function restore() {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     await restoreTestCase(testCaseId, session!.user.id);
@@ -229,6 +238,7 @@ export default async function TestCaseDetailPage({
 
   async function removeForever() {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     await deleteTestCase(testCaseId, session!.user.id, true);

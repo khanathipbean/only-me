@@ -21,6 +21,7 @@ import { ProjectForm } from "@/components/forms/ProjectForm";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
 import { EditIcon } from "@/components/icons";
 import { pageClass } from "@/lib/ui";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -48,6 +49,7 @@ export default async function ProjectDetailPage({
 
   async function update(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
@@ -80,6 +82,7 @@ export default async function ProjectDetailPage({
 
   async function archive() {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
     await archiveProject(id, session!.user.id);
@@ -88,6 +91,7 @@ export default async function ProjectDetailPage({
 
   async function restore() {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
     await restoreProject(id, session!.user.id);

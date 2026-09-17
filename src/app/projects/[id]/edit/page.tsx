@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { ProjectForm } from "@/components/forms/ProjectForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { pageClass } from "@/lib/ui";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -38,6 +39,7 @@ export default async function EditProjectPage({
 
   async function update(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);

@@ -30,6 +30,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { TrashIcon } from "@/components/icons";
+import { invalidateRouteCache } from "@/lib/revalidate";
 import {
   inputClass,
   labelClass,
@@ -97,6 +98,7 @@ export default async function ModulesPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     try {
@@ -117,6 +119,7 @@ export default async function ModulesPage({
     return {
       async rename(formData: FormData) {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {
@@ -134,6 +137,7 @@ export default async function ModulesPage({
       },
       async archive() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {
@@ -150,6 +154,7 @@ export default async function ModulesPage({
       },
       async restore() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await restoreModule(moduleId, session!.user.id);
@@ -157,6 +162,7 @@ export default async function ModulesPage({
       },
       async remove() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {

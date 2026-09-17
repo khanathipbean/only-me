@@ -56,6 +56,7 @@ import {
   thClass,
 } from "@/lib/ui";
 import type { WorkflowStatus } from "@/generated/prisma/client";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({
   params,
@@ -152,6 +153,7 @@ export default async function TestGroupsPage({
     return {
       async move(formData: FormData) {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -171,6 +173,7 @@ export default async function TestGroupsPage({
       },
       async duplicate() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -179,6 +182,7 @@ export default async function TestGroupsPage({
       },
       async archive() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -187,6 +191,7 @@ export default async function TestGroupsPage({
       },
       async restore() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -195,6 +200,7 @@ export default async function TestGroupsPage({
       },
       async removeForever() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
@@ -209,6 +215,7 @@ export default async function TestGroupsPage({
   function updateAction(testGroupId: string) {
     return async function update(formData: FormData) {
       "use server";
+      invalidateRouteCache();
 
       const session = await auth();
       await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
@@ -240,6 +247,7 @@ export default async function TestGroupsPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
@@ -269,6 +277,7 @@ export default async function TestGroupsPage({
 
   async function move(id: string, delta: -1 | 1) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
 
@@ -285,11 +294,13 @@ export default async function TestGroupsPage({
 
   async function moveUp(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     await move(formData.get("id") as string, -1);
   }
 
   async function moveDown(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     await move(formData.get("id") as string, 1);
   }
 

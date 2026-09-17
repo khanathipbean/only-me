@@ -24,6 +24,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { TrashIcon } from "@/components/icons";
 import { inputClass, labelClass, mutedTextClass, pageClass } from "@/lib/ui";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export const metadata = { title: "Profile" };
 
@@ -41,6 +42,7 @@ export default async function ProfilePage({
 
   async function saveName(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     try {
       await updateDisplayName(session!.user.id, formData.get("name") as string);
@@ -55,6 +57,7 @@ export default async function ProfilePage({
 
   async function savePassword(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     const next = formData.get("newPassword") as string;
     if (next !== (formData.get("confirmPassword") as string)) {
@@ -73,6 +76,7 @@ export default async function ProfilePage({
 
   async function uploadAvatar(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     const file = formData.get("avatar");
     if (!(file instanceof File) || file.size === 0) {
@@ -91,6 +95,7 @@ export default async function ProfilePage({
 
   async function removeAvatarAction() {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await removeAvatar(session!.user.id);
     redirect(withToast("/profile", "Profile picture removed"));

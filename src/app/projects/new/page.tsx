@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { ProjectForm } from "@/components/forms/ProjectForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { pageClass } from "@/lib/ui";
+import { invalidateRouteCache } from "@/lib/revalidate";
 
 export const metadata = { title: "New Project" };
 
@@ -18,6 +19,7 @@ export default async function NewProjectPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
 
     const session = await auth();
     const startDate = formData.get("startDate") as string;

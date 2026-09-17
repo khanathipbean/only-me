@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/Badge";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { invalidateRouteCache } from "@/lib/revalidate";
 import {
   inputClass,
   labelClass,
@@ -108,6 +109,7 @@ export default async function TestRunsPage({
 
   async function create(formData: FormData) {
     "use server";
+    invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     try {
@@ -136,6 +138,7 @@ export default async function TestRunsPage({
     return {
       async update(formData: FormData) {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {
@@ -161,6 +164,7 @@ export default async function TestRunsPage({
       },
       async close() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await setRunStatus(runId, "CLOSED", session!.user.id);
@@ -168,6 +172,7 @@ export default async function TestRunsPage({
       },
       async reopen() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await setRunStatus(runId, "OPEN", session!.user.id);
@@ -175,6 +180,7 @@ export default async function TestRunsPage({
       },
       async archive() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await setRunDeletedAt(runId, new Date(), session!.user.id);
@@ -182,6 +188,7 @@ export default async function TestRunsPage({
       },
       async restore() {
         "use server";
+        invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         await setRunDeletedAt(runId, null, session!.user.id);
