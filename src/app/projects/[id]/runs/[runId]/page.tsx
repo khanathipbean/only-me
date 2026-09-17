@@ -226,16 +226,18 @@ export default async function TestRunPage({
                 width="lg"
                 openOnMount={isPicking}
               >
-                {/* A fixed four-column grid rather than flex-wrap: the fields
-                    have different natural widths, so wrapping left one field
-                    stranded on a row of its own. */}
+                {/* A fixed grid rather than flex-wrap: the fields have
+                    different natural widths, so wrapping left one stranded on
+                    a row of its own. The trailing auto column is for the clear
+                    button, which would otherwise be that stranded field. */}
                 <FilterForm
                   showClear={hasFilters}
                   action={basePath}
-                  className="!grid grid-cols-2 gap-3 sm:grid-cols-4"
+                  ownLayout
+                  className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
                 >
                   <input type="hidden" name="picking" value="1" />
-                  <label className={`${labelClass} col-span-2 sm:col-span-4`}>
+                  <label className={`${labelClass} col-span-2 sm:col-span-5`}>
                     Search
                     <input
                       type="text"

@@ -28,11 +28,17 @@ export function FilterForm({
   action,
   showClear = true,
   className = "",
+  ownLayout = false,
   children,
 }: {
   action?: string;
   showClear?: boolean;
   className?: string;
+  /** The caller lays the fields out itself. Its `className` then replaces the
+   * default grid/flex rather than competing with it: two `grid-cols-*`
+   * utilities on one element resolve by Tailwind's emit order, not by which
+   * was written last, so appending one is a coin toss. */
+  ownLayout?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -103,7 +109,11 @@ export function FilterForm({
       // read as ragged (three narrow fields on one line, two on the next,
       // for no reason a viewer could see). sm: and up reverts to flex-wrap,
       // unchanged from before — plenty of room there for one tidy row.
-      className={`grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] items-end gap-3 sm:flex sm:flex-wrap ${className}`}
+      className={
+        ownLayout
+          ? `items-end ${className}`
+          : `grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] items-end gap-3 sm:flex sm:flex-wrap ${className}`
+      }
     >
       {children}
       {showClear && (

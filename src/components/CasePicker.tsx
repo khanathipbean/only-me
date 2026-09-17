@@ -53,10 +53,6 @@ export function CasePicker({
   return (
     <form action={action} className="mt-5 flex flex-col gap-3 border-t border-border pt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className={mutedTextClass}>
-          {selected.size} of {candidates.length} selected
-          {hasFilters ? " from these filters" : ""}
-        </p>
         <div className="flex gap-2">
           <Button
             type="button"
@@ -75,6 +71,12 @@ export function CasePicker({
             Clear all
           </Button>
         </div>
+        {/* Same wording as every other list in the app. How many of them are
+            ticked is on the submit button, where it decides what happens. */}
+        <p className={mutedTextClass}>
+          Total Results: <strong className="font-semibold text-foreground">{candidates.length}</strong>
+          {hasFilters ? " for these filters" : ""}
+        </p>
       </div>
 
       <div className="max-h-80 overflow-y-auto rounded-md border border-border">
