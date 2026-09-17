@@ -6,6 +6,8 @@ import { createPortal } from "react-dom";
 const SHOW_DELAY_MS = 300;
 /** Clearance from the trigger, and from the window's edges. */
 const GAP = 8;
+/** Widest the box may get before its text wraps. */
+const MAX_WIDTH = 320;
 
 /**
  * Whether the most recent input was a key press rather than a pointer —
@@ -51,7 +53,12 @@ if (typeof window !== "undefined") {
  * of whether this is showing.
  */
 export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
-  const [box, setBox] = useState<{ top: number; left: number; above: boolean } | null>(null);
+  const [box, setBox] = useState<{
+    top: number;
+    left: number;
+    above: boolean;
+    maxWidth: number;
+  } | null>(null);
   const [portalTarget, setPortalTarget] = useState<Element | null>(null);
   /** How far the box has to move off centre to stay inside its container. */
   const [shift, setShift] = useState(0);
@@ -73,10 +80,13 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
       // a trigger near the top of the viewport gets — measured against the
       // dialog's own edge, not the window's.
       const above = rect.top - containingRect.top > 40;
+      const containerWidth =
+        target === document.body ? window.innerWidth : (target as Element).clientWidth;
       setBox({
         top: (above ? rect.top - GAP : rect.bottom + GAP) - containingRect.top,
         left: rect.left + rect.width / 2 - containingRect.left,
         above,
+        maxWidth: Math.min(MAX_WIDTH, containerWidth - GAP * 2),
       });
       setPortalTarget(target);
     }, SHOW_DELAY_MS);
@@ -151,15 +161,20 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
             style={{
               top: box.top,
               left: box.left,
+              // `max-content` on purpose. A fixed box with only `left` set is
+              // sized by what's left of the container to its right, so one
+              // near the right edge shrank to a column of single words — and
+              // nudging it back with a transform doesn't undo that, because a
+              // transform doesn't change layout. Its own text decides the
+              // width now, capped below.
+              width: "max-content",
+              maxWidth: box.maxWidth,
               // One transform, not Tailwind's translate classes: the nudge
               // computed above has to compose with the centring, and two
               // sources writing `transform` would cancel each other out.
               transform: `translate(calc(-50% + ${shift}px), ${box.above ? "-100%" : "0"})`,
             }}
-            // Wraps inside a sensible measure rather than running on in one
-            // line: a label long enough to be a sentence is what pushed the
-            // box off the edge in the first place.
-            className="pointer-events-none fixed z-50 max-w-xs rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-lg"
+            className="pointer-events-none fixed z-50 rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-lg"
           >
             {label}
           </span>,
