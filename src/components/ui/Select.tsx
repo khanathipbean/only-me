@@ -1,10 +1,23 @@
 "use client";
 
-import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { ChevronRightIcon } from "@/components/icons";
 
 export type SelectOption = { value: string; label: string };
+
+/** Past this many options, the list grows a filter box. Below it, a filter is
+ *  one more thing standing between the click and the choice; above it,
+ *  scanning stops working — a project's Requirement picker runs to dozens of
+ *  names that all start the same way. */
+const SEARCHABLE_FROM = 8;
 
 /**
  * A dropdown with an option list we actually control. A native `<select>`
@@ -60,7 +73,9 @@ export function Select({
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const nativeRef = useRef<HTMLSelectElement>(null);
   const listboxId = useId();
 
@@ -69,6 +84,16 @@ export function Select({
     0,
   );
   const selectedLabel = options[selectedIndex]?.label ?? "";
+
+  const searchable = options.length >= SEARCHABLE_FROM;
+  const [query, setQuery] = useState("");
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) {
+      return options;
+    }
+    return options.filter((option) => option.label.toLowerCase().includes(needle));
+  }, [options, query]);
 
   function commit(next: string) {
     if (!isControlled) {
@@ -88,12 +113,14 @@ export function Select({
 
   function close() {
     setOpen(false);
+    setQuery("");
     setListBox(null);
     setPortalTarget(null);
     triggerRef.current?.focus();
   }
 
   function openList() {
+    setQuery("");
     setActiveIndex(selectedIndex);
     const trigger = triggerRef.current;
     if (trigger) {
@@ -117,15 +144,24 @@ export function Select({
       // the DIALOG grow a phantom scrollbar with nothing below it to reach.
       const GAP = 4;
       const rowHeightEstimate = 34;
-      const wantedHeight = Math.min(240, options.length * rowHeightEstimate + 8);
+      const searchRowHeight = searchable ? 45 : 0;
+      const wantedHeight = Math.min(
+        280,
+        options.length * rowHeightEstimate + 8 + searchRowHeight,
+      );
       const spaceBelow = containingRect.bottom - rect.bottom - GAP;
       const spaceAbove = rect.top - containingRect.top - GAP;
       const above = spaceBelow < wantedHeight && spaceAbove > spaceBelow;
-      const maxHeight = Math.max(80, Math.min(240, above ? spaceAbove : spaceBelow));
+      const maxHeight = Math.max(80, Math.min(280, above ? spaceAbove : spaceBelow));
 
       setListBox({
         top: (above ? rect.top - GAP : rect.bottom + GAP) - containingRect.top,
         left: rect.left - containingRect.left,
+        // Exactly the trigger's width — the list lines up with the field it
+        // belongs to and never grows past it. Sized to its widest option
+        // instead, it ran out over the fields beside it, and since a `fixed`
+        // child still counts toward a dialog's own scrollable area, it also
+        // dragged a horizontal scrollbar onto the dialog itself.
         width: rect.width,
         maxHeight,
         above,
@@ -163,7 +199,7 @@ export function Select({
       // on one of its options no longer counts as "inside" by DOM structure
       // alone — checked separately here, or every option click would look
       // like an outside click and close the list before `commit` ran.
-      if (!wrapperRef.current?.contains(target) && !listRef.current?.contains(target)) {
+      if (!wrapperRef.current?.contains(target) && !popupRef.current?.contains(target)) {
         setOpen(false);
       }
     }
@@ -172,7 +208,7 @@ export function Select({
     // capture-phase listener sees that too. Without this guard, scrolling a
     // list long enough to need scrolling closed it on the first wheel tick.
     function onScrollOrResize(event: Event) {
-      if (event.type === "scroll" && listRef.current?.contains(event.target as Node)) {
+      if (event.type === "scroll" && popupRef.current?.contains(event.target as Node)) {
         return;
       }
       setOpen(false);
@@ -202,13 +238,14 @@ export function Select({
     if (!open) {
       return;
     }
-    if (document.activeElement !== listRef.current) {
-      listRef.current?.focus();
+    const focusTarget = searchable ? searchRef.current : listRef.current;
+    if (focusTarget && document.activeElement !== focusTarget) {
+      focusTarget.focus();
     }
     listRef.current
       ?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)
       ?.scrollIntoView({ block: "nearest" });
-  }, [open, activeIndex]);
+  }, [open, activeIndex, searchable]);
 
   function onTriggerKeyDown(event: ReactKeyboardEvent) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === " ") {
@@ -221,7 +258,7 @@ export function Select({
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        setActiveIndex((index) => Math.min(index + 1, options.length - 1));
+        setActiveIndex((index) => Math.min(index + 1, visible.length - 1));
         break;
       case "ArrowUp":
         event.preventDefault();
@@ -233,13 +270,17 @@ export function Select({
         break;
       case "End":
         event.preventDefault();
-        setActiveIndex(options.length - 1);
+        setActiveIndex(visible.length - 1);
         break;
-      case "Enter":
       case " ":
+        if (searchable) {
+          return;
+        }
+      // falls through
+      case "Enter":
         event.preventDefault();
-        if (options[activeIndex]) {
-          commit(options[activeIndex].value);
+        if (visible[activeIndex]) {
+          commit(visible[activeIndex].value);
         }
         break;
       case "Escape":
@@ -251,7 +292,10 @@ export function Select({
         break;
       default:
         // Typeahead: jump to the first option starting with the typed letter.
-        if (event.key.length === 1) {
+        // Only where there is no filter box — with one, the letter belongs to
+        // it, and it already matches anywhere in the label rather than just
+        // the start, which is what a list of "REQ-PM-0xx" codes needs.
+        if (!searchable && event.key.length === 1) {
           const match = options.findIndex((option) =>
             option.label.toLowerCase().startsWith(event.key.toLowerCase()),
           );
@@ -307,44 +351,71 @@ export function Select({
         listBox &&
         portalTarget &&
         createPortal(
-          <ul
-            ref={listRef}
-            id={listboxId}
-            role="listbox"
-            tabIndex={-1}
-            aria-activedescendant={`${listboxId}-${activeIndex}`}
-            onKeyDown={onListKeyDown}
+          <div
+            ref={popupRef}
             style={{
               top: listBox.top,
               left: listBox.left,
               width: listBox.width,
               maxHeight: listBox.maxHeight,
             }}
-            className={`fixed z-20 min-w-max overflow-auto rounded-md border border-border bg-surface py-1 shadow-lg outline-none ${
+            className={`fixed z-20 flex flex-col overflow-hidden rounded-md border border-border bg-surface shadow-lg ${
               listBox.above ? "-translate-y-full" : ""
             }`}
           >
-            {options.map((option, index) => {
-              const isSelected = option.value === selected;
-              const isActive = index === activeIndex;
-              return (
-                <li
-                  key={option.value}
-                  id={`${listboxId}-${index}`}
-                  role="option"
-                  aria-selected={isSelected}
-                  data-index={index}
-                  onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => commit(option.value)}
-                  className={`cursor-pointer px-3 py-1.5 text-sm whitespace-nowrap ${
-                    isSelected ? "font-medium text-brand" : "text-foreground"
-                  } ${isActive ? "bg-black/[.05] dark:bg-white/[.08]" : ""}`}
-                >
-                  {option.label}
-                </li>
-              );
-            })}
-          </ul>,
+            {searchable && (
+              <div className="border-b border-border p-1.5">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setActiveIndex(0);
+                  }}
+                  onKeyDown={onListKeyDown}
+                  placeholder="Type to filter"
+                  aria-label="Filter options"
+                  aria-controls={listboxId}
+                  aria-activedescendant={`${listboxId}-${activeIndex}`}
+                  className="w-full rounded border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:border-brand"
+                />
+              </div>
+            )}
+            <ul
+              ref={listRef}
+              id={listboxId}
+              role="listbox"
+              tabIndex={-1}
+              aria-activedescendant={`${listboxId}-${activeIndex}`}
+              onKeyDown={onListKeyDown}
+              className="flex-1 overflow-auto py-1 outline-none"
+            >
+              {visible.length === 0 && (
+                <li className="px-3 py-2 text-sm text-muted">No match</li>
+              )}
+              {visible.map((option, index) => {
+                const isSelected = option.value === selected;
+                const isActive = index === activeIndex;
+                return (
+                  <li
+                    key={option.value}
+                    id={`${listboxId}-${index}`}
+                    role="option"
+                    aria-selected={isSelected}
+                    data-index={index}
+                    onMouseEnter={() => setActiveIndex(index)}
+                    onClick={() => commit(option.value)}
+                    className={`cursor-pointer px-3 py-1.5 text-sm break-words ${
+                      isSelected ? "font-medium text-brand" : "text-foreground"
+                    } ${isActive ? "bg-black/[.05] dark:bg-white/[.08]" : ""}`}
+                  >
+                    {option.label}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>,
           portalTarget,
         )}
     </div>

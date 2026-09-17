@@ -114,7 +114,10 @@ export function ScenarioForm({
           />
         </label>
         {requirements && (
-          <label className={labelClass}>
+          /* The full row, not half of one: these labels carry a code and a
+             sentence-long name, and the dropdown is only ever as wide as the
+             field it belongs to. */
+          <label className={`${labelClass} sm:col-span-2`}>
             <span>
               Requirement
               <RequiredMark />
