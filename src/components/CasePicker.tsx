@@ -5,7 +5,10 @@ import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { SubmitButton } from "@/components/SubmitButton";
-import { checkboxClass, mutedTextClass } from "@/lib/ui";
+import { ResultCount } from "@/components/ui/ResultCount";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { InfoIcon } from "@/components/icons";
+import { checkboxClass } from "@/lib/ui";
 import type { Priority, TestResult } from "@/generated/prisma/client";
 
 export type CaseCandidate = {
@@ -71,12 +74,27 @@ export function CasePicker({
             Clear all
           </Button>
         </div>
-        {/* Same wording as every other list in the app. How many of them are
-            ticked is on the submit button, where it decides what happens. */}
-        <p className={mutedTextClass}>
-          Total Results: <strong className="font-semibold text-foreground">{candidates.length}</strong>
-          {hasFilters ? " for these filters" : ""}
-        </p>
+        {/* The same count pill every other list uses. What the number means
+            is a sentence, not a label, so it lives in a tooltip rather than
+            trailing off the end of the row. */}
+        <div className="flex items-center gap-2">
+          <ResultCount total={candidates.length} />
+          <Tooltip
+            label={
+              hasFilters
+                ? "Cases matching these filters that aren't in this run yet. How many are ticked is on the Add button."
+                : "Every case in this project that isn't in this run yet. How many are ticked is on the Add button."
+            }
+          >
+            <button
+              type="button"
+              aria-label="What this count means"
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted outline-none transition-colors hover:bg-black/[.05] hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand dark:hover:bg-white/[.08]"
+            >
+              <InfoIcon className="size-4" />
+            </button>
+          </Tooltip>
+        </div>
       </div>
 
       <div className="max-h-80 overflow-y-auto rounded-md border border-border">
