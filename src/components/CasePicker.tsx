@@ -26,6 +26,10 @@ export type CaseCandidate = {
  * actually ticked. Reading the DOM instead would leave that number lying the
  * moment anyone unticked a row.
  */
+/** Shared by the header and every row so the labels line up with their
+ *  columns — a flex row would let each row's own content set the widths. */
+const ROW_GRID = "grid grid-cols-[1rem_minmax(0,1fr)_5.5rem_6.5rem] items-center gap-3";
+
 export function CasePicker({
   candidates,
   action,
@@ -97,32 +101,50 @@ export function CasePicker({
         </div>
       </div>
 
-      <div className="max-h-80 overflow-y-auto rounded-md border border-border">
-        {candidates.map((candidate) => (
-          <label
-            key={candidate.id}
-            className="flex items-start gap-3 border-b border-border px-3 py-2 text-sm last:border-b-0"
-          >
-            <input
-              type="checkbox"
-              name="testCaseId"
-              value={candidate.id}
-              checked={selected.has(candidate.id)}
-              onChange={(event) => toggle(candidate.id, event.target.checked)}
-              className={`${checkboxClass} mt-0.5`}
-            />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-foreground">{candidate.name}</span>
-              <span className="truncate text-xs text-muted">
-                {candidate.testGroup.scenario.name} › {candidate.testGroup.name}
+      <div className="rounded-md border border-border">
+        {/* A header, because "NOT RUN" on its own doesn't say whether it is
+            this run's result or the last one recorded anywhere — and it is
+            the latter, since nothing in this run has been run yet. */}
+        <div
+          className={`${ROW_GRID} border-b border-border bg-black/[.02] px-3 py-2 text-xs font-semibold tracking-wide text-muted uppercase dark:bg-white/[.03]`}
+        >
+          <span aria-hidden="true" />
+          <span>Test Case</span>
+          <span className="text-center">Priority</span>
+          <span className="text-center">Last result</span>
+        </div>
+
+        <div className="max-h-80 overflow-y-auto">
+          {candidates.map((candidate) => (
+            <label
+              key={candidate.id}
+              className={`${ROW_GRID} border-b border-border px-3 py-2 text-sm last:border-b-0`}
+            >
+              <input
+                type="checkbox"
+                name="testCaseId"
+                value={candidate.id}
+                checked={selected.has(candidate.id)}
+                onChange={(event) => toggle(candidate.id, event.target.checked)}
+                className={checkboxClass}
+              />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-foreground">{candidate.name}</span>
+                <span className="truncate text-xs text-muted">
+                  {candidate.testGroup.scenario.name} › {candidate.testGroup.name}
+                </span>
               </span>
-            </span>
-            <Badge tone={priorityTone(candidate.priority)}>{candidate.priority}</Badge>
-            <Badge tone={testResultTone(candidate.testResult)}>
-              {candidate.testResult.replace(/_/g, " ")}
-            </Badge>
-          </label>
-        ))}
+              <span className="text-center">
+                <Badge tone={priorityTone(candidate.priority)}>{candidate.priority}</Badge>
+              </span>
+              <span className="text-center">
+                <Badge tone={testResultTone(candidate.testResult)}>
+                  {candidate.testResult.replace(/_/g, " ")}
+                </Badge>
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2">
