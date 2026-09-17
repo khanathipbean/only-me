@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Pagination } from "@/components/ui/Pagination";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { InfoIcon } from "@/components/icons";
@@ -42,6 +43,19 @@ export function CasePicker({
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(candidates.map((candidate) => candidate.id)),
   );
+  /* Paged here rather than through the URL like every other list: paging by
+   * URL re-renders the page from the server, and everything ticked would be
+   * gone on the way back. Holding the page here keeps one selection across
+   * all of them. */
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  const totalPages = Math.max(Math.ceil(candidates.length / pageSize), 1);
+  const currentPage = Math.min(page, totalPages);
+  const visible = useMemo(
+    () => candidates.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [candidates, currentPage, pageSize],
+  );
 
   function toggle(id: string, checked: boolean) {
     setSelected((prev) => {
@@ -59,6 +73,13 @@ export function CasePicker({
 
   return (
     <form action={action} className="mt-5 flex flex-col gap-3 border-t border-border pt-5">
+      {/* The ticked ids ride as hidden fields, not as the checkboxes on
+          screen: only one page of those exists at a time, and a selection
+          spanning pages has to arrive whole. */}
+      {[...selected].map((id) => (
+        <input key={id} type="hidden" name="testCaseId" value={id} />
+      ))}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
           <Button
@@ -114,15 +135,14 @@ export function CasePicker({
             <span className="text-center">Priority</span>
             <span className="text-center">Last result</span>
           </div>
-          {candidates.map((candidate) => (
+          {visible.map((candidate) => (
             <label
               key={candidate.id}
               className={`${ROW_GRID} border-b border-border px-3 py-2 text-sm last:border-b-0`}
             >
               <input
                 type="checkbox"
-                name="testCaseId"
-                value={candidate.id}
+                aria-label={candidate.name}
                 checked={selected.has(candidate.id)}
                 onChange={(event) => toggle(candidate.id, event.target.checked)}
                 className={checkboxClass}
@@ -145,6 +165,20 @@ export function CasePicker({
           ))}
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <Pagination
+          page={currentPage}
+          totalPages={totalPages}
+          total={candidates.length}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(next) => {
+            setPageSize(next);
+            setPage(1);
+          }}
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         <DialogCloseButton />

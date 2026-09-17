@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { IconButton, IconLinkButton } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -69,12 +70,23 @@ export function Pagination({
   totalPages,
   total,
   pageSize,
+  onPageChange,
+  onPageSizeChange,
 }: {
   page: number;
   totalPages: number;
   total: number;
   pageSize: number;
+  /**
+   * Given together, the control reports changes instead of navigating, and
+   * the caller holds the page. A list that carries state across pages — the
+   * run picker's ticked cases — cannot use the URL for this: every page would
+   * be a fresh render, and what was ticked would be gone.
+   */
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
 }) {
+  const controlled = Boolean(onPageChange);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -99,6 +111,10 @@ export function Pagination({
   }
 
   function changePageSize(next: string) {
+    if (onPageSizeChange) {
+      onPageSizeChange(Number(next));
+      return;
+    }
     router.push(
       withParams((params) => {
         params.set("pageSize", next);
@@ -107,6 +123,33 @@ export function Pagination({
         params.delete("page");
       }),
       { scroll: false },
+    );
+  }
+
+  /** The same square either way: a link when the page lives in the URL, a
+   *  button when the caller owns it. */
+  function pageControl(target: number, label: string, children: ReactNode, className = "") {
+    return controlled ? (
+      <IconButton
+        type="button"
+        variant="secondary"
+        aria-label={label}
+        title={label}
+        className={className}
+        onClick={() => onPageChange?.(target)}
+      >
+        {children}
+      </IconButton>
+    ) : (
+      <IconLinkButton
+        href={hrefForPage(target)}
+        variant="secondary"
+        aria-label={label}
+        title={label}
+        className={className}
+      >
+        {children}
+      </IconLinkButton>
     );
   }
 
@@ -146,18 +189,14 @@ export function Pagination({
           doesn't exist. */}
       <div className="flex items-center gap-1">
         {page > 1 ? (
-          <IconLinkButton href={hrefForPage(1)} variant="secondary" aria-label="First page" title="First page">
-            <FirstPageIcon />
-          </IconLinkButton>
+          pageControl(1, "First page", <FirstPageIcon />)
         ) : (
           <IconButton type="button" variant="secondary" aria-label="First page" title="First page" disabled>
             <FirstPageIcon />
           </IconButton>
         )}
         {page > 1 ? (
-          <IconLinkButton href={hrefForPage(page - 1)} variant="secondary" aria-label="Previous page" title="Previous page">
-            <ChevronLeftIcon />
-          </IconLinkButton>
+          pageControl(page - 1, "Previous page", <ChevronLeftIcon />)
         ) : (
           <IconButton type="button" variant="secondary" aria-label="Previous page" title="Previous page" disabled>
             <ChevronLeftIcon />
@@ -184,31 +223,21 @@ export function Pagination({
               {entry}
             </span>
           ) : (
-            <IconLinkButton
-              key={entry}
-              href={hrefForPage(entry)}
-              variant="secondary"
-              aria-label={`Page ${entry}`}
-              className="text-sm font-medium"
-            >
-              {entry}
-            </IconLinkButton>
+            <span key={entry}>
+              {pageControl(entry, `Page ${entry}`, entry, "text-sm font-medium")}
+            </span>
           ),
         )}
 
         {page < totalPages ? (
-          <IconLinkButton href={hrefForPage(page + 1)} variant="secondary" aria-label="Next page" title="Next page">
-            <ChevronRightIcon />
-          </IconLinkButton>
+          pageControl(page + 1, "Next page", <ChevronRightIcon />)
         ) : (
           <IconButton type="button" variant="secondary" aria-label="Next page" title="Next page" disabled>
             <ChevronRightIcon />
           </IconButton>
         )}
         {page < totalPages ? (
-          <IconLinkButton href={hrefForPage(totalPages)} variant="secondary" aria-label="Last page" title="Last page">
-            <LastPageIcon />
-          </IconLinkButton>
+          pageControl(totalPages, "Last page", <LastPageIcon />)
         ) : (
           <IconButton type="button" variant="secondary" aria-label="Last page" title="Last page" disabled>
             <LastPageIcon />
