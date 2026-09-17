@@ -17,6 +17,7 @@ import {
   createRequirement,
   deleteRequirement,
   restoreRequirement,
+  updateRequirement,
 } from "@/lib/requirements";
 
 const mockAuth = vi.mocked(auth);
@@ -136,5 +137,30 @@ describe("requirements", () => {
     await expect(archiveRequirement(requirement.id, owner.id)).rejects.toThrow(
       RequirementValidationError,
     );
+  });
+
+  it("refuses to re-file a Requirement under another project's Module", async () => {
+    const { owner, project, testModule } = await setup("requirement-owner9@example.com", "PRJ-REQ-9");
+    const elsewhere = await setup("requirement-owner10@example.com", "PRJ-REQ-10");
+
+    const requirement = await createRequirement(
+      project.id,
+      { name: "Req in project 9", moduleId: testModule.id, priority: "MEDIUM" },
+      owner.id,
+    );
+
+    // The picker only ever offers this project's Modules, but the id arrives
+    // in a form field and a form field is whatever the request says it is.
+    await expect(
+      updateRequirement(
+        requirement.id,
+        { name: "Req in project 9", moduleId: elsewhere.testModule.id, priority: "MEDIUM" },
+        owner.id,
+      ),
+    ).rejects.toThrow(RequirementValidationError);
+
+    const after = await prisma.requirement.findUniqueOrThrow({ where: { id: requirement.id } });
+    expect(after.moduleId).toBe(testModule.id);
+    expect(after.projectId).toBe(project.id);
   });
 });

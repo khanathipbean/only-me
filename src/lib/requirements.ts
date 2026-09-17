@@ -211,6 +211,20 @@ export async function updateRequirement(
 ) {
   validate(input);
   const before = await prisma.requirement.findUniqueOrThrow({ where: { id } });
+
+  /* The Module id arrives from a form field, and a form field is whatever the
+   * request says it is. The picker only ever offers this Project's Modules, so
+   * nothing in the UI can reach another one — but nothing stopped a crafted
+   * request either, and a Requirement filed under another Project's Module
+   * would keep this Project's `projectId` and show up in both. */
+  const targetModule = await prisma.module.findFirst({
+    where: { id: input.moduleId, projectId: before.projectId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!targetModule) {
+    throw new RequirementValidationError("That Module is not in this project");
+  }
+
   const requirement = await prisma.requirement.update({
     where: { id },
     data: {

@@ -183,6 +183,20 @@ export async function updateScenario(
 
   const before = await prisma.scenario.findUniqueOrThrow({ where: { id } });
 
+  /* Same reason the Module is checked in `updateRequirement`: the picker only
+   * offers this Project's Requirements, but the field is still whatever the
+   * request sends, and a Scenario re-filed under another Project's Requirement
+   * would keep this Project's `projectId`. */
+  if (input.requirementId && input.requirementId !== before.requirementId) {
+    const target = await prisma.requirement.findFirst({
+      where: { id: input.requirementId, projectId: before.projectId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!target) {
+      throw new ValidationError("That Requirement is not in this project");
+    }
+  }
+
   const after = await prisma.scenario.update({
     where: { id },
     data: {

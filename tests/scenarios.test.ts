@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+import { ValidationError, updateScenario } from "@/lib/scenarios";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -304,5 +305,48 @@ describe("scenario routes", () => {
       { params: Promise.resolve({ id: scenario.id }) },
     );
     expect(response.status).toBe(403);
+  });
+
+  it("refuses to re-file a Scenario under another project's Requirement", async () => {
+    const owner = await createUser("s-owner-move@example.com");
+    const project = await createProjectAs(owner.id, "PRJ-SCN-MOVE-A");
+    const elsewhere = await createProjectAs(owner.id, "PRJ-SCN-MOVE-B");
+    const requirementId = await findOrCreateUnassignedRequirement(project.id, owner.id);
+    const elsewhereRequirementId = await findOrCreateUnassignedRequirement(
+      elsewhere.id,
+      owner.id,
+    );
+
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const scenario = await (
+      await createScenarioRoute(
+        jsonRequest(`http://test/api/projects/${project.id}/scenarios`, "POST", {
+          requirementId,
+          name: "Stays where it is",
+          expectedResult: "Result",
+          priority: "LOW",
+        }),
+        { params: Promise.resolve({ id: project.id }) },
+      )
+    ).json();
+
+    // The picker only offers this project's Requirements, but the field is
+    // still whatever the request sends.
+    await expect(
+      updateScenario(
+        scenario.id,
+        {
+          requirementId: elsewhereRequirementId,
+          name: "Stays where it is",
+          expectedResult: "Result",
+          priority: "LOW",
+        },
+        owner.id,
+      ),
+    ).rejects.toThrow(ValidationError);
+
+    const after = await prisma.scenario.findUniqueOrThrow({ where: { id: scenario.id } });
+    expect(after.requirementId).toBe(requirementId);
+    expect(after.projectId).toBe(project.id);
   });
 });
