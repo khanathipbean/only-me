@@ -24,6 +24,11 @@ export async function uploadFile(key: string, bytes: Buffer, contentType: string
 }
 
 /** Reads the bytes back. Resolves through the stored key only. */
+/** The ceiling on anything a user uploads — project files and Test Case
+ *  attachments alike. Declared here rather than in either uploader, since a
+ *  limit that lives with one of them is a limit the other forgets. */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
 export async function downloadFile(key: string): Promise<Buffer> {
   const { data, error } = await client().storage.from(BUCKET).download(key);
   if (error) {

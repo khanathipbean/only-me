@@ -13,6 +13,8 @@ vi.mock("@/lib/storage", () => ({
   uploadFile: vi.fn(),
   downloadFile: vi.fn(),
   deleteFile: vi.fn(),
+  // Not just the functions: `saveAttachment` reads the size cap from here too.
+  MAX_UPLOAD_BYTES: 20 * 1024 * 1024,
 }));
 
 import { auth } from "@/auth";
@@ -436,5 +438,59 @@ describe("test case routes", () => {
     ).json();
     expect(attachments).toHaveLength(1);
     expect(attachments[0].fileName).toBe("screenshot.png");
+    // The key is the app's own, not the uploader's name: a filename is not
+    // something to build a storage path out of.
+    const stored = await prisma.attachment.findUniqueOrThrow({
+      where: { id: attachments[0].id },
+      select: { storageKey: true },
+    });
+    expect(stored.storageKey).not.toContain("screenshot.png");
+    expect(stored.storageKey).toMatch(/^attachments\/[0-9a-f-]{36}$/);
+  });
+
+  it("refuses an empty attachment, and one past the size cap", async () => {
+    const { owner, testGroup } = await setup("tc-owner8@example.com", "PRJ-TC-8");
+
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const created = await (
+      await createTestCaseRoute(
+        jsonRequest(`http://test/api/test-groups/${testGroup.id}/test-cases`, "POST", {
+          name: "Case needing evidence",
+          expectedResult: "Result",
+          priority: "LOW",
+          steps: [{ step: "Step", expectedResult: "Expected" }],
+        }),
+        { params: Promise.resolve({ id: testGroup.id }) },
+      )
+    ).json();
+    const params = Promise.resolve({ id: created.id });
+
+    const upload = async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return uploadAttachmentRoute(
+        new NextRequest(`http://test/api/test-cases/${created.id}/attachments`, {
+          method: "POST",
+          body: formData,
+        }),
+        { params },
+      );
+    };
+
+    const empty = await upload(new File([], "empty.png", { type: "image/png" }));
+    expect(empty.status).toBe(400);
+    expect((await empty.json()).error).toMatch(/empty/i);
+
+    const oversized = await upload(
+      new File([new Uint8Array(20 * 1024 * 1024 + 1)], "huge.bin", {
+        type: "application/octet-stream",
+      }),
+    );
+    expect(oversized.status).toBe(400);
+    expect((await oversized.json()).error).toMatch(/larger than 20 MB/i);
+
+    // Neither wrote anything.
+    const attachments = await prisma.attachment.count({ where: { testCaseId: created.id } });
+    expect(attachments).toBe(0);
   });
 });

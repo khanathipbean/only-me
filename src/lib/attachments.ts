@@ -1,11 +1,28 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { deleteFile, downloadFile, uploadFile } from "@/lib/storage";
+import { MAX_UPLOAD_BYTES, deleteFile, downloadFile, uploadFile } from "@/lib/storage";
 
 const FOLDER = "attachments";
 
+export class AttachmentValidationError extends Error {}
+
 export async function saveAttachment(testCaseId: string, file: File, uploadedById: string) {
-  const storageKey = `${FOLDER}/${randomUUID()}-${file.name}`;
+  // The same two checks a project file gets. This path had neither, so a
+  // Test Case would take an empty file, or one of any size at all.
+  if (file.size === 0) {
+    throw new AttachmentValidationError("That file is empty");
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new AttachmentValidationError(
+      `File is larger than ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`,
+    );
+  }
+
+  // A bare UUID, the way project files are keyed. The uploader's filename used
+  // to be appended here, which is the one thing `saveProjectFile` is careful
+  // not to do: a name is not ours to build a path out of. It is kept in
+  // `fileName` below, which is display-only.
+  const storageKey = `${FOLDER}/${randomUUID()}`;
   const buffer = Buffer.from(await file.arrayBuffer());
   await uploadFile(storageKey, buffer, file.type || "application/octet-stream");
 

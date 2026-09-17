@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { downloadFile, uploadFile } from "@/lib/storage";
+import { MAX_UPLOAD_BYTES, downloadFile, uploadFile } from "@/lib/storage";
 
 const FOLDER = "project-files";
 
-export const MAX_FILE_BYTES = 20 * 1024 * 1024;
+export const MAX_FILE_BYTES = MAX_UPLOAD_BYTES;
 
 /**
  * Types the browser can display without being able to run anything.

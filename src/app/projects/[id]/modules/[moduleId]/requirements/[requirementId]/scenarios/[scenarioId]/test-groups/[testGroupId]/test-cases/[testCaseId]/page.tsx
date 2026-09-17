@@ -21,7 +21,12 @@ import {
 import { parseStepsJson } from "@/lib/test-case-form";
 import { getTestGroupWithProjectId, listTestGroupsForProject } from "@/lib/test-groups";
 import { getScenarioById, getScenarioLocation } from "@/lib/scenarios";
-import { deleteAttachment, getAttachmentWithProjectId, saveAttachment } from "@/lib/attachments";
+import {
+  AttachmentValidationError,
+  deleteAttachment,
+  getAttachmentWithProjectId,
+  saveAttachment,
+} from "@/lib/attachments";
 import { canPreview, getFileKind } from "@/lib/project-files";
 import { FilePreview } from "@/components/FilePreview";
 import { ConfirmForm } from "@/components/ConfirmForm";
@@ -67,10 +72,10 @@ export default async function TestCaseDetailPage({
     testGroupId: string;
     testCaseId: string;
   }>;
-  searchParams: Promise<{ error?: string; moveError?: string }>;
+  searchParams: Promise<{ error?: string; moveError?: string; attachmentError?: string }>;
 }) {
   const { moduleId, requirementId, scenarioId, testGroupId, testCaseId } = await params;
-  const { error, moveError } = await searchParams;
+  const { error, moveError, attachmentError } = await searchParams;
   const session = await auth();
 
   const testCase = await getTestCaseWithProjectId(testCaseId);
@@ -165,8 +170,22 @@ export default async function TestCaseDetailPage({
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const file = formData.get("file");
-    if (file instanceof File && file.size > 0) {
+    if (!(file instanceof File)) {
+      redirect(
+        `${basePath}/${testCaseId}?attachmentError=${encodeURIComponent("Choose a file first")}`,
+      );
+    }
+    try {
       await saveAttachment(testCaseId, file, session!.user.id);
+    } catch (err) {
+      // An empty or oversized file used to be dropped in silence, and the
+      // page still said "Attachment uploaded".
+      if (err instanceof AttachmentValidationError) {
+        redirect(
+          `${basePath}/${testCaseId}?attachmentError=${encodeURIComponent(err.message)}`,
+        );
+      }
+      throw err;
     }
     redirect(withToast(`${basePath}/${testCaseId}`, "Attachment uploaded"));
   }
@@ -412,6 +431,9 @@ export default async function TestCaseDetailPage({
               </li>
             ))}
           </ul>
+        )}
+        {attachmentError && (
+          <DismissibleAlert clearParams={["attachmentError"]}>{attachmentError}</DismissibleAlert>
         )}
         <form action={uploadAttachment} encType="multipart/form-data" className="mt-3 flex items-center gap-3">
           <input
