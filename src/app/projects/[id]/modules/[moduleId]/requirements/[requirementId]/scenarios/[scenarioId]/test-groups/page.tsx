@@ -33,6 +33,7 @@ import { TestGroupForm } from "@/components/forms/TestGroupForm";
 import { Badge, workflowStatusTone } from "@/components/ui/Badge";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { SubmitAction } from "@/components/SubmitButton";
+import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { FilterForm } from "@/components/FilterForm";
 import { Select } from "@/components/ui/Select";
 import { Pagination } from "@/components/ui/Pagination";
@@ -75,6 +76,9 @@ export default async function TestGroupsPage({
   params: Promise<{ id: string; moduleId: string; requirementId: string; scenarioId: string }>;
   searchParams: Promise<{
     error?: string;
+    /** A refused archive. Its own parameter, not `error`: that one reopens
+     * the New dialog, and a refusal has nothing to do with creating one. */
+    archiveError?: string;
     /** Surfaced inside the row's Manage section when a Move is rejected. */
     moveError?: string;
     search?: string;
@@ -89,7 +93,7 @@ export default async function TestGroupsPage({
   }>;
 }) {
   const { id: projectId, moduleId, requirementId, scenarioId } = await params;
-  const { error, moveError, search, status, archived, page, pageSize, editId } =
+  const { error, archiveError, moveError, search, status, archived, page, pageSize, editId } =
     await searchParams;
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || status || showArchived);
@@ -193,7 +197,16 @@ export default async function TestGroupsPage({
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
-        await archiveTestGroup(testGroupId, actorId);
+        try {
+          await archiveTestGroup(testGroupId, actorId);
+        } catch (err) {
+          // Refused for still carrying live Test Cases — shown against the
+          // list, since there is no row dialog to land back in.
+          if (err instanceof ValidationError) {
+            redirect(`${listPath}?archiveError=${encodeURIComponent(err.message)}`);
+          }
+          throw err;
+        }
         redirect(withToast(listHref, "Test Group archived"));
       },
       async restore() {
@@ -342,6 +355,12 @@ export default async function TestGroupsPage({
           </Modal>
         }
       />
+
+      {/* A refused archive has no row dialog to land back in, so the reason is
+          shown against the list itself. */}
+      {archiveError && (
+        <DismissibleAlert clearParams={["archiveError"]}>{archiveError}</DismissibleAlert>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">

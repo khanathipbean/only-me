@@ -252,7 +252,7 @@ describe("move operations", () => {
     expect(newGroupCases).toHaveLength(1);
   });
 
-  it("returns accurate descendant counts on Scenario archive", async () => {
+  it("refuses to archive a Scenario that still carries live Test Groups", async () => {
     const owner = await createUser("mv-owner5@example.com");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
@@ -263,12 +263,37 @@ describe("move operations", () => {
     await createTestCase(testGroup.id, "TC2");
     await createTestCase(testGroup.id, "TC3");
 
+    // The same rule Module and Requirement have always had. Archiving never
+    // touched descendants, so letting it through left them alive under
+    // something no list would show.
+    const refused = await archiveScenarioRoute(
+      jsonRequest(`http://test/api/scenarios/${scenario.id}/archive`, "POST"),
+      { params: Promise.resolve({ id: scenario.id }) },
+    );
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).error).toMatch(/1 Test Group/);
+    expect(
+      (await prisma.scenario.findUniqueOrThrow({ where: { id: scenario.id } })).deletedAt,
+    ).toBeNull();
+
+    // Archived from the bottom up, it goes through and still reports what it
+    // carries.
+    await prisma.testCase.updateMany({
+      where: { testGroupId: testGroup.id },
+      data: { deletedAt: new Date() },
+    });
+    await prisma.testGroup.update({
+      where: { id: testGroup.id },
+      data: { deletedAt: new Date() },
+    });
+
     const response = await archiveScenarioRoute(
       jsonRequest(`http://test/api/scenarios/${scenario.id}/archive`, "POST"),
       { params: Promise.resolve({ id: scenario.id }) },
     );
+    expect(response.status).toBe(200);
     const archived = await response.json();
-    expect(archived.descendantCounts).toEqual({ testGroups: 1, testCases: 3 });
+    expect(archived.descendantCounts).toEqual({ testGroups: 0, testCases: 0 });
   });
 
   it("requires editor membership on both projects to move a Test Group into a different project's Scenario", async () => {

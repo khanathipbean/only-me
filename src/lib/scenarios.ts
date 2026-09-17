@@ -292,7 +292,22 @@ export async function getScenarioDescendantCountsForMany(scenarioIds: string[]) 
   return counts;
 }
 
+/** Shared by archive and delete, and the same rule Module and Requirement have
+ * always had: nothing is put away while live children still hang off it. Those
+ * children keep `deletedAt: null` — archiving a parent never touched them — so
+ * they would sit alive under something the lists no longer show, reachable
+ * only by restoring the parent. */
+async function assertScenarioNotInUse(id: string) {
+  const testGroups = await prisma.testGroup.count({ where: { scenarioId: id, deletedAt: null } });
+  if (testGroups > 0) {
+    throw new ValidationError(
+      `Still carries ${testGroups} Test Group(s). Move or archive them first.`,
+    );
+  }
+}
+
 export async function archiveScenario(id: string, actorId: string) {
+  await assertScenarioNotInUse(id);
   const [scenario, descendantCounts] = await Promise.all([
     setScenarioDeletedAt(id, actorId, "archive", new Date()),
     getScenarioDescendantCounts(id),

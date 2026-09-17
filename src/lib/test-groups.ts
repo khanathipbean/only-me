@@ -317,7 +317,19 @@ export async function getTestGroupDescendantCountsForMany(testGroupIds: string[]
   return counts;
 }
 
+/** The same rule every other level has: nothing is put away while live
+ * children still hang off it. See `assertScenarioNotInUse`. */
+async function assertTestGroupNotInUse(id: string) {
+  const testCases = await prisma.testCase.count({ where: { testGroupId: id, deletedAt: null } });
+  if (testCases > 0) {
+    throw new ValidationError(
+      `Still carries ${testCases} Test Case(s). Move or archive them first.`,
+    );
+  }
+}
+
 export async function archiveTestGroup(id: string, actorId: string) {
+  await assertTestGroupNotInUse(id);
   const [testGroup, descendantCounts] = await Promise.all([
     setTestGroupDeletedAt(id, actorId, "archive", new Date()),
     getTestGroupDescendantCounts(id),

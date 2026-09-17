@@ -21,6 +21,7 @@ import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { EntityManageSection } from "@/components/EntityManageSection";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { FilterForm } from "@/components/FilterForm";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { Pagination } from "@/components/ui/Pagination";
@@ -80,6 +81,9 @@ export default async function ScenariosPage({
     page?: string;
     pageSize?: string;
     error?: string;
+    /** A refused archive. Its own parameter, not `error`: that one reopens
+     * the New dialog, and a refusal has nothing to do with creating one. */
+    archiveError?: string;
     /** Surfaced inside the row's Manage section when a Move is rejected. */
     moveError?: string;
     /** Which row's inline Edit modal to reopen after a failed save. Without it
@@ -103,6 +107,7 @@ export default async function ScenariosPage({
     page,
     pageSize,
     error,
+    archiveError,
     moveError,
     editId,
     new: openNew,
@@ -228,7 +233,18 @@ export default async function ScenariosPage({
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const actorId = session!.user.id;
-        await archiveScenario(scenarioId, actorId);
+        try {
+          await archiveScenario(scenarioId, actorId);
+        } catch (err) {
+          // Refused for still carrying live Test Groups. There is no row
+          // dialog to land back in, so it is shown against the list.
+          if (err instanceof ValidationError) {
+            const query = new URLSearchParams(listQueryString);
+            query.set("archiveError", err.message);
+            redirect(`${listPath}?${query}`);
+          }
+          throw err;
+        }
         redirect(withToast(listHref, "Scenario archived"));
       },
       async restore() {
@@ -389,6 +405,12 @@ export default async function ScenariosPage({
           </Modal>
         }
       />
+
+      {/* A refused archive has no row dialog to land back in, so the reason is
+          shown against the list itself. */}
+      {archiveError && (
+        <DismissibleAlert clearParams={["archiveError"]}>{archiveError}</DismissibleAlert>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">
