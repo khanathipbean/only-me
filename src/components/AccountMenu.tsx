@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
 import { EditIcon, LogoutIcon, MoonIcon, SunIcon, UsersIcon } from "@/components/icons";
+import { SubmitAction } from "@/components/SubmitButton";
 import { useTheme } from "@/lib/theme";
 
 /**
@@ -149,10 +150,19 @@ export function AccountMenu({
 
             <div className="border-t border-border py-1">
               <form action={logout}>
-                <button type="submit" role="menuitem" className={itemClass}>
+                <SubmitAction
+                  role="menuitem"
+                  className={`${itemClass} disabled:opacity-60`}
+                  pendingChildren={
+                    <>
+                      <LogoutIcon />
+                      Logging out…
+                    </>
+                  }
+                >
                   <LogoutIcon />
                   Log out
-                </button>
+                </SubmitAction>
               </form>
             </div>
           </div>,

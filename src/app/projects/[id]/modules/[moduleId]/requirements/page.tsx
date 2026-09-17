@@ -29,7 +29,8 @@ import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
 import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
-import { Button, IconButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { TrashIcon } from "@/components/icons";
@@ -449,9 +450,9 @@ export default async function RequirementsPage({
                           </div>
                           <div className="flex items-center gap-2">
                             <DialogCloseButton />
-                            <Button type="submit" form={`edit-requirement-${requirement.id}`}>
+                            <FormSubmitButton formId={`edit-requirement-${requirement.id}`}>
                               Save
-                            </Button>
+                            </FormSubmitButton>
                           </div>
                         </div>
                       </RowActions>

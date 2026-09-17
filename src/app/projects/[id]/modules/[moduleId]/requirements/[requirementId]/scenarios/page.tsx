@@ -17,7 +17,7 @@ import {
 } from "@/lib/scenarios";
 import { getProjectById, listProjectsForUserWithRole } from "@/lib/projects";
 import { getRequirementById, listRequirementsForProject } from "@/lib/requirements";
-import { Button } from "@/components/ui/Button";
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { EntityManageSection } from "@/components/EntityManageSection";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -549,9 +549,9 @@ export default async function ScenariosPage({
                         trailing={
                           <>
                             <DialogCloseButton />
-                            <Button type="submit" form={`edit-scenario-${scenario.id}`}>
+                            <FormSubmitButton formId={`edit-scenario-${scenario.id}`}>
                               Save
-                            </Button>
+                            </FormSubmitButton>
                           </>
                         }
                       />

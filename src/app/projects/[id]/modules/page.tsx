@@ -24,7 +24,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { RowActions } from "@/components/ui/RowActions";
-import { Button, IconButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
@@ -358,9 +359,9 @@ export default async function ModulesPage({
                             </div>
                             <div className="flex items-center gap-2">
                               <DialogCloseButton />
-                              <Button type="submit" form={`edit-module-${module.id}`}>
+                              <FormSubmitButton formId={`edit-module-${module.id}`}>
                                 Save
-                              </Button>
+                              </FormSubmitButton>
                             </div>
                           </div>
                         </RowActions>

@@ -29,3 +29,27 @@ export function SubmitButton({
     </Button>
   );
 }
+
+/**
+ * The same guard for a submit control that isn't a `Button` — the test group
+ * reorder arrows, the Log out item in the account menu. It keeps whatever
+ * classes the caller gives it and only adds the disabled state, since these
+ * are too small for a spinner to fit in.
+ *
+ * Worth having on the arrows in particular: two quick clicks would move a row
+ * twice, and the second move is against an order the first one already
+ * changed.
+ */
+export function SubmitAction({
+  children,
+  pendingChildren,
+  ...props
+}: Omit<ComponentProps<"button">, "type" | "disabled"> & { pendingChildren?: ReactNode }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button type="submit" disabled={pending} aria-busy={pending} {...props}>
+      {pending ? (pendingChildren ?? children) : children}
+    </button>
+  );
+}

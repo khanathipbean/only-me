@@ -31,7 +31,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { TestGroupForm } from "@/components/forms/TestGroupForm";
 import { Badge, workflowStatusTone } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { FormSubmitButton } from "@/components/FormSubmitButton";
+import { SubmitAction } from "@/components/SubmitButton";
 import { FilterForm } from "@/components/FilterForm";
 import { Select } from "@/components/ui/Select";
 import { Pagination } from "@/components/ui/Pagination";
@@ -419,21 +420,19 @@ export default async function TestGroupsPage({
                         <div className="flex items-center justify-center gap-1">
                           <form action={moveUp}>
                             <input type="hidden" name="id" value={testGroup.id} />
-                            <button
-                              type="submit"
-                              className="rounded-md border border-border px-2 py-1 text-sm text-muted hover:text-foreground"
+                            <SubmitAction
+                              className="rounded-md border border-border px-2 py-1 text-sm text-muted transition-opacity hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               ↑
-                            </button>
+                            </SubmitAction>
                           </form>
                           <form action={moveDown}>
                             <input type="hidden" name="id" value={testGroup.id} />
-                            <button
-                              type="submit"
-                              className="rounded-md border border-border px-2 py-1 text-sm text-muted hover:text-foreground"
+                            <SubmitAction
+                              className="rounded-md border border-border px-2 py-1 text-sm text-muted transition-opacity hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               ↓
-                            </button>
+                            </SubmitAction>
                           </form>
                         </div>
                       </td>
@@ -482,9 +481,9 @@ export default async function TestGroupsPage({
                         trailing={
                           <>
                             <DialogCloseButton />
-                            <Button type="submit" form={`edit-test-group-${testGroup.id}`}>
+                            <FormSubmitButton formId={`edit-test-group-${testGroup.id}`}>
                               Save
-                            </Button>
+                            </FormSubmitButton>
                           </>
                         }
                       />
