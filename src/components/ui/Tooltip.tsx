@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 const SHOW_DELAY_MS = 300;
@@ -53,7 +53,10 @@ if (typeof window !== "undefined") {
 export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
   const [box, setBox] = useState<{ top: number; left: number; above: boolean } | null>(null);
   const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+  /** How far the box has to move off centre to stay inside its container. */
+  const [shift, setShift] = useState(0);
   const wrapperRef = useRef<HTMLSpanElement>(null);
+  const tipRef = useRef<HTMLSpanElement>(null);
   const showTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function scheduleShow() {
@@ -83,7 +86,38 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
     if (showTimeout.current) clearTimeout(showTimeout.current);
     setBox(null);
     setPortalTarget(null);
+    setShift(0);
   }
+
+  /**
+   * Centring on the trigger runs the box off the edge when the trigger sits
+   * near one — a sentence-length label next to a right-aligned control ended
+   * up half outside the dialog. Measured after it renders, because how far it
+   * overhangs depends on how wide the text made it, then nudged back inside.
+   */
+  useLayoutEffect(() => {
+    const tip = tipRef.current;
+    if (!box || !tip) {
+      return;
+    }
+    const rect = tip.getBoundingClientRect();
+    const bounds =
+      portalTarget && portalTarget !== document.body
+        ? portalTarget.getBoundingClientRect()
+        : { left: 0, right: window.innerWidth };
+
+    let delta = 0;
+    if (rect.left < bounds.left + GAP) {
+      delta = bounds.left + GAP - rect.left;
+    } else if (rect.right > bounds.right - GAP) {
+      delta = bounds.right - GAP - rect.right;
+    }
+    if (delta !== 0) {
+      // One correction pass: `shift` is deliberately not a dependency, so
+      // applying it doesn't re-run this and bounce the box back and forth.
+      setShift((current) => current + delta);
+    }
+  }, [box, portalTarget]);
 
   // Fixed coordinates go stale as soon as anything moves; `hide` is a no-op
   // while nothing is shown, so this can just listen for the component's whole
@@ -112,11 +146,20 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
         portalTarget &&
         createPortal(
           <span
+            ref={tipRef}
             role="tooltip"
-            style={{ top: box.top, left: box.left }}
-            className={`pointer-events-none fixed z-50 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs font-medium whitespace-nowrap text-background shadow-lg ${
-              box.above ? "-translate-y-full" : ""
-            }`}
+            style={{
+              top: box.top,
+              left: box.left,
+              // One transform, not Tailwind's translate classes: the nudge
+              // computed above has to compose with the centring, and two
+              // sources writing `transform` would cancel each other out.
+              transform: `translate(calc(-50% + ${shift}px), ${box.above ? "-100%" : "0"})`,
+            }}
+            // Wraps inside a sensible measure rather than running on in one
+            // line: a label long enough to be a sentence is what pushed the
+            // box off the edge in the first place.
+            className="pointer-events-none fixed z-50 max-w-xs rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-lg"
           >
             {label}
           </span>,
