@@ -102,19 +102,18 @@ export function CasePicker({
       </div>
 
       <div className="rounded-md border border-border">
-        {/* A header, because "NOT RUN" on its own doesn't say whether it is
-            this run's result or the last one recorded anywhere — and it is
-            the latter, since nothing in this run has been run yet. */}
-        <div
-          className={`${ROW_GRID} border-b border-border bg-black/[.02] px-3 py-2 text-xs font-semibold tracking-wide text-muted uppercase dark:bg-white/[.03]`}
-        >
-          <span aria-hidden="true" />
-          <span>Test Case</span>
-          <span className="text-center">Priority</span>
-          <span className="text-center">Last result</span>
-        </div>
-
         <div className="max-h-80 overflow-y-auto">
+          {/* Inside the scroller, not above it: a header outside sits over the
+              full width while the rows lose the scrollbar's, so every column
+              was off by that much. Sticky keeps it in view all the same. */}
+          <div
+            className={`${ROW_GRID} sticky top-0 z-10 border-b border-border bg-surface px-3 py-2 text-xs font-semibold tracking-wide text-muted uppercase`}
+          >
+            <span aria-hidden="true" />
+            <span>Test Case</span>
+            <span className="text-center">Priority</span>
+            <span className="text-center">Last result</span>
+          </div>
           {candidates.map((candidate) => (
             <label
               key={candidate.id}
