@@ -15,6 +15,7 @@ import {
   setRunStatus,
 } from "@/lib/test-runs";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { CasePicker } from "@/components/CasePicker";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
 import { nameOr, testRunBreadcrumb } from "@/lib/breadcrumb";
@@ -24,10 +25,8 @@ import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
-import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { TEST_RESULT_OPTIONS, PRIORITY_OPTIONS } from "@/lib/enums";
 import {
-  checkboxClass,
   inputClass,
   labelClass,
   mutedTextClass,
@@ -302,46 +301,11 @@ export default async function TestRunPage({
                       : "Every test case in this project is already in this run."}
                   </p>
                 ) : (
-                  <form action={addCases} className="mt-5 flex flex-col gap-3 border-t border-border pt-5">
-                    <p className={mutedTextClass}>
-                      {candidates.length} case{candidates.length === 1 ? "" : "s"} available
-                      {hasFilters ? " for these filters" : ""}. Untick any you don&apos;t want.
-                    </p>
-                    <div className="max-h-80 overflow-y-auto rounded-md border border-border">
-                      {candidates.map((candidate) => (
-                        <label
-                          key={candidate.id}
-                          className="flex items-start gap-3 border-b border-border px-3 py-2 text-sm last:border-b-0"
-                        >
-                          <input
-                            type="checkbox"
-                            name="testCaseId"
-                            value={candidate.id}
-                            defaultChecked
-                            className={`${checkboxClass} mt-0.5`}
-                          />
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="truncate text-foreground">{candidate.name}</span>
-                            <span className="truncate text-xs text-muted">
-                              {candidate.testGroup.scenario.name} › {candidate.testGroup.name}
-                            </span>
-                          </span>
-                          <Badge tone={priorityTone(candidate.priority)}>
-                            {candidate.priority}
-                          </Badge>
-                          <Badge tone={testResultTone(candidate.testResult)}>
-                            {candidate.testResult.replace(/_/g, " ")}
-                          </Badge>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <DialogCloseButton />
-                      <SubmitButton pendingLabel="Adding…">
-                        Add {candidates.length} to run
-                      </SubmitButton>
-                    </div>
-                  </form>
+                  <CasePicker
+                    candidates={candidates}
+                    action={addCases}
+                    hasFilters={hasFilters}
+                  />
                 )}
               </Modal>
             )}
