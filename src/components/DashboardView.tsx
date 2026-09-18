@@ -130,11 +130,15 @@ type DashboardData = {
     requirements: Array<{ id: string; name: string; moduleId: string }>;
     scenarios: Array<{ id: string; name: string; requirementId: string }>;
     testGroups: Array<{ id: string; name: string; scenarioId: string }>;
+    testRuns: Array<{ id: string; name: string; status: string }>;
   };
 };
 
 type Filters = {
   search: string;
+  /** Which round of testing to read results from. Empty means every Test Case
+   *  and its last recorded result, which is what this page always showed. */
+  testRunId: string;
   moduleId: string;
   feature: string;
   requirementId: string;
@@ -149,6 +153,7 @@ type Filters = {
 
 const EMPTY_FILTERS: Filters = {
   search: "",
+  testRunId: "",
   moduleId: "",
   feature: "",
   requirementId: "",
@@ -163,6 +168,7 @@ const EMPTY_FILTERS: Filters = {
 
 const FILTER_LABELS: Record<keyof Filters, string> = {
   search: "Search",
+  testRunId: "Test Run",
   moduleId: "Module",
   feature: "Feature",
   requirementId: "Requirement",
@@ -339,6 +345,8 @@ export function DashboardView({ projectId }: { projectId: string }) {
         return data?.options.scenarios.find((row) => row.id === value)?.name ?? value;
       case "testGroupId":
         return data?.options.testGroups.find((row) => row.id === value)?.name ?? value;
+      case "testRunId":
+        return data?.options.testRuns.find((row) => row.id === value)?.name ?? value;
       case "assigneeId":
         return (
           data?.testCasesByAssignee.find((row) => row.assigneeId === value)?.assigneeName ?? value
@@ -353,7 +361,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
       <div className="flex flex-col gap-3">
         <form
           onSubmit={(event) => event.preventDefault()}
-          className="flex items-center gap-2"
+          className="flex flex-wrap items-center gap-2"
         >
           <input
             type="search"
@@ -361,8 +369,27 @@ export function DashboardView({ projectId }: { projectId: string }) {
             onChange={(event) => updateFilter("search", event.target.value)}
             placeholder="Search test cases…"
             aria-label="Search test cases"
-            className={`${inputClass} flex-1`}
+            className={`${inputClass} min-w-48 flex-1`}
           />
+          {/* Out in the open, not behind the filter toggle: this one changes
+              what every number on the page means, rather than narrowing which
+              rows they cover. Hidden entirely until the project has a round to
+              choose. */}
+          {(options?.testRuns?.length ?? 0) > 0 && (
+            <Select
+              value={filters.testRunId}
+              onChange={(next) => updateFilter("testRunId", next)}
+              options={[
+                { value: "", label: "All test cases" },
+                ...(options?.testRuns ?? []).map((run) => ({
+                  value: run.id,
+                  label: `${run.name} · ${run.status === "OPEN" ? "open" : "closed"}`,
+                })),
+              ]}
+              ariaLabel="Test Run"
+              className="w-56"
+            />
+          )}
           <IconButton
             type="button"
             variant={showMoreFilters ? "secondary" : "ghost"}

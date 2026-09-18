@@ -6,6 +6,7 @@ import { createScenario } from "@/lib/scenarios";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { createTestGroup } from "@/lib/test-groups";
 import { createTestCase, updateAssignee, updateTestResultAndNotes } from "@/lib/test-cases";
+import { addCasesToRun, createRun, setRunCaseResult } from "@/lib/test-runs";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -281,5 +282,83 @@ describe("project dashboard", () => {
       testGroups: 0,
       testCases: 0,
     });
+  });
+
+  it("reads results from the chosen Test Run, and only its cases", async () => {
+    const owner = await createUser("dash-owner7@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1, tc3 } = await seedDashboardFixture(owner.id, "PRJ-DASH-7");
+
+    // A round covering two of the three cases. TC1 already carries PASSED from
+    // before the round existed; inside the round it is re-tested and fails.
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [tc1.id, tc3.id], owner.id);
+    await setRunCaseResult(run.id, tc1.id, { testResult: "FAILED" }, owner.id);
+
+    const unfiltered = await dashboard(project.id);
+    const inRun = await dashboard(project.id, `?testRunId=${run.id}`);
+
+    // Without a round: all three cases, and TC1's result is the last one
+    // written anywhere — which the round has now overwritten.
+    expect(unfiltered.counts.testCases).toBe(3);
+
+    // With the round: only its two cases, and their results are the round's.
+    expect(inRun.counts.testCases).toBe(2);
+    expect(inRun.testCasesByResult).toEqual({
+      NOT_RUN: 1,
+      PASSED: 0,
+      FAILED: 1,
+      BLOCKED: 0,
+      SKIPPED: 0,
+    });
+    // One of two recorded, not two of three.
+    expect(inRun.testProgress).toBeCloseTo(50);
+
+    // TC2 is not in the round, so it is absent from the tree as well as the
+    // counts — the cards and the tree must never disagree.
+    const names = inRun.tree
+      .flatMap((m: { requirements: { scenarios: { testGroups: { testCases: { name: string }[] }[] }[] }[] }) =>
+        m.requirements.flatMap((r) =>
+          r.scenarios.flatMap((s) => s.testGroups.flatMap((g) => g.testCases.map((c) => c.name))),
+        ),
+      )
+      .sort();
+    expect(names).toEqual(["TC1", "TC3"]);
+  });
+
+  it("filters by the round's result, not the copy left on the Test Case", async () => {
+    const owner = await createUser("dash-owner8@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-8");
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [tc1.id, tc2.id], owner.id);
+    // TC1 passed before the round and is BLOCKED within it; TC2 failed before
+    // and passes within it.
+    await setRunCaseResult(run.id, tc1.id, { testResult: "BLOCKED" }, owner.id);
+    await setRunCaseResult(run.id, tc2.id, { testResult: "PASSED" }, owner.id);
+
+    const blocked = await dashboard(project.id, `?testRunId=${run.id}&testResult=BLOCKED`);
+    expect(blocked.counts.testCases).toBe(1);
+    expect(blocked.testCasesByResult.BLOCKED).toBe(1);
+
+    const passed = await dashboard(project.id, `?testRunId=${run.id}&testResult=PASSED`);
+    expect(passed.counts.testCases).toBe(1);
+    expect(passed.testCasesByResult.PASSED).toBe(1);
+  });
+
+  it("offers the project's rounds as filter options, newest first", async () => {
+    const owner = await createUser("dash-owner9@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id, "PRJ-DASH-9");
+
+    await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await createRun(project.id, { name: "Sprint 2" }, owner.id);
+
+    const result = await dashboard(project.id);
+    expect(result.options.testRuns.map((run: { name: string }) => run.name)).toEqual([
+      "Sprint 2",
+      "Sprint 1",
+    ]);
   });
 });

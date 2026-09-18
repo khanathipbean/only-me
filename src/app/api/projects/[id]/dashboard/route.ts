@@ -20,6 +20,7 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
     requirementId: searchParams.get("requirementId") ?? undefined,
     scenarioId: searchParams.get("scenarioId") ?? undefined,
     testGroupId: searchParams.get("testGroupId") ?? undefined,
+    testRunId: searchParams.get("testRunId") ?? undefined,
     testResult: asEnumOrUndefined<TestResult>(searchParams.get("testResult"), TEST_RESULT_VALUES),
     priority: asEnumOrUndefined<Priority>(searchParams.get("priority"), PRIORITY_VALUES),
     status: asEnumOrUndefined<WorkflowStatus>(searchParams.get("status"), WORKFLOW_STATUS_VALUES),

@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES } from "@/lib/enums";
-import type { Priority, TestResult, WorkflowStatus } from "@/generated/prisma/client";
+import type {
+  Priority,
+  TestResult,
+  TestRunStatus,
+  WorkflowStatus,
+} from "@/generated/prisma/client";
 
 /** Pure: no divide-by-zero when a project has no Test Cases yet. */
 export function calculateTestProgress(testCasesWithResult: number, totalTestCases: number): number {
@@ -20,6 +25,16 @@ export type DashboardFilters = {
   status?: WorkflowStatus;
   assigneeId?: string;
   tags?: string[];
+  /**
+   * Narrows the whole dashboard to one round of testing.
+   *
+   * `TestCase.testResult` holds whatever the last round to touch that case
+   * wrote there, so on its own it can't say how a given round is going — and
+   * it counts cases no round has ever included. With a run chosen, only the
+   * cases in it are counted and each one's result is that round's, read from
+   * `TestRunCase`.
+   */
+  testRunId?: string;
 };
 
 export type DashboardTestCaseNode = {
@@ -74,6 +89,8 @@ export type DashboardFilterOptions = {
   requirements: Array<{ id: string; name: string; moduleId: string }>;
   scenarios: Array<{ id: string; name: string; requirementId: string }>;
   testGroups: Array<{ id: string; name: string; scenarioId: string }>;
+  /** The rounds of testing this project has had, newest first. */
+  testRuns: Array<{ id: string; name: string; status: TestRunStatus }>;
 };
 
 export type ProjectDashboard = {
@@ -114,11 +131,38 @@ export async function getProjectDashboard(
     ...(filters.search
       ? { name: { contains: filters.search, mode: "insensitive" as const } }
       : {}),
-    ...(filters.testResult ? { testResult: filters.testResult } : {}),
+    /* With a run chosen, membership *and* the result filter both go through
+     * `runCases`: the result that matters is the one recorded in that round,
+     * not the copy left on the Test Case by whichever round wrote last. */
+    ...(filters.testRunId
+      ? {
+          runCases: {
+            some: {
+              testRunId: filters.testRunId,
+              ...(filters.testResult ? { testResult: filters.testResult } : {}),
+            },
+          },
+        }
+      : filters.testResult
+        ? { testResult: filters.testResult }
+        : {}),
     ...(filters.priority ? { priority: filters.priority } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
   };
+
+  /* One query for the chosen round's results, so the loop below can read each
+   * case's result for that round instead of the mirrored one. */
+  const runResults = filters.testRunId
+    ? new Map(
+        (
+          await prisma.testRunCase.findMany({
+            where: { testRunId: filters.testRunId },
+            select: { testCaseId: true, testResult: true },
+          })
+        ).map((runCase) => [runCase.testCaseId, runCase.testResult]),
+      )
+    : null;
 
   const testGroupWhere = {
     deletedAt: null,
@@ -185,10 +229,15 @@ export async function getProjectDashboard(
       name: group.name,
       testCaseCount: group.testCases.length,
       testCases: group.testCases.map((testCase) => {
+        // The round's own result when a round is chosen. Read once here and
+        // used for the breakdown, the progress and the tree node alike, so
+        // the cards and the tree can never tell different stories.
+        const testResult = runResults?.get(testCase.id) ?? testCase.testResult;
+
         totalTestCases += 1;
-        testCasesByResult[testCase.testResult] += 1;
+        testCasesByResult[testResult] += 1;
         testCasesByPriority[testCase.priority] += 1;
-        if (testCase.testResult !== "NOT_RUN") {
+        if (testResult !== "NOT_RUN") {
           testCasesWithResult += 1;
         }
 
@@ -207,7 +256,7 @@ export async function getProjectDashboard(
         return {
           id: testCase.id,
           name: testCase.name,
-          testResult: testCase.testResult,
+          testResult,
           priority: testCase.priority,
           assigneeName: testCase.assignee?.name ?? null,
         };
@@ -258,8 +307,14 @@ export async function getProjectDashboard(
 
   const tree = Array.from(moduleNodes.values());
 
-  const [moduleOptions, requirementOptions, featureRows, scenarioOptions, testGroupOptions] =
-    await Promise.all([
+  const [
+    moduleOptions,
+    requirementOptions,
+    featureRows,
+    scenarioOptions,
+    testGroupOptions,
+    testRunOptions,
+  ] = await Promise.all([
       prisma.module.findMany({
         where: { projectId, deletedAt: null },
         select: { id: true, name: true },
@@ -286,6 +341,13 @@ export async function getProjectDashboard(
         select: { id: true, name: true, scenarioId: true },
         orderBy: { sequence: "asc" },
       }),
+      // Newest first: the round someone wants to look at is almost always the
+      // one they just opened.
+      prisma.testRun.findMany({
+        where: { projectId, deletedAt: null },
+        select: { id: true, name: true, status: true },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
 
   return {
@@ -308,6 +370,7 @@ export async function getProjectDashboard(
       requirements: requirementOptions,
       scenarios: scenarioOptions,
       testGroups: testGroupOptions,
+      testRuns: testRunOptions,
     },
   };
 }
