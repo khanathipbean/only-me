@@ -19,6 +19,10 @@ export type SelectOption = { value: string; label: string };
  *  names that all start the same way. */
 const SEARCHABLE_FROM = 8;
 
+/** Past this the list stops reading as a dropdown and starts reading as a
+ *  panel pasted over the page. Long labels wrap inside it instead. */
+const CONTENT_MAX_WIDTH = 384;
+
 /**
  * A dropdown with an option list we actually control. A native `<select>`
  * hands its open list to the OS, so its corners, row height and highlight
@@ -66,6 +70,7 @@ export function Select({
     top: number;
     left: number;
     width: number;
+    maxWidth: number;
     maxHeight: number;
     above: boolean;
   } | null>(null);
@@ -133,7 +138,7 @@ export function Select({
       const target = trigger.closest("dialog") ?? document.body;
       const containingRect =
         target === document.body
-          ? { top: 0, left: 0, bottom: window.innerHeight }
+          ? { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight }
           : target.getBoundingClientRect();
 
       // Clamped to whichever box it's confined to, rather than letting it
@@ -157,12 +162,21 @@ export function Select({
       setListBox({
         top: (above ? rect.top - GAP : rect.bottom + GAP) - containingRect.top,
         left: rect.left - containingRect.left,
-        // Exactly the trigger's width — the list lines up with the field it
-        // belongs to and never grows past it. Sized to its widest option
-        // instead, it ran out over the fields beside it, and since a `fixed`
-        // child still counts toward a dialog's own scrollable area, it also
-        // dragged a horizontal scrollbar onto the dialog itself.
+        // The trigger's width is the floor, not the width. Pinning the list to
+        // it exactly looked tidy on a wide field and broke every narrow one:
+        // a filter select is about sixty pixels, so "Critical" came out as
+        // "Critic / al" over two lines.
         width: rect.width,
+        // ...and the ceiling is whichever comes first, the container's own
+        // edge or a width past which a dropdown stops reading as a dropdown.
+        // Without the first, a `fixed` child still counts toward a dialog's
+        // scrollable area and dragged a horizontal scrollbar onto it; without
+        // the second, one long option turned the list into a banner across
+        // the page.
+        maxWidth: Math.max(
+          rect.width,
+          Math.min(CONTENT_MAX_WIDTH, containingRect.right - rect.left - GAP),
+        ),
         maxHeight,
         above,
       });
@@ -356,7 +370,14 @@ export function Select({
             style={{
               top: listBox.top,
               left: listBox.left,
-              width: listBox.width,
+              // `max-content` between the two bounds: the list is as wide as
+              // it needs to be, never narrower than the field it belongs to,
+              // never wider than it has room for. As an inline style rather
+              // than a `min-w-*` class, since a min-width beats a max-width in
+              // the cascade and the clamp would lose.
+              width: "max-content",
+              minWidth: listBox.width,
+              maxWidth: listBox.maxWidth,
               maxHeight: listBox.maxHeight,
             }}
             className={`fixed z-20 flex flex-col overflow-hidden rounded-md border border-border bg-surface shadow-lg ${
