@@ -400,11 +400,19 @@ export default async function TestCasesPage({
                               <li key={step.id} className="flex gap-2">
                                 <span className="w-5 shrink-0 text-muted">{index + 1}.</span>
                                 <span>
-                                  <span className="whitespace-pre-wrap">{step.step}</span>{" "}
-                                  <span className="text-muted">→</span>{" "}
-                                  <span className="whitespace-pre-wrap italic">
-                                    {step.expectedResult}
-                                  </span>
+                                  <span className="whitespace-pre-wrap">{step.step}</span>
+                                  {/* Only when the step has one of its own — see
+                                      the detail page for why most imported
+                                      steps do not. */}
+                                  {step.expectedResult && (
+                                    <>
+                                      {" "}
+                                      <span className="text-muted">→</span>{" "}
+                                      <span className="whitespace-pre-wrap italic">
+                                        {step.expectedResult}
+                                      </span>
+                                    </>
+                                  )}
                                 </span>
                               </li>
                             ))}

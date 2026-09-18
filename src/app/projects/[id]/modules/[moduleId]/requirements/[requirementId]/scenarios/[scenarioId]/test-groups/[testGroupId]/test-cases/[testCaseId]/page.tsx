@@ -351,9 +351,19 @@ export default async function TestCaseDetailPage({
             <li key={step.id} className="flex gap-3 text-sm">
               <span className="w-5 shrink-0 text-muted">{index + 1}.</span>
               <span>
-                <span className="whitespace-pre-wrap">{step.step}</span>{" "}
-                <span className="text-muted">→</span>{" "}
-                <span className="whitespace-pre-wrap italic">{step.expectedResult}</span>
+                <span className="whitespace-pre-wrap">{step.step}</span>
+                {/* The arrow separates a step from its own expected result, so
+                    it only earns its place when there is one. An imported
+                    sheet has a single Expected Result for the whole Test Case
+                    and it lands on the last step, which left every step before
+                    it ending in an arrow pointing at nothing. */}
+                {step.expectedResult && (
+                  <>
+                    {" "}
+                    <span className="text-muted">→</span>{" "}
+                    <span className="whitespace-pre-wrap italic">{step.expectedResult}</span>
+                  </>
+                )}
               </span>
             </li>
           ))}
