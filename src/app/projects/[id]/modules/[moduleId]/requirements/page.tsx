@@ -355,11 +355,15 @@ export default async function RequirementsPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            {/* The badge columns hold one short word each and were taking a
+                fifth of the table apiece, which left the names — the only
+                column with anything long in it — wrapping against dead space.
+                */}
             <colgroup>
-              <col className="w-[46%]" />
-              <col className="w-[20%]" />
-              <col className="w-[20%]" />
-              <col className="w-[14%]" />
+              <col className="w-[66%]" />
+              <col className="w-[12%]" />
+              <col className="w-[12%]" />
+              <col className="w-[10%]" />
             </colgroup>
             <thead>
               <tr>
@@ -380,23 +384,29 @@ export default async function RequirementsPage({
                     cells={
                       <>
                         <td className={tdClass}>
-                          {/* Straight to what it covers, like every other level. */}
-                          <Link
-                            href={`${listPath}/${requirement.id}/scenarios`}
-                            className="font-medium text-foreground hover:text-brand hover:underline"
-                          >
-                            {requirement.name}
-                          </Link>
-                          {requirement.feature && (
-                            <span className="ml-2 align-middle">
-                              <Badge tone="gray" variant="outline">
-                                {requirement.feature}
-                              </Badge>
+                          {/* A row, not a run of inline text: the Feature tag
+                              and the count are each one piece, and a long name
+                              used to push "scenario(s)" onto its own line away
+                              from the number in front of it. */}
+                          <div className="flex items-baseline gap-2">
+                            {/* Straight to what it covers, like every other level. */}
+                            <Link
+                              href={`${listPath}/${requirement.id}/scenarios`}
+                              className="min-w-0 font-medium text-foreground hover:text-brand hover:underline"
+                            >
+                              {requirement.name}
+                            </Link>
+                            {requirement.feature && (
+                              <span className="shrink-0">
+                                <Badge tone="gray" variant="outline">
+                                  {requirement.feature}
+                                </Badge>
+                              </span>
+                            )}
+                            <span className="shrink-0 text-xs whitespace-nowrap text-muted">
+                              {requirement._count.scenarios} scenario(s)
                             </span>
-                          )}
-                          <span className="ml-2 text-xs text-muted">
-                            {requirement._count.scenarios} scenario(s)
-                          </span>
+                          </div>
                         </td>
                         <td className={tdCenterClass}>
                           <Badge tone={priorityTone(requirement.priority)}>

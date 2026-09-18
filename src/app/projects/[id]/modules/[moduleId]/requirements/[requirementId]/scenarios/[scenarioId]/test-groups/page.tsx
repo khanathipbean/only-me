@@ -409,16 +409,20 @@ export default async function TestGroupsPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            {/* The badge columns hold one short word each and were taking a
+                fifth of the table apiece, which left the names — the only
+                column with anything long in it — wrapping against dead space.
+                */}
             <colgroup>
+              <col className="w-[8%]" />
+              <col className="w-[58%]" />
+              <col className="w-[12%]" />
+              <col className="w-[12%]" />
               <col className="w-[10%]" />
-              <col className="w-[38%]" />
-              <col className="w-[18%]" />
-              <col className="w-[20%]" />
-              <col className="w-[14%]" />
             </colgroup>
             <thead>
               <tr>
-                <th className={thClass}>Sequence</th>
+                <th className={thCenterClass}>Sequence</th>
                 <th className={thClass}>Name</th>
                 <th className={thCenterClass}>Status</th>
                 <th className={thCenterClass}>Reorder</th>
@@ -433,20 +437,24 @@ export default async function TestGroupsPage({
                   detailLabel={testGroup.name}
                   cells={
                     <>
-                      <td className={`${tdClass} text-muted`}>{testGroup.sequence}</td>
+                      <td className={`${tdCenterClass} text-muted`}>{testGroup.sequence}</td>
                       <td className={tdClass}>
-                        {/* Straight to the children, not this Test Group's own
-                            detail page: drilling down is the common move, and
-                            the panel below covers a quick look. */}
-                        <Link
-                          href={`${listPath}/${testGroup.id}/test-cases`}
-                          className="font-medium text-foreground hover:text-brand hover:underline"
-                        >
-                          {testGroup.name}
-                        </Link>
-                        <span className="ml-2 text-xs text-muted">
-                          {descendantCounts.get(testGroup.id)?.testCases ?? 0} test case(s)
-                        </span>
+                        {/* A row, not a run of inline text: the count is one
+                            phrase and must not break across lines. */}
+                        <div className="flex items-baseline gap-2">
+                          {/* Straight to the children, not this Test Group's own
+                              detail page: drilling down is the common move, and
+                              the panel below covers a quick look. */}
+                          <Link
+                            href={`${listPath}/${testGroup.id}/test-cases`}
+                            className="min-w-0 font-medium text-foreground hover:text-brand hover:underline"
+                          >
+                            {testGroup.name}
+                          </Link>
+                          <span className="shrink-0 text-xs whitespace-nowrap text-muted">
+                            {descendantCounts.get(testGroup.id)?.testCases ?? 0} test case(s)
+                          </span>
+                        </div>
                       </td>
                       <td className={tdCenterClass}>
                         <Badge tone={workflowStatusTone(testGroup.status)}>

@@ -284,16 +284,24 @@ export default async function ModulesPage({
                 return (
                   <tr key={module.id} className={trHoverClass}>
                     <td className={tdClass}>
-                      {/* Straight to what it contains, like every other level. */}
-                      <Link
-                        href={`${listPath}/${module.id}/requirements`}
-                        className="font-medium text-foreground hover:text-brand hover:underline"
-                      >
-                        {module.name}
-                      </Link>
-                      <span className="ml-2 text-xs text-muted">
-                        {module._count.requirements} requirement(s)
-                      </span>
+                      {/* A row, not a run of inline text. The count is one
+                          phrase and must not be broken in half, which is what
+                          happened when all of this was left to wrap as text;
+                          the name is the only item that gives way, so the tag
+                          and the count stay beside it rather than being pushed
+                          to the far edge. */}
+                      <div className="flex items-baseline gap-2">
+                        {/* Straight to what it contains, like every other level. */}
+                        <Link
+                          href={`${listPath}/${module.id}/requirements`}
+                          className="min-w-0 font-medium text-foreground hover:text-brand hover:underline"
+                        >
+                          {module.name}
+                        </Link>
+                        <span className="shrink-0 text-xs whitespace-nowrap text-muted">
+                          {module._count.requirements} requirement(s)
+                        </span>
+                      </div>
                     </td>
                     <td className={tdCenterClass}>
                       <div className="inline-flex items-center gap-1">
