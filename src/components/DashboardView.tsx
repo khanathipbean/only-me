@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/Badge";
 import { Button, IconButton, LinkButton } from "@/components/ui/Button";
 import { ChevronRightIcon, ClearIcon, FilterIcon, FilterOffIcon } from "@/components/icons";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 const TEST_RESULT_LABELS: Record<string, string> = {
   NOT_RUN: "Not Run",
@@ -131,11 +132,24 @@ type DashboardData = {
     scenarios: Array<{ id: string; name: string; requirementId: string }>;
     testGroups: Array<{ id: string; name: string; scenarioId: string }>;
     testRuns: Array<{ id: string; name: string; status: string }>;
+    phases: string[];
   };
+  runProgress: Array<{
+    id: string;
+    name: string;
+    status: string;
+    total: number;
+    recorded: number;
+    byResult: Record<string, number>;
+  }>;
+  coverage: { inAnyRun: number; notInAnyRun: number };
 };
 
 type Filters = {
   search: string;
+  /** Six sprints to a phase. Narrows which rounds exist as far as this page is
+   *  concerned — both the panel and the round picker. */
+  phase: string;
   /** Which round of testing to read results from. Empty means every Test Case
    *  and its last recorded result, which is what this page always showed. */
   testRunId: string;
@@ -153,6 +167,7 @@ type Filters = {
 
 const EMPTY_FILTERS: Filters = {
   search: "",
+  phase: "",
   testRunId: "",
   moduleId: "",
   feature: "",
@@ -168,6 +183,7 @@ const EMPTY_FILTERS: Filters = {
 
 const FILTER_LABELS: Record<keyof Filters, string> = {
   search: "Search",
+  phase: "Phase",
   testRunId: "Test Run",
   moduleId: "Module",
   feature: "Feature",
@@ -375,6 +391,26 @@ export function DashboardView({ projectId }: { projectId: string }) {
               what every number on the page means, rather than narrowing which
               rows they cover. Hidden entirely until the project has a round to
               choose. */}
+          {(options?.phases?.length ?? 0) > 0 && (
+            <Select
+              value={filters.phase}
+              onChange={(next) => {
+                // Choosing a phase clears the round: the round that was
+                // selected probably isn't in the new phase, and a picker
+                // showing a value it no longer offers is worse than none.
+                setLoading(true);
+                setFilters((current) => ({ ...current, phase: next, testRunId: "" }));
+              }}
+              options={[
+                { value: "", label: "All phases" },
+                ...(options?.phases ?? []).map((value) => ({ value, label: value })),
+              ]}
+              ariaLabel="Phase"
+              autoWidth
+              /* A ceiling only, for a phase someone gave a long name. */
+              className="max-w-44"
+            />
+          )}
           {(options?.testRuns?.length ?? 0) > 0 && (
             <Select
               value={filters.testRunId}
@@ -648,12 +684,57 @@ function SummaryWidget({
           onClick={(key) => onDrillDown("priority", key)}
           tone={priorityTone}
         />
+        {/* The third column, which the two breakdowns left empty. One panel,
+            not two stacked: the rounds and the work no round covers are the
+            same story — where the testing has been spread — and a second
+            heading in a column where every other column has one read as a
+            layout accident.
+
+            Deliberately ignoring the filters above, including the chosen
+            round: this exists to compare the rounds against each other, and
+            filtered there would be nothing to compare. Phase is the one
+            exception, because it decides which rounds are on the page at
+            all. */}
+        {data.runProgress.length > 0 && (
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Test Runs</h3>
+            <ul className="mt-3 grid grid-cols-[max-content_1fr_auto] items-center gap-x-2.5 gap-y-2">
+              {data.runProgress.map((run) => (
+                <li key={run.id} className="col-span-3 grid grid-cols-subgrid items-center">
+                  <RunProgressRow run={run} />
+                </li>
+              ))}
+              {data.coverage.notInAnyRun > 0 && (
+                <>
+                  {/* A rule, because the row below is not a round: it is what
+                      the rounds above have not reached. */}
+                  <li aria-hidden="true" className="col-span-3 my-0.5 border-t border-border" />
+                  <li className="col-span-3 grid grid-cols-subgrid items-center">
+                    <MeterRow
+                      label="unscheduled"
+                      count={data.coverage.notInAnyRun}
+                      total={data.coverage.inAnyRun + data.coverage.notInAnyRun}
+                      tone="gray"
+                      hint="In no run yet — an archived run doesn't count."
+                    />
+                  </li>
+                </>
+              )}
+            </ul>
+            {data.coverage.notInAnyRun > 0 && (
+              <p className="mt-2 text-[11px] text-muted">
+                Test Progress counts every case, these included.
+              </p>
+            )}
+          </div>
+        )}
+
         {ASSIGNEE_ENABLED && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">By Assignee</h3>
-          <ul className="mt-3 flex flex-col gap-2">
+          <ul className="mt-3 grid grid-cols-[max-content_1fr_auto] items-center gap-x-2.5 gap-y-2">
             {data.testCasesByAssignee.map((entry) => (
-              <li key={entry.assigneeId ?? "unassigned"}>
+              <li key={entry.assigneeId ?? "unassigned"} className="col-span-3 grid grid-cols-subgrid items-center">
                 <MeterRow
                   label={entry.assigneeName}
                   count={entry.count}
@@ -706,9 +787,9 @@ function BreakdownList({
   return (
     <div>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className="mt-3 grid grid-cols-[max-content_1fr_auto] items-center gap-x-2.5 gap-y-2">
         {entries.map(([key, count]) => (
-          <li key={key}>
+          <li key={key} className="col-span-3 grid grid-cols-subgrid items-center">
             <MeterRow
               label={key.replace(/_/g, " ")}
               count={count}
@@ -724,23 +805,91 @@ function BreakdownList({
 }
 
 /** A single proportional bar row — the shared building block for every Overview breakdown list. */
+/**
+ * One round: its name, how much of it has been recorded, and what those
+ * results were — one bar split by result rather than five separate bars, so
+ * three rounds read as three things to compare instead of fifteen.
+ *
+ * Reuses the result tones from `By Test Result` above it. A round's own colour
+ * would be a new hue for something that already has one, and every tone in
+ * `Badge` is spoken for.
+ */
+function RunProgressRow({
+  run,
+}: {
+  run: {
+    name: string;
+    status: string;
+    total: number;
+    recorded: number;
+    byResult: Record<string, number>;
+  };
+}) {
+  // NOT_RUN last and unfilled: it is the part not yet done, which reads as the
+  // empty remainder of the bar rather than a result of its own.
+  const segments = TEST_RESULT_VALUES.filter((value) => value !== "NOT_RUN")
+    .map((value) => ({ value, count: run.byResult[value] ?? 0 }))
+    .filter((segment) => segment.count > 0);
+
+  return (
+    <Tooltip
+      className="col-span-3 grid grid-cols-subgrid items-center"
+      label={
+        <span className="flex flex-col gap-0.5">
+          <span className="font-semibold">
+            {run.name} · {run.status === "OPEN" ? "open" : "closed"}
+          </span>
+          {/* Every result, including the ones with none: a round with no
+              failures is worth seeing stated, and a list that changes length
+              as you move between rows is harder to read than one that
+              doesn't. */}
+          {TEST_RESULT_VALUES.map((value) => (
+            <span key={value} className="flex justify-between gap-4">
+              <span>{TEST_RESULT_LABELS[value]}</span>
+              <span className="tabular-nums">{run.byResult[value] ?? 0}</span>
+            </span>
+          ))}
+        </span>
+      }
+    >
+      <span className="truncate text-xs font-medium text-muted">{run.name}</span>
+      <span className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
+        {segments.map((segment) => (
+          <span
+            key={segment.value}
+            className={`block h-full ${toneBarClass(testResultTone(segment.value))}`}
+            style={{ width: `${run.total > 0 ? (segment.count / run.total) * 100 : 0}%` }}
+          />
+        ))}
+      </span>
+      <span className="text-right text-xs font-semibold tabular-nums text-foreground">
+        {run.recorded}/{run.total}
+      </span>
+    </Tooltip>
+  );
+}
+
 function MeterRow({
   label,
   count,
   total,
   tone,
   onClick,
+  hint,
 }: {
   label: string;
   count: number;
   total: number;
   tone: Tone;
   onClick?: () => void;
+  /** An extra line on the tooltip, where the number alone doesn't explain
+   *  itself. */
+  hint?: string;
 }) {
   const pct = total > 0 ? Math.round((count / total) * 100) : 0;
   const content = (
     <>
-      <span className="w-24 shrink-0 truncate text-xs font-medium text-muted capitalize">
+      <span className="truncate text-xs font-medium text-muted capitalize">
         {label.toLowerCase()}
       </span>
       <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.1]">
@@ -749,29 +898,43 @@ function MeterRow({
           style={{ width: `${Math.max(pct, count > 0 ? 4 : 0)}%` }}
         />
       </span>
-      <span className="w-6 shrink-0 text-right text-xs font-semibold tabular-nums text-foreground">
+      <span className="text-right text-xs font-semibold tabular-nums text-foreground">
         {count}
       </span>
     </>
   );
 
+  const tip = (
+    <span className="flex flex-col gap-0.5">
+      <span className="font-semibold capitalize">{label.toLowerCase()}</span>
+      <span>
+        {count} of {total} ({pct}%)
+      </span>
+      {hint && <span className="opacity-80">{hint}</span>}
+    </span>
+  );
+
   if (!onClick) {
     return (
-      <div title={`${label}: ${count} (${pct}%)`} className="flex items-center gap-2.5">
+      <Tooltip label={tip} className="col-span-3 grid grid-cols-subgrid items-center">
         {content}
-      </div>
+      </Tooltip>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={`${label}: ${count} (${pct}%)`}
-      className="flex w-full items-center gap-2.5 rounded-md py-0.5 text-left hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+    <Tooltip
+      label={tip}
+      className="col-span-3 grid grid-cols-subgrid items-center rounded-md hover:bg-black/[.03] dark:hover:bg-white/[.05]"
     >
-      {content}
-    </button>
+      <button
+        type="button"
+        onClick={onClick}
+        className="col-span-3 grid grid-cols-subgrid items-center py-0.5 text-left"
+      >
+        {content}
+      </button>
+    </Tooltip>
   );
 }
 

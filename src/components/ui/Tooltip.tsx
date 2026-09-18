@@ -52,7 +52,21 @@ if (typeof window !== "undefined") {
  * `aria-label`, which is what a screen reader actually announces regardless
  * of whether this is showing.
  */
-export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
+export function Tooltip({
+  label,
+  children,
+  className = "inline-flex",
+}: {
+  /** Usually a line of text, but anything that reads as a small panel — a
+   *  breakdown of counts, say — belongs here too. */
+  label: ReactNode;
+  children: ReactNode;
+  /** Replaces the wrapper's own layout. The wrapper has to be a real box for
+   *  the tooltip to measure itself against, so it cannot be `display:
+   *  contents` — a caller inside a grid passes the row's own classes instead,
+   *  which keeps the wrapper *as* the row rather than a box around it. */
+  className?: string;
+}) {
   const [box, setBox] = useState<{
     top: number;
     left: number;
@@ -145,7 +159,7 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
   return (
     <span
       ref={wrapperRef}
-      className="inline-flex"
+      className={className}
       onMouseEnter={scheduleShow}
       onMouseLeave={hide}
       onFocus={() => usingKeyboard && scheduleShow()}

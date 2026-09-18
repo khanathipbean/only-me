@@ -6,7 +6,12 @@ import { createScenario } from "@/lib/scenarios";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { createTestGroup } from "@/lib/test-groups";
 import { createTestCase, updateAssignee, updateTestResultAndNotes } from "@/lib/test-cases";
-import { addCasesToRun, createRun, setRunCaseResult } from "@/lib/test-runs";
+import {
+  addCasesToRun,
+  createRun,
+  setRunCaseResult,
+  setRunDeletedAt,
+} from "@/lib/test-runs";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -51,6 +56,20 @@ async function dashboard(projectId: string, query = "") {
 
 /** Seeds: Scenario A (tags: smoke) > Group A1 > TC1 (HIGH/PASSED/user1), TC2 (LOW/FAILED/user2, status DRAFT);
  *  Scenario B (tags: regression) > Group B1 > TC3 (HIGH/NOT_RUN, unassigned, status DRAFT). */
+/** Every Test Case name the tree carries, sorted — the tree's answer to the
+ *  question the cards answer with a count. */
+function caseNames(tree: Array<{ requirements: Array<{ scenarios: Array<{ testGroups: Array<{ testCases: Array<{ name: string }> }> }> }> }>): string[] {
+  return tree
+    .flatMap((module) =>
+      module.requirements.flatMap((requirement) =>
+        requirement.scenarios.flatMap((scenario) =>
+          scenario.testGroups.flatMap((group) => group.testCases.map((testCase) => testCase.name)),
+        ),
+      ),
+    )
+    .sort();
+}
+
 async function seedDashboardFixture(ownerId: string, code: string) {
   const project = await (
     await createProjectRoute(
@@ -345,6 +364,153 @@ describe("project dashboard", () => {
     const passed = await dashboard(project.id, `?testRunId=${run.id}&testResult=PASSED`);
     expect(passed.counts.testCases).toBe(1);
     expect(passed.testCasesByResult.PASSED).toBe(1);
+  });
+
+  it("reports each round's progress and how much work is scheduled at all", async () => {
+    const owner = await createUser("dash-owner10@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-10");
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [tc1.id, tc2.id], owner.id);
+    await setRunCaseResult(run.id, tc1.id, { testResult: "PASSED" }, owner.id);
+
+    const result = await dashboard(project.id);
+
+    const sprint = result.runProgress.find((row: { name: string }) => row.name === "Sprint 1");
+    expect(sprint.total).toBe(2);
+    expect(sprint.recorded).toBe(1);
+    expect(sprint.byResult).toMatchObject({ PASSED: 1, NOT_RUN: 1 });
+
+    // Two of the fixture's three cases are in the round; the third is not.
+    expect(result.coverage).toEqual({ inAnyRun: 2, notInAnyRun: 1 });
+  });
+
+  it("stops counting a case as scheduled once its only round is archived", async () => {
+    const owner = await createUser("dash-owner12@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1 } = await seedDashboardFixture(owner.id, "PRJ-DASH-12");
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [tc1.id], owner.id);
+    expect((await dashboard(project.id)).coverage).toEqual({ inAnyRun: 1, notInAnyRun: 2 });
+
+    // An archived round keeps its TestRunCase rows, which used to leave its
+    // cases counted as scheduled while the round itself had left the page —
+    // 142 "scheduled" against rounds covering 21.
+    await setRunDeletedAt(run.id, new Date(), owner.id);
+
+    const after = await dashboard(project.id);
+    expect(after.coverage).toEqual({ inAnyRun: 0, notInAnyRun: 3 });
+    expect(after.runProgress).toHaveLength(0);
+  });
+
+  it("keeps run progress and coverage whole when a filter narrows the page", async () => {
+    const owner = await createUser("dash-owner11@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-11");
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [tc1.id, tc2.id], owner.id);
+
+    // Both panels compare the project against itself, so narrowing the page —
+    // here to one result, and even to the round itself — must leave them
+    // alone. Filtered, there would be nothing left to compare against.
+    const filtered = await dashboard(project.id, `?testResult=PASSED&testRunId=${run.id}`);
+    expect(filtered.counts.testCases).toBe(0);
+    expect(filtered.coverage).toEqual({ inAnyRun: 2, notInAnyRun: 1 });
+    expect(filtered.runProgress.find((row: { name: string }) => row.name === "Sprint 1").total).toBe(2);
+  });
+
+  it("narrows the whole page to one phase, counting only the cases its rounds scheduled", async () => {
+    const owner = await createUser("dash-owner13@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1 } = await seedDashboardFixture(owner.id, "PRJ-DASH-13");
+
+    const first = await createRun(project.id, { name: "Sprint 1", phase: "Phase 1" }, owner.id);
+    await createRun(project.id, { name: "Sprint 7", phase: "Phase 2" }, owner.id);
+    // A round with no phase at all: rounds written before the idea existed.
+    await createRun(project.id, { name: "Ad hoc" }, owner.id);
+    await addCasesToRun(first.id, [tc1.id], owner.id);
+
+    const all = await dashboard(project.id);
+    expect(all.options.phases).toEqual(["Phase 1", "Phase 2"]);
+    expect(all.runProgress).toHaveLength(3);
+
+    const phaseOne = await dashboard(project.id, "?phase=Phase%201");
+    expect(phaseOne.runProgress.map((row: { name: string }) => row.name)).toEqual(["Sprint 1"]);
+    // The picker offers what the panel shows, so a round can't be selected
+    // from a phase that is no longer on screen.
+    expect(phaseOne.options.testRuns.map((row: { name: string }) => row.name)).toEqual([
+      "Sprint 1",
+    ]);
+    // Every phase stays on offer, or there would be no way back.
+    expect(phaseOne.options.phases).toEqual(["Phase 1", "Phase 2"]);
+
+    // The fixture has three cases; Phase 1's only round scheduled one. The
+    // page follows the phase rather than counting all three, which read as a
+    // filter that had done nothing.
+    expect(all.counts.testCases).toBe(3);
+    expect(phaseOne.counts.testCases).toBe(1);
+
+    // The tree agrees with the cards, as it must under every other filter.
+    expect(caseNames(phaseOne.tree)).toEqual(["TC1"]);
+
+    // Inside a phase every counted case is in one of its rounds, so there is
+    // nothing left over to report as unscheduled.
+    expect(phaseOne.coverage).toEqual({ inAnyRun: 1, notInAnyRun: 0 });
+  });
+
+  it("reads a case tested twice in a phase as its latest result, not twice", async () => {
+    const owner = await createUser("dash-owner15@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-15");
+
+    const sprint1 = await createRun(project.id, { name: "Sprint 1", phase: "Phase 1" }, owner.id);
+    const sprint2 = await createRun(project.id, { name: "Sprint 2", phase: "Phase 1" }, owner.id);
+
+    // TC1 fails in the earlier round and passes in the later one: the retest.
+    await addCasesToRun(sprint1.id, [tc1.id, tc2.id], owner.id);
+    await addCasesToRun(sprint2.id, [tc1.id], owner.id);
+    await setRunCaseResult(sprint1.id, tc1.id, { testResult: "FAILED" }, owner.id);
+    await setRunCaseResult(sprint2.id, tc1.id, { testResult: "PASSED" }, owner.id);
+
+    const phaseOne = await dashboard(project.id, "?phase=Phase%201");
+
+    // Two cases, not three rows of run membership: TC1 is one case that was
+    // tested twice.
+    expect(phaseOne.counts.testCases).toBe(2);
+    expect(phaseOne.testCasesByResult).toEqual({
+      NOT_RUN: 1,
+      PASSED: 1,
+      FAILED: 0,
+      BLOCKED: 0,
+      SKIPPED: 0,
+    });
+    // TC2 was scheduled but never run, so one of two is recorded.
+    expect(phaseOne.testProgress).toBeCloseTo(50);
+
+    // And the result filter answers to the resolved result, not to any round
+    // that once held it: TC1 failed in Sprint 1 but reads as Passed here.
+    expect((await dashboard(project.id, "?phase=Phase%201&testResult=FAILED")).counts.testCases).toBe(0);
+    expect(caseNames((await dashboard(project.id, "?phase=Phase%201&testResult=PASSED")).tree)).toEqual([
+      "TC1",
+    ]);
+  });
+
+  it("files a round under an existing phase whatever the typing", async () => {
+    const owner = await createUser("dash-owner14@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id, "PRJ-DASH-14");
+
+    await createRun(project.id, { name: "Sprint 1", phase: "Phase 2" }, owner.id);
+    await createRun(project.id, { name: "Sprint 2", phase: "  phase 2 " }, owner.id);
+
+    // One phase, spelled the way the first round spelled it — not two that
+    // differ by case.
+    const result = await dashboard(project.id);
+    expect(result.options.phases).toEqual(["Phase 2"]);
+    expect((await dashboard(project.id, "?phase=Phase%202")).runProgress).toHaveLength(2);
   });
 
   it("offers the project's rounds as filter options, newest first", async () => {

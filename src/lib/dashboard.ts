@@ -35,6 +35,18 @@ export type DashboardFilters = {
    * `TestRunCase`.
    */
   testRunId?: string;
+  /**
+   * Narrows the whole dashboard to one phase — six sprints, in this team's
+   * process.
+   *
+   * Only the cases the phase's rounds scheduled are counted, and each one's
+   * result is the phase's: the newest round inside it to actually report. A
+   * case tested twice in the phase therefore reads as its latest result, the
+   * same rule `TestCase.testResult` follows, rather than being counted twice.
+   *
+   * `testRunId` is the narrower choice of the two and wins when both are set.
+   */
+  phase?: string;
 };
 
 export type DashboardTestCaseNode = {
@@ -89,8 +101,40 @@ export type DashboardFilterOptions = {
   requirements: Array<{ id: string; name: string; moduleId: string }>;
   scenarios: Array<{ id: string; name: string; requirementId: string }>;
   testGroups: Array<{ id: string; name: string; scenarioId: string }>;
-  /** The rounds of testing this project has had, newest first. */
+  /** The rounds of testing this project has had, newest first. Narrowed to
+   *  the chosen phase, so the picker offers what the panel shows. */
   testRuns: Array<{ id: string; name: string; status: TestRunStatus }>;
+  /** Every phase the project's rounds have been filed under. */
+  phases: string[];
+};
+
+/**
+ * How far one round has got. Project-wide and unfiltered, like
+ * `DashboardFilterOptions`: it exists to compare the rounds against each
+ * other, so narrowing it to the current filter — or worse, to the currently
+ * selected round — would leave nothing to compare.
+ */
+export type DashboardRunProgress = {
+  id: string;
+  name: string;
+  status: TestRunStatus;
+  /** Cases in the round. */
+  total: number;
+  /** Cases in it with a result recorded — anything but NOT_RUN. */
+  recorded: number;
+  byResult: Record<TestResult, number>;
+};
+
+/**
+ * Work that has been scheduled into a round against work that has not.
+ *
+ * Answers what the Test Progress card cannot: that figure divides by every
+ * case in the project, so a backlog nobody has planned to test yet drags it
+ * down and makes the round in flight look stalled.
+ */
+export type DashboardCoverage = {
+  inAnyRun: number;
+  notInAnyRun: number;
 };
 
 export type ProjectDashboard = {
@@ -108,7 +152,49 @@ export type ProjectDashboard = {
   testProgress: number;
   tree: DashboardModuleNode[];
   options: DashboardFilterOptions;
+  runProgress: DashboardRunProgress[];
+  coverage: DashboardCoverage;
 };
+
+/** A live Test Case under a live Test Group under a live Scenario in this
+ *  Project — the same chain the tree walks, so the coverage split and the
+ *  Test Cases card can't be counting different populations. */
+function liveCaseInProject(projectId: string) {
+  return {
+    deletedAt: null,
+    testGroup: { deletedAt: null, scenario: { deletedAt: null, projectId } },
+  };
+}
+
+/**
+ * One result per Test Case across a phase's rounds.
+ *
+ * A phase is six sprints, so a case can be tested more than once inside it and
+ * carry a different result each time. The rule here is the one
+ * `TestCase.testResult` itself follows: the newest round to actually report
+ * wins, and a case every round left NOT_RUN stays NOT_RUN. Rounds come oldest
+ * first so each later report simply overwrites the one before it.
+ *
+ * The keys are the phase's membership as well as its results: a case with no
+ * entry here was never scheduled into the phase at all.
+ */
+async function resolvePhaseResults(projectId: string, phase: string) {
+  const rows = await prisma.testRunCase.findMany({
+    // Live rounds only, for the reason the coverage count learned the hard
+    // way: an archived round still owns its `TestRunCase` rows.
+    where: { testRun: { projectId, deletedAt: null, phase } },
+    select: { testCaseId: true, testResult: true },
+    orderBy: { testRun: { createdAt: "asc" } },
+  });
+
+  const resolved = new Map<string, TestResult>();
+  for (const row of rows) {
+    if (!resolved.has(row.testCaseId) || row.testResult !== "NOT_RUN") {
+      resolved.set(row.testCaseId, row.testResult);
+    }
+  }
+  return resolved;
+}
 
 function zeroCountRecord<K extends string>(keys: K[]): Record<K, number> {
   return Object.fromEntries(keys.map((key) => [key, 0])) as Record<K, number>;
@@ -126,6 +212,22 @@ export async function getProjectDashboard(
   const hasAnyData =
     (await prisma.scenario.count({ where: { projectId, deletedAt: null } })) > 0;
 
+  /* A round is the narrower of the two, so it wins when both are set. */
+  const phaseResults =
+    filters.phase && !filters.testRunId
+      ? await resolvePhaseResults(projectId, filters.phase)
+      : null;
+
+  /* Membership and the result filter, both answered from the resolved map: a
+   * case that passed in Sprint 4 and failed in Sprint 6 must not answer to
+   * "Passed", which is exactly what a `runCases: { some: ... }` clause would
+   * have let it do. */
+  const phaseCaseIds = phaseResults
+    ? Array.from(phaseResults)
+        .filter(([, result]) => !filters.testResult || result === filters.testResult)
+        .map(([testCaseId]) => testCaseId)
+    : null;
+
   const testCaseWhere = {
     deletedAt: null,
     ...(filters.search
@@ -133,7 +235,9 @@ export async function getProjectDashboard(
       : {}),
     /* With a run chosen, membership *and* the result filter both go through
      * `runCases`: the result that matters is the one recorded in that round,
-     * not the copy left on the Test Case by whichever round wrote last. */
+     * not the copy left on the Test Case by whichever round wrote last. A
+     * phase answers both from `phaseCaseIds` for the same reason. Only with
+     * neither does the mirrored result on the Test Case get the question. */
     ...(filters.testRunId
       ? {
           runCases: {
@@ -143,16 +247,19 @@ export async function getProjectDashboard(
             },
           },
         }
-      : filters.testResult
-        ? { testResult: filters.testResult }
-        : {}),
+      : phaseCaseIds
+        ? { id: { in: phaseCaseIds } }
+        : filters.testResult
+          ? { testResult: filters.testResult }
+          : {}),
     ...(filters.priority ? { priority: filters.priority } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
   };
 
   /* One query for the chosen round's results, so the loop below can read each
-   * case's result for that round instead of the mirrored one. */
+   * case's result for that round instead of the mirrored one. A phase brings
+   * its own map, already resolved across its rounds. */
   const runResults = filters.testRunId
     ? new Map(
         (
@@ -162,7 +269,7 @@ export async function getProjectDashboard(
           })
         ).map((runCase) => [runCase.testCaseId, runCase.testResult]),
       )
-    : null;
+    : phaseResults;
 
   const testGroupWhere = {
     deletedAt: null,
@@ -314,6 +421,10 @@ export async function getProjectDashboard(
     scenarioOptions,
     testGroupOptions,
     testRunOptions,
+    phaseRows,
+    runResultRows,
+    inAnyRun,
+    notInAnyRun,
   ] = await Promise.all([
       prisma.module.findMany({
         where: { projectId, deletedAt: null },
@@ -344,11 +455,69 @@ export async function getProjectDashboard(
       // Newest first: the round someone wants to look at is almost always the
       // one they just opened.
       prisma.testRun.findMany({
-        where: { projectId, deletedAt: null },
+        where: {
+          projectId,
+          deletedAt: null,
+          ...(filters.phase ? { phase: filters.phase } : {}),
+        },
         select: { id: true, name: true, status: true },
         orderBy: { createdAt: "desc" },
       }),
+      // Unfiltered on purpose, like the other option lists: choosing a phase
+      // must not remove every other phase from the control that chose it.
+      prisma.testRun.findMany({
+        where: { projectId, deletedAt: null, phase: { not: null } },
+        select: { phase: true },
+        distinct: ["phase"],
+        orderBy: { phase: "asc" },
+      }),
+      // Every round's results in one grouped query rather than a pair per
+      // round.
+      prisma.testRunCase.groupBy({
+        by: ["testRunId", "testResult"],
+        where: {
+          testRun: {
+            projectId,
+            deletedAt: null,
+            ...(filters.phase ? { phase: filters.phase } : {}),
+          },
+        },
+        _count: { _all: true },
+      }),
+      prisma.testCase.count({
+        // Membership in a *live* round only. An archived round still owns its
+        // `TestRunCase` rows, so counting those left 142 cases "scheduled"
+        // while the rounds on screen covered 21 — the difference being a round
+        // that had been archived.
+        where: {
+          ...liveCaseInProject(projectId),
+          runCases: { some: { testRun: { deletedAt: null } } },
+        },
+      }),
+      prisma.testCase.count({
+        where: {
+          ...liveCaseInProject(projectId),
+          runCases: { none: { testRun: { deletedAt: null } } },
+        },
+      }),
     ]);
+
+  const runProgress: DashboardRunProgress[] = testRunOptions.map((run) => {
+    const byResult = zeroCountRecord(TEST_RESULT_VALUES);
+    let total = 0;
+    for (const row of runResultRows) {
+      if (row.testRunId === run.id) {
+        byResult[row.testResult] += row._count._all;
+        total += row._count._all;
+      }
+    }
+    return {
+      ...run,
+      total,
+      recorded: total - byResult.NOT_RUN,
+      byResult,
+    };
+  });
 
   return {
     hasAnyData,
@@ -371,6 +540,11 @@ export async function getProjectDashboard(
       scenarios: scenarioOptions,
       testGroups: testGroupOptions,
       testRuns: testRunOptions,
+      phases: phaseRows.map((row) => row.phase as string),
     },
+    runProgress,
+    coverage: phaseResults
+      ? { inAnyRun: totalTestCases, notInAnyRun: 0 }
+      : { inAnyRun, notInAnyRun },
   };
 }
