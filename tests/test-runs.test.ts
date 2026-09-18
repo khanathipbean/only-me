@@ -132,6 +132,71 @@ describe("test runs", () => {
     expect(inSecond.testResult).toBe("FAILED");
   });
 
+  it("leaves the Test Case showing the newest round, whatever order results are typed in", async () => {
+    const { owner, project, cases } = await seed("run-owner7@example.com", "PRJ-RUN-7");
+    const testCase = cases[0];
+
+    const older = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    const newer = await createRun(project.id, { name: "Sprint 2" }, owner.id);
+    await addCasesToRun(older.id, [testCase.id], owner.id);
+    await addCasesToRun(newer.id, [testCase.id], owner.id);
+
+    // The newer round reports first, then someone goes back and fills in the
+    // older one — which is exactly what happened in practice, and used to
+    // stamp the older answer onto the Test Case.
+    await setRunCaseResult(newer.id, testCase.id, { testResult: "FAILED" }, owner.id);
+    const late = await setRunCaseResult(
+      older.id,
+      testCase.id,
+      { testResult: "SKIPPED", notes: "ran out of time" },
+      owner.id,
+    );
+
+    // Both rounds keep their own answer.
+    const inOlder = await prisma.testRunCase.findUniqueOrThrow({
+      where: { testRunId_testCaseId: { testRunId: older.id, testCaseId: testCase.id } },
+    });
+    const inNewer = await prisma.testRunCase.findUniqueOrThrow({
+      where: { testRunId_testCaseId: { testRunId: newer.id, testCaseId: testCase.id } },
+    });
+    expect(inOlder.testResult).toBe("SKIPPED");
+    expect(inOlder.notes).toBe("ran out of time");
+    expect(inNewer.testResult).toBe("FAILED");
+
+    // The Test Case keeps the newer round's, and its notes are untouched.
+    const after = await prisma.testCase.findUniqueOrThrow({ where: { id: testCase.id } });
+    expect(after.testResult).toBe("FAILED");
+    expect(after.notes).not.toBe("ran out of time");
+
+    // And the caller is told, so it can say why nothing else moved.
+    expect(late.mirrorHeldBy).toBe("Sprint 2");
+  });
+
+  it("mirrors again once the newest round has its own say", async () => {
+    const { owner, project, cases } = await seed("run-owner8@example.com", "PRJ-RUN-8");
+    const testCase = cases[0];
+
+    const older = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    const newer = await createRun(project.id, { name: "Sprint 2" }, owner.id);
+    await addCasesToRun(older.id, [testCase.id], owner.id);
+    await addCasesToRun(newer.id, [testCase.id], owner.id);
+
+    // A newer round that holds the case but has recorded nothing does not hold
+    // the mirror — only a round that has actually reported does.
+    const first = await setRunCaseResult(older.id, testCase.id, { testResult: "PASSED" }, owner.id);
+    expect(first.mirrorHeldBy).toBeNull();
+    expect(
+      (await prisma.testCase.findUniqueOrThrow({ where: { id: testCase.id } })).testResult,
+    ).toBe("PASSED");
+
+    // Then the newer round reports and takes it over.
+    const second = await setRunCaseResult(newer.id, testCase.id, { testResult: "BLOCKED" }, owner.id);
+    expect(second.mirrorHeldBy).toBeNull();
+    expect(
+      (await prisma.testCase.findUniqueOrThrow({ where: { id: testCase.id } })).testResult,
+    ).toBe("BLOCKED");
+  });
+
   it("refuses every change to a closed run", async () => {
     const { owner, project, cases } = await seed("run-owner3@example.com", "PRJ-RUN-3");
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);

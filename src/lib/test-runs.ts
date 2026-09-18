@@ -339,10 +339,21 @@ export async function removeCaseFromRun(testRunId: string, testCaseId: string, a
 }
 
 /**
- * The one place a result is written. It records the result against the round
- * and mirrors it onto `TestCase.testResult`, which every list and the
- * dashboard still read as "latest result" — two writes in one transaction, so
- * the two can never disagree.
+ * The one place a result is written. It records the result against the round,
+ * and mirrors it onto `TestCase.testResult` — which every list and the
+ * Dashboard's default view read as "the latest result" — in the same
+ * transaction, so the two can never disagree.
+ *
+ * "Latest" means *the newest round*, not the most recent keystroke. Before
+ * this guard the mirror was last-write-wins, so recording into an older round
+ * after a newer one had already reported stamped the older answer onto the
+ * Test Case: four cases ended up showing Sprint 5's SKIPPED while Sprint 6 had
+ * them as FAILED. Which round is newer is decided by `createdAt`, the same
+ * order the Dashboard's round picker lists them in, and the only ordering
+ * every round has — `startsOn` is optional and often unset.
+ *
+ * A round that merely holds the case does not hold the mirror: it has to have
+ * recorded something. An archived round holds nothing at all.
  */
 export async function setRunCaseResult(
   testRunId: string,
@@ -357,6 +368,16 @@ export async function setRunCaseResult(
     where: { testRunId_testCaseId: { testRunId, testCaseId } },
   });
 
+  const newerRound = await prisma.testRunCase.findFirst({
+    where: {
+      testCaseId,
+      testResult: { not: "NOT_RUN" },
+      testRun: { deletedAt: null, createdAt: { gt: run.createdAt } },
+    },
+    select: { testRun: { select: { name: true } } },
+    orderBy: { testRun: { createdAt: "desc" } },
+  });
+
   const ran = input.testResult !== "NOT_RUN";
 
   const [runCase] = await prisma.$transaction([
@@ -369,14 +390,20 @@ export async function setRunCaseResult(
         ranAt: ran ? new Date() : null,
       },
     }),
-    prisma.testCase.update({
-      where: { id: testCaseId },
-      data: {
-        testResult: input.testResult,
-        ...(input.notes !== undefined ? { notes: input.notes } : {}),
-        updatedById: actorId,
-      },
-    }),
+    // Skipped entirely when a newer round has spoken — including the notes,
+    // which belong to the result they were written beside.
+    ...(newerRound
+      ? []
+      : [
+          prisma.testCase.update({
+            where: { id: testCaseId },
+            data: {
+              testResult: input.testResult,
+              ...(input.notes !== undefined ? { notes: input.notes } : {}),
+              updatedById: actorId,
+            },
+          }),
+        ]),
   ]);
 
   await writeAuditLog({
@@ -386,8 +413,19 @@ export async function setRunCaseResult(
     actorId,
     projectId: run.projectId,
     oldValue: { testRunId, testResult: before.testResult },
-    newValue: { testRunId, testResult: input.testResult },
+    newValue: {
+      testRunId,
+      testResult: input.testResult,
+      // Recorded so the trail explains why the Test Case did not move.
+      ...(newerRound ? { mirrorHeldBy: newerRound.testRun.name } : {}),
+    },
   });
 
-  return runCase;
+  return {
+    ...runCase,
+    /** The newer round whose result the Test Case keeps showing, if any. The
+     *  caller tells the user, so recording into an older round doesn't read as
+     *  a save that failed. */
+    mirrorHeldBy: newerRound?.testRun.name ?? null,
+  };
 }

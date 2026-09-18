@@ -177,8 +177,9 @@ export default async function TestRunPage({
         invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        let mirrorHeldBy: string | null = null;
         try {
-          await setRunCaseResult(
+          ({ mirrorHeldBy } = await setRunCaseResult(
             runId,
             testCaseId,
             {
@@ -186,14 +187,24 @@ export default async function TestRunPage({
               notes: (formData.get("notes") as string) || null,
             },
             session!.user.id,
-          );
+          ));
         } catch (err) {
           if (err instanceof TestRunValidationError) {
             redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
           }
           throw err;
         }
-        redirect(basePath);
+        // Normally the result speaks for itself in the row that just changed.
+        // It needs saying only when the Test Case elsewhere will not move,
+        // which otherwise reads as a save that didn't take.
+        redirect(
+          mirrorHeldBy
+            ? withToast(
+                basePath,
+                `Recorded in this run — the Test Case still shows ${mirrorHeldBy}, which is newer`,
+              )
+            : basePath,
+        );
       },
       async remove() {
         "use server";
