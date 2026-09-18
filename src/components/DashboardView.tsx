@@ -451,7 +451,10 @@ export function DashboardView({ projectId }: { projectId: string }) {
           )}
         </form>
 
-        {showMoreFilters && (
+        {/* -mt-3 while closed cancels the stack's own gap-3, so collapsing
+            leaves the row below exactly where it sat before this panel
+            animated at all. */}
+        <Collapsible open={showMoreFilters} className={showMoreFilters ? "" : "-mt-3"}>
           <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {/* aria-label rather than relying on the wrapping <label>: a label
                 can only be programmatically bound to a real form control, not to
@@ -545,7 +548,7 @@ export function DashboardView({ projectId }: { projectId: string }) {
               />
             </label>
           </div>
-        )}
+        </Collapsible>
 
         {activeFilters.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -949,16 +952,31 @@ function idsOf(projectId: string, scenario: TreeScenario) {
   };
 }
 
-/** Animates a branch open/closed instead of mounting/unmounting it outright.
+/** Animates a section open/closed instead of mounting/unmounting it outright.
  * Children stay in the DOM at all times — the branch's own data is already
  * in hand (the whole tree arrives in one response), so there's no lazy-fetch
  * to lose by keeping a collapsed subtree rendered — and the 0fr/1fr grid-row
  * trick animates a height that was never known ahead of time, without
- * measuring it in JS. */
-function Collapsible({ open, children }: { open: boolean; children: ReactNode }) {
+ * measuring it in JS.
+ *
+ * `inert` is the price of keeping them: a collapsed section is invisible but
+ * still in the DOM, and without it Tab walks into controls nobody can see. */
+function Collapsible({
+  open,
+  className = "",
+  children,
+}: {
+  open: boolean;
+  /** For a caller whose parent stack has a `gap`: a collapsed section is zero
+   *  height but still a flex item, so the gap around it stays on screen. Pass
+   *  a matching negative margin to cancel it — it animates alongside. */
+  className?: string;
+  children: ReactNode;
+}) {
   return (
     <div
-      className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      inert={!open}
+      className={`grid transition-[grid-template-rows,margin] duration-200 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"} ${className}`}
     >
       <div className="overflow-hidden">{children}</div>
     </div>
