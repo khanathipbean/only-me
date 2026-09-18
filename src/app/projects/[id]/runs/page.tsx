@@ -6,6 +6,7 @@ import { getProjectById } from "@/lib/projects";
 import {
   TestRunValidationError,
   createRun,
+  listPhasesForProject,
   listRunsForProjectPage,
   setRunDeletedAt,
   setRunStatus,
@@ -85,7 +86,7 @@ export default async function TestRunsPage({
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || status || showArchived);
 
-  const [project, result] = await Promise.all([
+  const [project, result, phases] = await Promise.all([
     getProjectById(projectId),
     listRunsForProjectPage(projectId, {
       search,
@@ -94,6 +95,7 @@ export default async function TestRunsPage({
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     }),
+    listPhasesForProject(projectId),
   ]);
   const runs = result.items;
 
@@ -117,6 +119,7 @@ export default async function TestRunsPage({
         projectId,
         {
           name: formData.get("name") as string,
+          phase: formData.get("phase") as string,
           startsOn: parseDay(formData.get("startsOn")),
           endsOn: parseDay(formData.get("endsOn")),
         },
@@ -146,6 +149,7 @@ export default async function TestRunsPage({
             runId,
             {
               name: formData.get("name") as string,
+              phase: formData.get("phase") as string,
               startsOn: parseDay(formData.get("startsOn")),
               endsOn: parseDay(formData.get("endsOn")),
             },
@@ -222,6 +226,25 @@ export default async function TestRunsPage({
                   <RequiredMark />
                 </span>
                 <input name="name" required placeholder="e.g. Sprint 14" className={inputClass} />
+              </label>
+              <label className={`${labelClass} sm:col-span-2`}>
+                Phase
+                {/* A suggestion list, not a closed set — the same shape as a
+                    Requirement's Feature. A phase is only a name here: the
+                    dates and the status belong to the sprints inside it. A
+                    spelling that matches one already in use is re-spelled to
+                    it server-side, so case can't split a phase in two. */}
+                <input
+                  name="phase"
+                  list="run-phases"
+                  placeholder="Six sprints to a phase, e.g. Phase 2"
+                  className={inputClass}
+                />
+                <datalist id="run-phases">
+                  {phases.map((value) => (
+                    <option key={value} value={value} />
+                  ))}
+                </datalist>
               </label>
               <label className={labelClass}>
                 Starts on
@@ -321,12 +344,24 @@ export default async function TestRunsPage({
                 return (
                   <tr key={run.id} className={trHoverClass}>
                     <td className={tdClass}>
-                      <Link
-                        href={`${listPath}/${run.id}`}
-                        className="font-medium text-foreground hover:text-brand hover:underline"
-                      >
-                        {run.name}
-                      </Link>
+                      {/* The phase beside the name, the way a Requirement wears
+                          its Feature: six sprints share one, so the name alone
+                          ("Sprint 4") never said which round of which phase. */}
+                      <div className="flex items-baseline gap-2">
+                        <Link
+                          href={`${listPath}/${run.id}`}
+                          className="min-w-0 font-medium text-foreground hover:text-brand hover:underline"
+                        >
+                          {run.name}
+                        </Link>
+                        {run.phase && (
+                          <span className="shrink-0">
+                            <Badge tone="gray" variant="outline">
+                              {run.phase}
+                            </Badge>
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className={`${tdClass} text-muted`}>
                       {run.startsOn || run.endsOn
@@ -377,6 +412,16 @@ export default async function TestRunsPage({
                                 name="name"
                                 required
                                 defaultValue={run.name}
+                                className={inputClass}
+                              />
+                            </label>
+                            <label className={`${labelClass} sm:col-span-2`}>
+                              Phase
+                              <input
+                                name="phase"
+                                list="run-phases"
+                                defaultValue={run.phase ?? ""}
+                                placeholder="Six sprints to a phase, e.g. Phase 2"
                                 className={inputClass}
                               />
                             </label>

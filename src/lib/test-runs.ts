@@ -7,9 +7,38 @@ export class TestRunValidationError extends Error {}
 
 export type TestRunInput = {
   name: string;
+  /** Six sprints to a phase here. Free text rather than a table: a phase has
+   *  no dates and no status of its own — only the rounds inside it do. */
+  phase?: string | null;
   startsOn?: Date | null;
   endsOn?: Date | null;
 };
+
+/** Every phase this project has used, for the pickers to offer. */
+export async function listPhasesForProject(projectId: string) {
+  const rows = await prisma.testRun.findMany({
+    where: { projectId, deletedAt: null, phase: { not: null } },
+    select: { phase: true },
+    distinct: ["phase"],
+    orderBy: { phase: "asc" },
+  });
+  return rows.map((row) => row.phase as string);
+}
+
+/**
+ * Matches an existing phase case-insensitively and answers with the spelling
+ * already in use, so "phase 2" typed against a project that says "Phase 2"
+ * joins that phase instead of starting a second one beside it. The same guard
+ * `Requirement.feature` has, for the same reason.
+ */
+async function normalizePhase(projectId: string, raw: string | null | undefined) {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const known = await listPhasesForProject(projectId);
+  return known.find((value) => value.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
+}
 
 function validate(input: TestRunInput) {
   if (!input.name?.trim()) {
@@ -130,6 +159,7 @@ export async function createRun(projectId: string, input: TestRunInput, actorId:
     data: {
       projectId,
       name,
+      phase: await normalizePhase(projectId, input.phase),
       startsOn: input.startsOn ?? null,
       endsOn: input.endsOn ?? null,
       createdById: actorId,
@@ -157,6 +187,7 @@ export async function updateRun(id: string, input: TestRunInput, actorId: string
     where: { id },
     data: {
       name: input.name.trim(),
+      phase: await normalizePhase(before.projectId, input.phase),
       startsOn: input.startsOn ?? null,
       endsOn: input.endsOn ?? null,
     },

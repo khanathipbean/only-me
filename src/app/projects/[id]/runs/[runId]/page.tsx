@@ -236,6 +236,12 @@ export default async function TestRunPage({
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <Badge tone={isOpen ? "blue" : "gray"}>{isOpen ? "Open" : "Closed"}</Badge>
+            {/* Which phase this round belongs to — the list says it too. */}
+            {run.phase && (
+              <Badge tone="gray" variant="outline">
+                {run.phase}
+              </Badge>
+            )}
             <span>
               {ran} of {cases.length} run
             </span>

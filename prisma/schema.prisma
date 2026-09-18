@@ -220,6 +220,12 @@ model TestRun {
   id          String        @id @default(cuid())
   projectId   String
   name        String
+  /// The phase this round belongs to — six sprints to a phase, in this team's
+  /// process. A label rather than a level of its own, the same shape as
+  /// `Requirement.feature`: a phase has no dates or status, only the rounds
+  /// inside it do, so a table of its own would hold nothing but a name.
+  /// Optional, so rounds that predate the idea stay valid.
+  phase       String?
   /// Both optional: a round can be opened before its dates are settled.
   startsOn    DateTime?
   endsOn      DateTime?
@@ -236,6 +242,7 @@ model TestRun {
 
   @@unique([projectId, name])
   @@index([projectId, status])
+  @@index([projectId, phase])
 }
 
 enum TestRunStatus {
