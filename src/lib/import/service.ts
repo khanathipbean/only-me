@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { UNASSIGNED_NAME } from "@/lib/requirements";
 import type { ImportRow } from "@/lib/import/parse";
+import { parseTestSteps } from "@/lib/import/steps";
 import { normalizePriority, validateRow, type ValidatedRow } from "@/lib/import/validate";
 
 export const MAX_IMPORT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -73,6 +74,24 @@ export class ImportRowFailedError extends Error {
  * network round-trip, so the whole batch failed with P2028 and rolled back. */
 const IMPORT_TRANSACTION_TIMEOUT_MS = 120_000;
 const IMPORT_TRANSACTION_MAX_WAIT_MS = 15_000;
+
+/**
+ * The steps one row asks for, numbered.
+ *
+ * The sheet has a single Expected Result column, which describes the outcome
+ * after the whole thing has been carried out — so it goes on the last step
+ * rather than being repeated against every one of them. A one-line cell still
+ * produces one step carrying it, exactly as before.
+ */
+function stepRows(testCaseId: string, row: { data: ImportRow }) {
+  const steps = parseTestSteps(row.data.testSteps);
+  return steps.map((step, index) => ({
+    testCaseId,
+    sequence: index + 1,
+    step,
+    expectedResult: index === steps.length - 1 ? row.data.expectedResult : "",
+  }));
+}
 
 /**
  * Atomic: re-validates every row, then performs every write in one
@@ -491,12 +510,7 @@ export async function confirmImport(
         const updatedIds = updated.map(({ after }) => after.id);
         await tx.testStep.deleteMany({ where: { testCaseId: { in: updatedIds } } });
         await tx.testStep.createMany({
-          data: toUpdate.map(({ w }, index) => ({
-            testCaseId: updatedIds[index],
-            sequence: 1,
-            step: w.data.testSteps,
-            expectedResult: w.data.expectedResult,
-          })),
+          data: toUpdate.flatMap(({ w }, index) => stepRows(updatedIds[index], w)),
         });
         await tx.auditLog.createMany({
           data: updated.map(({ before, after }) => ({
@@ -528,12 +542,7 @@ export async function confirmImport(
         // sent, which is what lets each be paired with the row that asked for
         // it.
         await tx.testStep.createMany({
-          data: created.map((testCase, index) => ({
-            testCaseId: testCase.id,
-            sequence: 1,
-            step: toCreate[index].data.testSteps,
-            expectedResult: toCreate[index].data.expectedResult,
-          })),
+          data: created.flatMap((testCase, index) => stepRows(testCase.id, toCreate[index])),
         });
         await tx.auditLog.createMany({
           data: created.map((testCase) => ({

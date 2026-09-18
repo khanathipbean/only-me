@@ -586,4 +586,97 @@ describe("import", () => {
     });
     expect(scenario?.requirementId).toBe(requirement!.id);
   });
+
+  it("makes one Test Step per line of the Test Steps cell", async () => {
+    const owner = await createUser("imp-owner15@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-15");
+
+    const rowData = {
+      rowNumber: 1,
+      projectCode: "PRJ-IMP-15",
+      moduleName: "Governance",
+      requirementName: "REQ-SEMANTIC-001",
+      scenarioName: "Scenario",
+      testGroupName: "Navigation",
+      testCaseName: "Open the Semantic Type page",
+      preconditions: "",
+      // What a spreadsheet actually contains: a numbered list, either typed
+      // with Alt+Enter or run together on one line.
+      testSteps: "1. Open the Governance menu\n2. Choose Semantic Type",
+      expectedResult: "The Semantic Type page is listed",
+      priority: "HIGH",
+    };
+
+    await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
+        rows: [{ rowNumber: 1, data: rowData }],
+      }),
+      { params: Promise.resolve({ id: project.id }) },
+    );
+
+    const testCase = await prisma.testCase.findFirstOrThrow({
+      where: { name: "Open the Semantic Type page" },
+      include: { steps: { orderBy: { sequence: "asc" } } },
+    });
+
+    // Two rows, not one row holding a line break — and without the sheet's own
+    // numbering, which the dialog would otherwise print on top of its own.
+    expect(testCase.steps).toHaveLength(2);
+    expect(testCase.steps[0]).toMatchObject({
+      sequence: 1,
+      step: "Open the Governance menu",
+    });
+    expect(testCase.steps[1]).toMatchObject({
+      sequence: 2,
+      step: "Choose Semantic Type",
+    });
+
+    // The sheet has one Expected Result, describing the outcome once the whole
+    // thing has been carried out, so it sits on the last step rather than
+    // being repeated against each.
+    expect(testCase.steps[0].expectedResult).toBe("");
+    expect(testCase.steps[1].expectedResult).toBe("The Semantic Type page is listed");
+  });
+
+  it("still makes a single step from a single-line cell", async () => {
+    const owner = await createUser("imp-owner16@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-16");
+
+    await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
+        rows: [
+          {
+            rowNumber: 1,
+            data: {
+              rowNumber: 1,
+              projectCode: "PRJ-IMP-16",
+              moduleName: "",
+              requirementName: "",
+              scenarioName: "Scenario",
+              testGroupName: "Group",
+              testCaseName: "One step only",
+              preconditions: "",
+              testSteps: "Enter valid credentials and click Login",
+              expectedResult: "Result",
+              priority: "MEDIUM",
+            },
+          },
+        ],
+      }),
+      { params: Promise.resolve({ id: project.id }) },
+    );
+
+    const testCase = await prisma.testCase.findFirstOrThrow({
+      where: { name: "One step only" },
+      include: { steps: true },
+    });
+    expect(testCase.steps).toHaveLength(1);
+    expect(testCase.steps[0]).toMatchObject({
+      sequence: 1,
+      step: "Enter valid credentials and click Login",
+      expectedResult: "Result",
+    });
+  });
 });

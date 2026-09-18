@@ -153,3 +153,8 @@ export function generateImportTemplateCsv(): string {
     .join(",");
   return `${header}\n${example}\n`;
 }
+
+/* `parseTestSteps` lives in `./steps` rather than here: the import preview in
+ * the browser needs it, and this module imports `exceljs` and `csv-parse`,
+ * which a client component has no business pulling in. */
+

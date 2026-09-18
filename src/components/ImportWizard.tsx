@@ -7,6 +7,35 @@ import { TrashIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
 import { checkboxClass, inputClass, textareaClass } from "@/lib/ui";
 import { Select } from "@/components/ui/Select";
+import { parseTestSteps } from "@/lib/import/steps";
+
+/**
+ * What the Test Steps cell in front of you will actually become.
+ *
+ * The field shows the text as written; nothing showed what the importer would
+ * make of it, so a cell that was going to collapse into one step looked
+ * exactly like one that would split into five — which is how 171 Test Cases
+ * came to hold their steps merged into a single row before anyone noticed.
+ *
+ * Counted with the same function the importer runs, not by counting lines
+ * here: two implementations of one rule eventually disagree, and the one on
+ * screen would be the one lying.
+ */
+function StepCount({ cell }: { cell: string }) {
+  if (!cell.trim()) {
+    return <span className="text-[11px] font-normal text-muted">One step per line.</span>;
+  }
+  const count = parseTestSteps(cell).length;
+  return (
+    <span className="text-[11px] font-normal text-muted">
+      One step per line — this row creates{" "}
+      <strong className="font-semibold text-foreground">
+        {count} step{count === 1 ? "" : "s"}
+      </strong>
+      .
+    </span>
+  );
+}
 
 type PreviewRow = {
   rowNumber: number;
@@ -468,14 +497,17 @@ export function ImportWizard({ projectId }: { projectId: string }) {
                             >
                               {label}
                               {multiline ? (
-                                <textarea
-                                  value={data[key] ?? ""}
-                                  disabled={loading}
-                                  onChange={(event) =>
-                                    updateRowField(row.rowNumber, key, event.target.value)
-                                  }
-                                  className={textareaClass}
-                                />
+                                <>
+                                  <textarea
+                                    value={data[key] ?? ""}
+                                    disabled={loading}
+                                    onChange={(event) =>
+                                      updateRowField(row.rowNumber, key, event.target.value)
+                                    }
+                                    className={textareaClass}
+                                  />
+                                  {key === "testSteps" && <StepCount cell={data[key] ?? ""} />}
+                                </>
                               ) : (
                                 <input
                                   value={data[key] ?? ""}
