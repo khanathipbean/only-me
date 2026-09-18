@@ -231,3 +231,34 @@ input[type="datetime-local"]:focus::-webkit-calendar-picker-indicator {
     animation-timing-function: step-end;
   }
 }
+
+/**
+ * A scrollbar that doesn't sit on top of the thing it belongs to.
+ *
+ * The header search panel has rounded corners, and Windows' default scrollbar
+ * is wide enough to cover the right-hand radius and the edge of every group
+ * box inside it. `scrollbar-width: thin` narrows it; `scrollbar-color` stops
+ * it being a light-grey slab in a dark panel. Both take theme tokens rather
+ * than fixed colours, so the thumb follows the palette.
+ *
+ * `::-webkit-scrollbar` is the fallback for browsers that predate the
+ * standard properties; where both are understood, the standard ones win.
+ */
+.scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.scrollbar-slim::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-slim::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+}

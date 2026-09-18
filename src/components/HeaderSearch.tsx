@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Badge, type Tone } from "@/components/ui/Badge";
+import {
+  BoxIcon,
+  BranchIcon,
+  ChevronRightIcon,
+  FileTextIcon,
+  FolderIcon,
+  LayersIcon,
+  ListChecksIcon,
+} from "@/components/icons";
 
 const DEBOUNCE_MS = 300;
 
@@ -16,10 +25,52 @@ const RESULT_TYPE_TONE: Record<string, Tone> = {
   TestCase: "green",
 };
 
+/** Fixed order, so the groups sit where you last saw them however the
+ *  matches fall — and it is the order of the hierarchy itself, widest first. */
+const GROUPS = [
+  { type: "Project", heading: "Projects", icon: <BoxIcon /> },
+  { type: "Module", heading: "Modules", icon: <LayersIcon /> },
+  { type: "Requirement", heading: "Requirements", icon: <FileTextIcon /> },
+  { type: "Scenario", heading: "Scenarios", icon: <BranchIcon /> },
+  { type: "TestGroup", heading: "Test Groups", icon: <FolderIcon /> },
+  { type: "TestCase", heading: "Test Cases", icon: <ListChecksIcon /> },
+] as const;
+
+/**
+ * Where "View all" goes for a group, or null when there is nowhere honest to
+ * send it.
+ *
+ * Projects have a list of their own. Modules have one per Project, so the
+ * link only appears when every match in the group sits in the same Project —
+ * otherwise it would have to pick one and silently drop the rest.
+ *
+ * Nothing deeper gets a link at all: a Requirements list lives inside one
+ * Module, a Scenarios list inside one Requirement, and so on down. Matches in
+ * those groups come from different parents, so there is no single page that
+ * holds them.
+ */
+function viewAllHref(type: string, items: SearchResult[], term: string): string | null {
+  const query = `search=${encodeURIComponent(term)}`;
+
+  if (type === "Project") {
+    return `/projects?${query}`;
+  }
+
+  if (type === "Module") {
+    const projectIds = new Set(items.map((item) => item.projectId));
+    return projectIds.size === 1
+      ? `/projects/${items[0].projectId}/modules?${query}`
+      : null;
+  }
+
+  return null;
+}
+
 type SearchResult = {
   type: string;
   id: string;
   label: string;
+  projectId: string;
   projectName: string;
   position: string;
   href: string;
@@ -123,31 +174,82 @@ export function HeaderSearch({ className = "" }: { className?: string }) {
       {showPanel && (
         <div
           id={panelId}
-          className="absolute top-full right-0 left-0 z-30 mt-2 max-h-96 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-lg"
+          className="scrollbar-slim absolute top-full right-0 left-0 z-30 mt-2 max-h-[28rem] overflow-y-auto rounded-lg border border-border bg-surface shadow-lg"
         >
           {searching ? (
             <p className="px-4 py-3 text-sm text-muted">Searching…</p>
           ) : results && results.length > 0 ? (
-            <ul>
-              {results.map((result) => (
-                <li key={`${result.type}-${result.id}`}>
-                  <Link
-                    href={result.href}
-                    onClick={() => setOpen(false)}
-                    className="flex flex-col gap-1 px-4 py-2 hover:bg-black/[.05] dark:hover:bg-white/[.08]"
+            /* Grouped by kind rather than one flat run: a search for "login"
+               matches at every level, and ungrouped those arrive interleaved,
+               so finding the Module among forty Test Cases meant reading each
+               row's badge. The badge stays on the row all the same — scroll a
+               long group and its heading leaves the panel. */
+            <div className="flex flex-col gap-3 p-3">
+              {GROUPS.map(({ type, heading, icon }) => {
+                const items = results.filter((result) => result.type === type);
+                if (items.length === 0) {
+                  return null;
+                }
+                const allHref = viewAllHref(type, items, term);
+
+                return (
+                  /* Boxed, not just spaced: the panel scrolls, and a
+                     heading that has scrolled past leaves its rows looking
+                     like they belong to the group above. A border travels
+                     with them. */
+                  <section
+                    key={type}
+                    className="overflow-hidden rounded-lg border border-border"
                   >
-                    <span className="truncate text-sm font-medium text-foreground">
-                      {result.label}
-                    </span>
-                    <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                      <Badge tone={RESULT_TYPE_TONE[result.type] ?? "gray"}>{result.type}</Badge>
-                      <span className="truncate">{result.projectName}</span>
-                      {result.position && <span className="truncate">— {result.position}</span>}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <span className="shrink-0 text-muted">{icon}</span>
+                      <h2 className="flex-1 truncate text-xs font-semibold tracking-wide text-muted uppercase">
+                        {heading}
+                      </h2>
+                      <span className="shrink-0 text-xs tabular-nums text-muted">
+                        {items.length}
+                      </span>
+                      {allHref && (
+                        <Link
+                          href={allHref}
+                          onClick={() => setOpen(false)}
+                          className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-brand hover:underline"
+                        >
+                          View all
+                          <ChevronRightIcon className="size-3" />
+                        </Link>
+                      )}
+                    </div>
+                    <ul>
+                      {items.map((result) => (
+                        <li key={`${result.type}-${result.id}`}>
+                          <Link
+                            href={result.href}
+                            onClick={() => setOpen(false)}
+                            className="flex items-center gap-3 px-3 py-2 hover:bg-black/[.05] dark:hover:bg-white/[.08]"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium text-foreground">
+                                {result.label}
+                              </span>
+                              <span className="block truncate text-xs text-muted">
+                                {result.projectName}
+                                {result.position && ` — ${result.position}`}
+                              </span>
+                            </span>
+                            <span className="shrink-0">
+                              <Badge tone={RESULT_TYPE_TONE[result.type] ?? "gray"}>
+                                {result.type}
+                              </Badge>
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
           ) : (
             <p className="px-4 py-3 text-sm text-muted">
               No results for &quot;{term}&quot;. Clear the box to carry on where you were.
