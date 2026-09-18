@@ -19,7 +19,9 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Modal } from "@/components/ui/Modal";
 import { ProjectForm } from "@/components/forms/ProjectForm";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
-import { EditIcon } from "@/components/icons";
+import { ClockIcon, EditIcon } from "@/components/icons";
+import { Avatar } from "@/components/ui/Avatar";
+import { formatTimestamp } from "@/lib/dates";
 import { pageClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
 
@@ -140,17 +142,57 @@ export default async function ProjectDetailPage({
           </Modal>
         </div>
 
+        {/* Its own block, not a wide row in the same list: free-form prose
+            shares nothing with the two one-line facts below it. Sharing a
+            list looked fine for a short blurb, but a genuinely long
+            description stretched the row and stranded Owner and Last updated
+            at the top of a column of empty space. */}
         <div className="border-t border-border pt-5">
           <DetailFields>
-            {/* Wide: free-form prose gets its own row rather than sharing one
-                with Owner/Last updated — sharing looked fine for a short
-                blurb, but a genuinely long description stretched that row's
-                height and stranded those two facts at the top with a lot of
-                empty space beneath them. */}
             <DetailField label="Description" wide>{project.description}</DetailField>
-            <DetailField label="Owner">{project.owner.name}</DetailField>
-            <DetailField label="Last updated">
-              {project.updatedBy?.name ?? "—"} at {project.updatedAt.toISOString()}
+          </DetailFields>
+        </div>
+
+        {/* A rule of its own, so the description ends somewhere: who owns the
+            Project and when it last moved are facts about the record, not
+            more of what it says. */}
+        <div className="border-t border-border pt-5">
+          <DetailFields>
+            <DetailField
+              label="Owner"
+              /* Their actual face where they have uploaded one, their
+                 monogram otherwise — the same disc the header wears, so one
+                 person looks like one person across the app. */
+              icon={
+                <Avatar
+                  name={project.owner.name ?? project.owner.email}
+                  src={project.owner.avatarKey ? `/api/users/${project.owner.id}/avatar` : null}
+                  size="size-9"
+                />
+              }
+            >
+              {project.owner.name}
+            </DetailField>
+            <DetailField
+              label="Last updated"
+              /* A clock, not another face: the fact here is the moment. Who
+                 made the change is named in the value beside it. */
+              icon={
+                <span className="flex size-9 items-center justify-center rounded-full border border-border bg-black/[.06] text-muted dark:bg-white/[.10]">
+                  <ClockIcon />
+                </span>
+              }
+            >
+              {project.updatedBy?.name ?? "—"} at{" "}
+              {/* The exact value stays reachable — `title` on hover, and
+                  `dateTime` for anything reading the page rather than
+                  looking at it. */}
+              <time
+                dateTime={project.updatedAt.toISOString()}
+                title={project.updatedAt.toISOString()}
+              >
+                {formatTimestamp(project.updatedAt)}
+              </time>
             </DetailField>
           </DetailFields>
         </div>

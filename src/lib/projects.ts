@@ -144,7 +144,10 @@ export const getProjectById = cache(async (id: string) => {
   return prisma.project.findUnique({
     where: { id },
     include: {
-      owner: { select: { id: true, name: true, email: true } },
+      /* `avatarKey` so the page knows whether there is a picture to ask
+         `/api/users/{id}/avatar` for — without it every owner falls back to
+         a monogram, picture or not. */
+      owner: { select: { id: true, name: true, email: true, avatarKey: true } },
       updatedBy: { select: { id: true, name: true, email: true } },
     },
   });
