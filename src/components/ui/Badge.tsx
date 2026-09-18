@@ -39,8 +39,16 @@ export function toneBarClass(tone: Tone): string {
  * wearing one borrows a meaning it doesn't have — and a Requirement row showed
  * two cyan pills side by side, one naming the level and one naming the
  * Feature.
+ *
+ * Quiet, not absent. The first attempt used the muted text colour and the
+ * table's own border token, which made it read as a disabled chip rather than
+ * a label — the same weight as the "1 scenario(s)" beside it, on a border the
+ * same weight as the row divider under it. It has a faint fill and its own
+ * foreground now, so it reads as a discrete thing without taking a colour that
+ * means something.
  */
-const OUTLINE_CLASS = "border border-border bg-transparent text-muted";
+const OUTLINE_CLASS =
+  "border border-muted/35 bg-muted/10 text-foreground/80 dark:bg-muted/15";
 
 export function Badge({
   tone,
