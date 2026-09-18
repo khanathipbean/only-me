@@ -17,6 +17,14 @@ import {
   workflowStatusTone,
 } from "@/components/ui/Badge";
 import { Button, IconButton, LinkButton } from "@/components/ui/Button";
+import {
+  BranchIcon,
+  FileTextIcon,
+  FolderIcon,
+  LayersIcon,
+  ListChecksIcon,
+  PulseIcon,
+} from "@/components/icons";
 import { ChevronRightIcon, ClearIcon, FilterIcon, FilterOffIcon } from "@/components/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
 
@@ -661,15 +669,22 @@ function SummaryWidget({
 
   return (
     <WidgetShell label="Overview">
-      {/* Six stats: 2 / 3 / 6 per row divides evenly at every width, where
-          the old 4-column grid would leave a ragged last row. */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Modules" value={data.counts.modules} />
-        <Stat label="Requirements" value={data.counts.requirements} />
-        <Stat label="Scenarios" value={data.counts.scenarios} />
-        <Stat label="Test Groups" value={data.counts.testGroups} />
-        <Stat label="Test Cases" value={data.counts.testCases} />
-        <Stat label="Test Progress" value={`${data.testProgress.toFixed(1)}%`} />
+      {/* One per row on a phone, then 2 / 3 / 6 — each divides evenly, where
+          the old 4-column grid would leave a ragged last row. Two columns at
+          phone width cost "Requirements" its last four letters: the tile and
+          the rule take the room the label had when the figure sat beneath
+          it. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <Stat icon={<LayersIcon />} label="Modules" value={data.counts.modules} />
+        <Stat icon={<FileTextIcon />} label="Requirements" value={data.counts.requirements} />
+        <Stat icon={<BranchIcon />} label="Scenarios" value={data.counts.scenarios} />
+        <Stat icon={<FolderIcon />} label="Test Groups" value={data.counts.testGroups} />
+        <Stat icon={<ListChecksIcon />} label="Test Cases" value={data.counts.testCases} />
+        <Stat
+          icon={<PulseIcon />}
+          label="Test Progress"
+          value={`${data.testProgress.toFixed(1)}%`}
+        />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3">
@@ -755,21 +770,60 @@ function SummaryWidget({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+/**
+ * Icon and name first, figure second.
+ *
+ * The other order — a bare number with its name beneath — asks you to hold
+ * six unlabelled figures in your head until you reach what each one counts.
+ * The icon is what lets the row be scanned at a glance once the names are
+ * known.
+ *
+ * No bar, deliberately, on Test Progress or any of them: a first pass gave
+ * that card a split bar and a legend, and every figure in the legend was
+ * already on screen a few rows below under By Test Result — which carries
+ * Not Run and a click through to the filter besides.
+ */
+/**
+ * A tinted icon tile, a rule, then what it counts above the figure.
+ *
+ * Side by side rather than stacked: the tile carries the colour, so the rule
+ * is what separates "which of the six is this" from "what does it say", and
+ * the card gets shorter by a row in the bargain.
+ */
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+}) {
   return (
     // A glass pane, not a flat tint: a soft gradient fill plus blur reads as
     // a pane sitting just above the Card's surface, and the hairline top
     // edge (brighter than the border's other three sides) is what sells
     // "glass" rather than "tinted box" — light catching the top of a bevel.
-    <div className="relative overflow-hidden rounded-xl border border-black/[.06] bg-gradient-to-b from-black/[.05] to-black/[.015] p-4 shadow-sm backdrop-blur-sm dark:border-white/10 dark:from-white/[.08] dark:to-white/[.02]">
+    <div className="relative overflow-hidden rounded-xl border border-black/[.06] bg-gradient-to-b from-black/[.05] to-black/[.015] px-4 py-5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:from-white/[.08] dark:to-white/[.02]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 dark:bg-white/15" />
-      {/* Proportional figures, not tabular-nums: these sit alone, not in a
-          column that needs to align digit-for-digit, and tabular-nums makes
-          a standalone number like "5" look loose at display size. */}
-      <p className="text-3xl font-semibold text-foreground">{value}</p>
-      <p className="mt-0.5 text-xs font-semibold tracking-wide text-muted uppercase">
-        {label}
-      </p>
+      <div className="flex items-center gap-3.5">
+        {/* One tint for all six, taken from the theme's own accent rather
+            than a colour per card: these are not six categories to tell
+            apart, they are six facts about one project, and the label beside
+            each already names it. */}
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand dark:bg-brand/15">
+          {icon}
+        </span>
+        <span aria-hidden="true" className="h-10 w-px shrink-0 bg-border" />
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-muted">{label}</p>
+          {/* Proportional figures, not tabular-nums: these sit alone, not in
+              a column that needs to align digit-for-digit, and tabular-nums
+              makes a standalone number like "5" look loose at display
+              size. */}
+          <p className="text-2xl font-semibold text-foreground">{value}</p>
+        </div>
+      </div>
     </div>
   );
 }
