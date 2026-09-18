@@ -1205,21 +1205,31 @@ function TreeRow({
         <ChevronRightIcon className={`size-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
       </button>
       <Badge tone={levelTone}>{level}</Badge>
+      {/* No `flex-1`: that stretched the name across the whole row and left
+          the tag stranded at the far right, reading as a column of its own
+          rather than as something about this Requirement. It hugs the name
+          here, the way the Requirements list sets it. */}
       <button
         type="button"
         onClick={onPreview ?? onToggle}
-        className={`min-w-0 flex-1 truncate text-left text-foreground hover:text-brand hover:underline ${bold ? "font-medium" : ""}`}
+        className={`min-w-0 truncate text-left text-foreground hover:text-brand hover:underline ${bold ? "font-medium" : ""}`}
       >
         {label}
       </button>
       {/* Outline, not cyan: cyan is the Requirement level's own badge, and the
           two sat side by side on the same row meaning different things. */}
       {tag && (
-        <Badge tone="gray" variant="outline">
-          {tag}
-        </Badge>
+        <span className="shrink-0">
+          <Badge tone="gray" variant="outline">
+            {tag}
+          </Badge>
+        </span>
       )}
-      <Badge tone="gray">{count}</Badge>
+      {/* The count keeps its right edge: it is the one thing on these rows
+          worth comparing down the column. */}
+      <span className="ml-auto shrink-0">
+        <Badge tone="gray">{count}</Badge>
+      </span>
     </div>
   );
 }
