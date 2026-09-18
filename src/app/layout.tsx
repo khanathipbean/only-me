@@ -11,6 +11,8 @@ import { AccountMenu } from "@/components/AccountMenu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemeSync } from "@/components/ThemeSync";
 import { ToastListener } from "@/components/ToastListener";
+import { ProjectPicker } from "@/components/ProjectPicker";
+import { listProjectsForUser } from "@/lib/projects";
 import { IconLinkButton } from "@/components/ui/Button";
 import { UserPlusIcon } from "@/components/icons";
 import "./globals.css";
@@ -59,7 +61,21 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // back in. `getUserById` is cached per request, so pages that need it too
   // don't pay for a second query.
   const currentUser = session?.user ? await getUserById(session.user.id) : null;
-  const canManageMembers = session?.user ? await isAdminAnywhere(session.user.id) : false;
+  /* ADMIN on at least one Project. Gates the Members page and "New Project"
+   * alike — one predicate, so one query rather than the same one twice. */
+  const isAdmin = session?.user ? await isAdminAnywhere(session.user.id) : false;
+  /* For the header's Project picker. Only what it needs, and only the
+   * Projects this person is a member of, so it can never offer one they'd be
+   * bounced straight out of. Archived ones are already excluded upstream —
+   * switching into one would land you somewhere you cannot edit. */
+  const pickerProjects = session?.user
+    ? (await listProjectsForUser(session.user.id)).map((project) => ({
+        id: project.id,
+        code: project.code,
+        name: project.name,
+        status: project.status as string,
+      }))
+    : [];
 
   async function logout() {
     "use server";
@@ -115,10 +131,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 
               <HeaderSearch className="min-w-48 flex-1" />
 
+              {/* Right after the search box, so the two things that say "what
+                  am I looking at" sit together. It renders nothing off a
+                  Project page, and nothing when there is only one Project. */}
+              <ProjectPicker projects={pickerProjects} canCreateProject={isAdmin} />
+
               {/* Hidden below sm: AccountMenu folds the same links into its
                   own menu there, so the header doesn't need to fit an admin
                   icon, a theme icon, and the avatar in a phone's width. */}
-              {canManageMembers && (
+              {isAdmin && (
                 <div className="hidden sm:flex">
                   <IconLinkButton href="/members" aria-label="Members" title="Members">
                     <UserPlusIcon />
@@ -133,7 +154,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                 email={currentUser?.email ?? session.user.email ?? ""}
                 avatarUrl={currentUser?.avatarKey ? `/api/users/${currentUser.id}/avatar` : null}
                 logout={logout}
-                canManageMembers={canManageMembers}
+                canManageMembers={isAdmin}
               />
             </div>
           </header>

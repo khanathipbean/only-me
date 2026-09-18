@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useId,
@@ -46,6 +47,7 @@ export function Select({
   required,
   disabled,
   ariaLabel,
+  leadingIcon,
   autoWidth = false,
   className = "",
 }: {
@@ -59,6 +61,9 @@ export function Select({
   required?: boolean;
   disabled?: boolean;
   ariaLabel?: string;
+  /** Shown before the label, inside the trigger. Options stay plain text —
+   *  an icon repeated down every row of the list is noise, not a signpost. */
+  leadingIcon?: ReactNode;
   /**
    * Size the control to its widest option instead of taking a width from the
    * caller. For a control whose options are user-entered — a phase, a round —
@@ -369,6 +374,7 @@ export function Select({
                  when the chosen label was the widest one. */
               className="flex items-center gap-2 rounded-md border border-transparent py-2 pr-2.5 pl-3"
             >
+              {leadingIcon && <span className="shrink-0">{leadingIcon}</span>}
               <span className="whitespace-nowrap">{option.label}</span>
               <span className="size-3.5 shrink-0" />
             </div>
@@ -389,7 +395,10 @@ export function Select({
         onKeyDown={onTriggerKeyDown}
         className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-surface py-2 pr-2.5 pl-3 text-left text-sm text-foreground shadow-sm transition-colors outline-none hover:bg-black/[.02] focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/[.04]"
       >
-        <span className="truncate">{selectedLabel}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {leadingIcon && <span className="shrink-0 text-muted">{leadingIcon}</span>}
+          <span className="truncate">{selectedLabel}</span>
+        </span>
         <ChevronRightIcon className="size-3.5 shrink-0 rotate-90 text-muted" />
       </button>
 

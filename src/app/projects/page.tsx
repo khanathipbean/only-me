@@ -40,10 +40,14 @@ export default async function ProjectsPage({
     page?: string;
     pageSize?: string;
     error?: string;
+    /** Opens the New Project dialog on arrival, so the header's Project
+     *  picker can link straight to it instead of dropping someone on this
+     *  page to hunt for the button. */
+    new?: string;
   }>;
 }) {
   const session = await auth();
-  const { search, status, page, pageSize, error } = await searchParams;
+  const { search, status, page, pageSize, error, new: openNew } = await searchParams;
   const hasFilters = Boolean(search || status);
   const canCreateProject = await isAdminAnywhere(session!.user.id);
 
@@ -97,7 +101,11 @@ export default async function ProjectsPage({
         title="Projects"
         actions={
           canCreateProject && (
-            <Modal triggerLabel="+ New Project" title="New Project" openOnMount={!!error}>
+            <Modal
+              triggerLabel="+ New Project"
+              title="New Project"
+              openOnMount={!!error || openNew === "1"}
+            >
               <ProjectForm action={create} submitLabel="Create Project" error={error} />
             </Modal>
           )
