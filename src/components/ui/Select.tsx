@@ -46,6 +46,7 @@ export function Select({
   required,
   disabled,
   ariaLabel,
+  autoWidth = false,
   className = "",
 }: {
   options: SelectOption[];
@@ -58,6 +59,16 @@ export function Select({
   required?: boolean;
   disabled?: boolean;
   ariaLabel?: string;
+  /**
+   * Size the control to its widest option instead of taking a width from the
+   * caller. For a control whose options are user-entered — a phase, a round —
+   * any fixed width is guesswork: too wide leaves the empty gutter this was
+   * added to remove, too narrow truncates a name someone chose.
+   *
+   * Widest, not current: sizing to the selected label would resize the control
+   * on every choice and shove whatever sits beside it sideways.
+   */
+  autoWidth?: boolean;
   className?: string;
 }) {
   const isControlled = value !== undefined;
@@ -342,6 +353,27 @@ export function Select({
             </option>
           ))}
         </select>
+      )}
+
+      {autoWidth && (
+        /* Every option laid out with the trigger's own horizontal chrome, at
+           zero height: it contributes width to this box and nothing else. A
+           width class from the caller still wins — this only decides the
+           intrinsic width. */
+        <div aria-hidden="true" className="h-0 overflow-hidden text-sm">
+          {options.map((option) => (
+            <div
+              key={option.value}
+              /* Same horizontal chrome as the trigger, border included: two
+                 pixels of it, left off, let the control still shift by two
+                 when the chosen label was the widest one. */
+              className="flex items-center gap-2 rounded-md border border-transparent py-2 pr-2.5 pl-3"
+            >
+              <span className="whitespace-nowrap">{option.label}</span>
+              <span className="size-3.5 shrink-0" />
+            </div>
+          ))}
+        </div>
       )}
 
       <button

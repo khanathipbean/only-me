@@ -387,7 +387,8 @@ export function DashboardView({ projectId }: { projectId: string }) {
                 })),
               ]}
               ariaLabel="Test Run"
-              className="w-56"
+              autoWidth
+              className="max-w-56"
             />
           )}
           <IconButton
