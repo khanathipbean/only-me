@@ -11,6 +11,12 @@ import { POST as createProjectRoute } from "@/app/api/projects/route";
 import { GET as listProjects } from "@/app/api/projects/route";
 import { GET as listMembersRoute, POST as createMemberRoute } from "@/app/api/members/route";
 import { PATCH as updateAccessRoute } from "@/app/api/members/[userId]/route";
+import {
+  CannotDeleteSelfError,
+  LastAdminError,
+  UserInUseError,
+  deleteUser,
+} from "@/lib/members";
 
 const mockAuth = vi.mocked(auth);
 
@@ -365,5 +371,128 @@ describe("member routes", () => {
       { params: Promise.resolve({ userId: tester.id }) },
     );
     expect(response.status).toBe(403);
+  });
+
+  it("deletes a user with no activity, taking every membership with it", async () => {
+    const { admin, project } = await setupAsAdmin("member-admin13@example.com", "PRJ-MEM-13");
+    const target = await createUser("member-to-delete1@example.com");
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: target.id, role: "TESTER" },
+    });
+
+    await deleteUser(target.id, admin.id);
+
+    expect(await prisma.user.findUnique({ where: { id: target.id } })).toBeNull();
+    expect(await prisma.projectMember.findMany({ where: { userId: target.id } })).toHaveLength(0);
+  });
+
+  it("refuses to delete your own account", async () => {
+    const { admin } = await setupAsAdmin("member-admin14@example.com", "PRJ-MEM-14");
+    await expect(deleteUser(admin.id, admin.id)).rejects.toBeInstanceOf(CannotDeleteSelfError);
+  });
+
+  it("refuses to delete the last ADMIN in the system", async () => {
+    const { admin, project } = await setupAsAdmin("member-admin15@example.com", "PRJ-MEM-15");
+    const actor = await createUser("member-actor15@example.com");
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: actor.id, role: "TESTER" },
+    });
+    // Same isolation concern as the demote test above: clear every other
+    // ADMIN this suite has left behind first.
+    await prisma.projectMember.updateMany({
+      where: { role: "ADMIN", userId: { not: admin.id } },
+      data: { role: "TESTER" },
+    });
+
+    await expect(deleteUser(admin.id, actor.id)).rejects.toBeInstanceOf(LastAdminError);
+    expect(await prisma.user.findUnique({ where: { id: admin.id } })).not.toBeNull();
+  });
+
+  it("deletes a user who has audit history, leaving the log intact with a null actor", async () => {
+    const { admin, project } = await setupAsAdmin("member-admin16@example.com", "PRJ-MEM-16");
+    const target = await createUser("member-to-delete2@example.com");
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: target.id, role: "TESTER" },
+    });
+    // A history-only reference — the same shape any real action (updating a
+    // Requirement, closing a Test Run) leaves behind. This must NOT block
+    // deletion: it's a record of what happened, not something `target` owns.
+    const log = await prisma.auditLog.create({
+      data: {
+        entityType: "Project",
+        entityId: project.id,
+        action: "update",
+        actorId: target.id,
+        projectId: project.id,
+      },
+    });
+
+    await deleteUser(target.id, admin.id);
+
+    expect(await prisma.user.findUnique({ where: { id: target.id } })).toBeNull();
+    const survivingLog = await prisma.auditLog.findUnique({ where: { id: log.id } });
+    expect(survivingLog).not.toBeNull();
+    expect(survivingLog?.actorId).toBeNull();
+  });
+
+  it("deletes a user's own notifications along with them, but keeps ones they only triggered (actor set null)", async () => {
+    const { admin, project } = await setupAsAdmin("member-admin17@example.com", "PRJ-MEM-17");
+    const target = await createUser("member-to-delete3@example.com");
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: target.id, role: "TESTER" },
+    });
+
+    const asRecipient = await prisma.notification.create({
+      data: {
+        recipientId: target.id,
+        projectId: project.id,
+        type: "MEMBER_ADDED",
+        title: "t",
+        body: "b",
+        actorId: admin.id,
+      },
+    });
+    const asActor = await prisma.notification.create({
+      data: {
+        recipientId: admin.id,
+        projectId: project.id,
+        type: "MEMBER_ADDED",
+        title: "t",
+        body: "b",
+        actorId: target.id,
+      },
+    });
+
+    await deleteUser(target.id, admin.id);
+
+    expect(await prisma.notification.findUnique({ where: { id: asRecipient.id } })).toBeNull();
+    const survivingAsActor = await prisma.notification.findUnique({ where: { id: asActor.id } });
+    expect(survivingAsActor).not.toBeNull();
+    expect(survivingAsActor?.actorId).toBeNull();
+  });
+
+  it("refuses to delete a user who owns a Project, leaving them untouched", async () => {
+    const { admin } = await setupAsAdmin("member-admin18@example.com", "PRJ-MEM-18");
+    const owner = await createUser("member-project-owner@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const ownedProject = await (
+      await createProjectRoute(
+        jsonRequest("http://test/api/projects", "POST", {
+          code: "PRJ-MEM-18B",
+          name: "Owned",
+          status: "DRAFT",
+        }),
+      )
+    ).json();
+
+    await expect(deleteUser(owner.id, admin.id)).rejects.toBeInstanceOf(UserInUseError);
+
+    // Refused atomically: the membership removal inside the same transaction
+    // must not have gone through either.
+    expect(await prisma.user.findUnique({ where: { id: owner.id } })).not.toBeNull();
+    expect(
+      await prisma.projectMember.findMany({ where: { userId: owner.id } }),
+    ).toHaveLength(1);
+    void ownedProject;
   });
 });

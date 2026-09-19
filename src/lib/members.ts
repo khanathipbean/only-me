@@ -1,13 +1,31 @@
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { notifyProject } from "@/lib/notifications";
 import { hashPassword } from "@/lib/auth-credentials";
 import { MIN_PASSWORD_LENGTH } from "@/lib/users";
-import type { ProjectRole } from "@/generated/prisma/client";
+import { PROJECT_ROLE_OPTIONS } from "@/lib/enums";
+import { Prisma, type ProjectRole } from "@/generated/prisma/client";
+
+function roleLabel(role: ProjectRole) {
+  return PROJECT_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
+}
 
 export class ValidationError extends Error {}
 export class DuplicateEmailError extends Error {
   constructor() {
     super("A user with this email already exists");
+  }
+}
+export class CannotDeleteSelfError extends ValidationError {
+  constructor() {
+    super("You can't delete your own account");
+  }
+}
+export class UserInUseError extends ValidationError {
+  constructor() {
+    super(
+      "This user owns or created something elsewhere in the system (a Project, Test Case, upload, etc.) and can't be deleted until that's reassigned",
+    );
   }
 }
 export class LastAdminError extends ValidationError {
@@ -161,6 +179,24 @@ export async function updateUserProjectAccess(
       newValue: { userId, role: entry.role },
     });
   }
+
+  if (toAdd.length > 0) {
+    const addedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { name: true },
+    });
+    for (const entry of toAdd) {
+      await notifyProject({
+        projectId: entry.projectId,
+        type: "MEMBER_ADDED",
+        title: "New member added",
+        body: `${addedUser.name} was added as ${roleLabel(entry.role)}.`,
+        link: "/members",
+        actorId,
+        excludeUserId: actorId,
+      });
+    }
+  }
 }
 
 export type NewUserInput = {
@@ -247,5 +283,70 @@ export async function createUserWithAccess(
     });
   }
 
+  for (const entry of access) {
+    await notifyProject({
+      projectId: entry.projectId,
+      type: "MEMBER_ADDED",
+      title: "New member added",
+      body: `${input.name} was added as ${roleLabel(entry.role)}.`,
+      link: "/members",
+      actorId,
+      excludeUserId: actorId,
+    });
+  }
+
   return { userId: user.id, name: user.name, email: user.email, access };
+}
+
+/**
+ * Removes the account entirely — every level down from here soft-deletes,
+ * but a User has no `deletedAt` and nothing reads a "deleted" account, so
+ * this is a hard delete. Refused if it would leave no Admin anywhere (same
+ * guard as `updateUserProjectAccess`), and refused if the account owns or
+ * created real content elsewhere (a Project, a Test Case, an upload —
+ * anything a mandatory foreign key still points at, caught generically via
+ * the FK-violation Postgres raises rather than enumerating every relation by
+ * hand). History-only references don't block it: `AuditLog.actorId` and
+ * `Notification.actorId`/`recipientId` are nullable/cascading specifically
+ * so a record of what happened outlives the account that did it — the
+ * schema comments on those fields explain why.
+ */
+export async function deleteUser(userId: string, actorId: string) {
+  if (userId === actorId) {
+    throw new CannotDeleteSelfError();
+  }
+
+  const memberships = await prisma.projectMember.findMany({ where: { userId } });
+
+  if (memberships.some((m) => m.role === "ADMIN")) {
+    const otherAdmins = await prisma.projectMember.count({
+      where: { role: "ADMIN", userId: { not: userId } },
+    });
+    if (otherAdmins === 0) {
+      throw new LastAdminError();
+    }
+  }
+
+  try {
+    await prisma.$transaction([
+      prisma.projectMember.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+      throw new UserInUseError();
+    }
+    throw error;
+  }
+
+  for (const m of memberships) {
+    await writeAuditLog({
+      entityType: "ProjectMember",
+      entityId: m.id,
+      action: "delete",
+      actorId,
+      projectId: m.projectId,
+      oldValue: { userId, role: m.role },
+    });
+  }
 }

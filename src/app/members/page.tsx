@@ -6,6 +6,7 @@ import {
   DuplicateEmailError,
   ValidationError,
   createUserWithAccess,
+  deleteUser,
   listMembersGroupedByUser,
   updateUserProjectAccess,
 } from "@/lib/members";
@@ -16,6 +17,7 @@ import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { ResultCount } from "@/components/ui/ResultCount";
+import { ConfirmForm } from "@/components/ConfirmForm";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
@@ -23,7 +25,8 @@ import { Select } from "@/components/ui/Select";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { Badge, type Tone } from "@/components/ui/Badge";
-import { EditIcon } from "@/components/icons";
+import { Button, IconButton } from "@/components/ui/Button";
+import { EditIcon, TrashIcon } from "@/components/icons";
 import { MIN_PASSWORD_LENGTH } from "@/lib/users";
 import { ASSIGNABLE_PROJECT_ROLE_OPTIONS, PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import {
@@ -184,6 +187,28 @@ export default async function MembersPage({
     };
   }
 
+  function deleteMemberAction(targetUserId: string) {
+    return async function deleteMember() {
+      "use server";
+      invalidateRouteCache();
+      const session = await auth();
+      await requireAdminAnywhereOrNotFound(session!.user.id);
+
+      try {
+        await deleteUser(targetUserId, session!.user.id);
+      } catch (err) {
+        if (err instanceof ValidationError) {
+          redirect(
+            `/members?userId=${targetUserId}&error=${encodeURIComponent(err.message)}`,
+          );
+        }
+        throw err;
+      }
+
+      redirect(withToast("/members", "User deleted"));
+    };
+  }
+
   return (
     <main className={pageClass}>
       <Breadcrumb segments={membersBreadcrumb()} />
@@ -296,17 +321,39 @@ export default async function MembersPage({
                           {error}
                         </p>
                       )}
-                      <form action={updateAccessAction(member.userId)} className="flex flex-col gap-4">
+                      <form
+                        id={`edit-access-${member.userId}`}
+                        action={updateAccessAction(member.userId)}
+                        className="flex flex-col gap-4"
+                      >
                         <p className={mutedTextClass}>
                           Choose every Project this account should have access to, and their role
                           on each. Unchecking a Project removes their membership there.
                         </p>
                         <ProjectAccessChecklist projects={projects} current={member.memberships} />
-                        <div className="mt-2 flex justify-end gap-2">
-                          <DialogCloseButton />
-                          <SubmitButton>Save</SubmitButton>
-                        </div>
                       </form>
+                      <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
+                        <ConfirmForm
+                          action={deleteMemberAction(member.userId)}
+                          confirmMessage={`Delete ${member.name}? This removes the account and every Project membership it has. This cannot be undone.`}
+                          variant="danger"
+                        >
+                          <IconButton
+                            type="submit"
+                            variant="danger"
+                            aria-label={`Delete ${member.name}`}
+                            title="Delete user"
+                          >
+                            <TrashIcon />
+                          </IconButton>
+                        </ConfirmForm>
+                        <div className="flex items-center gap-2">
+                          <DialogCloseButton />
+                          <Button type="submit" form={`edit-access-${member.userId}`}>
+                            Save
+                          </Button>
+                        </div>
+                      </div>
                     </Modal>
                   </td>
                 </tr>
