@@ -23,6 +23,7 @@ import { nameOr, testRunBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
+import { isTestRunOverdue } from "@/lib/deadlines";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
@@ -236,6 +237,7 @@ export default async function TestRunPage({
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <Badge tone={isOpen ? "blue" : "gray"}>{isOpen ? "Open" : "Closed"}</Badge>
+            {isTestRunOverdue(run) && <Badge tone="red">Overdue</Badge>}
             {/* Which phase this round belongs to — the list says it too. */}
             {run.phase && (
               <Badge tone="gray" variant="outline">
@@ -255,6 +257,12 @@ export default async function TestRunPage({
         }
         actions={
           <>
+            <a
+              href={`/api/projects/${projectId}/runs/${runId}/export`}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+            >
+              Export results
+            </a>
             {isOpen && (
               <Modal
                 triggerLabel="+ Add test cases"

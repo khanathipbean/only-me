@@ -29,7 +29,17 @@ export default async function DashboardPage({
       <Breadcrumb
         segments={dashboardBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
-      <PageHeader title="Dashboard" />
+      <PageHeader
+        title="Dashboard"
+        actions={
+          <a
+            href={`/api/projects/${projectId}/dashboard/export`}
+            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+          >
+            Export summary
+          </a>
+        }
+      />
       <DashboardView projectId={projectId} />
     </main>
   );

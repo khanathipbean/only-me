@@ -66,6 +66,7 @@ export type TestRunFilters = {
   search?: string;
   status?: "OPEN" | "CLOSED";
   archived?: boolean;
+  overdue?: boolean;
 };
 
 function runWhere(projectId: string, filters: TestRunFilters) {
@@ -73,6 +74,12 @@ function runWhere(projectId: string, filters: TestRunFilters) {
     projectId,
     deletedAt: filters.archived ? { not: null } : null,
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.overdue
+      ? {
+          endsOn: { lt: new Date() },
+          ...(filters.status ? {} : { status: "OPEN" as const }),
+        }
+      : {}),
     ...(filters.search
       ? { name: { contains: filters.search, mode: "insensitive" as const } }
       : {}),
@@ -136,6 +143,38 @@ export async function listCasesInRun(testRunId: string) {
               name: true,
               sequence: true,
               scenario: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+}
+
+/** Every case in a round with its full ancestor chain, for the results
+ *  export — `listCasesInRun` stops at Scenario/Test Group because the page it
+ *  serves groups by those; this needs Requirement and Module too. */
+export async function listRunResultsForExport(testRunId: string) {
+  return prisma.testRunCase.findMany({
+    where: { testRunId },
+    include: {
+      ranBy: { select: { name: true } },
+      testCase: {
+        select: {
+          name: true,
+          priority: true,
+          testGroup: {
+            select: {
+              name: true,
+              scenario: {
+                select: {
+                  name: true,
+                  requirement: {
+                    select: { name: true, module: { select: { name: true } } },
+                  },
+                },
+              },
             },
           },
         },

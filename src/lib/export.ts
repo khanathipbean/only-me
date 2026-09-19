@@ -1,0 +1,168 @@
+import ExcelJS from "exceljs";
+import { prisma } from "@/lib/prisma";
+import { IMPORT_COLUMNS } from "@/lib/import/parse";
+import type { ProjectDashboard } from "@/lib/dashboard";
+import type { listRunResultsForExport } from "@/lib/test-runs";
+
+function csvCell(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+function toCsv(rows: string[][]): string {
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
+}
+
+/**
+ * Every live row of the project's hierarchy, in `IMPORT_COLUMNS` order — the
+ * file this produces can be fed straight back into the CSV/XLSX import. A
+ * Scenario or Test Group with no Test Cases under it has no row to carry it
+ * (the import format is one row per Test Case), so it's left out here too.
+ */
+export async function getProjectHierarchyRows(projectId: string, projectCode: string) {
+  const modules = await prisma.module.findMany({
+    where: { projectId, deletedAt: null },
+    orderBy: { sequence: "asc" },
+    include: {
+      requirements: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        include: {
+          scenarios: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: "asc" },
+            include: {
+              testGroups: {
+                where: { deletedAt: null },
+                orderBy: { sequence: "asc" },
+                include: {
+                  testCases: {
+                    where: { deletedAt: null },
+                    orderBy: { createdAt: "asc" },
+                    include: { steps: { orderBy: { sequence: "asc" } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const rows: string[][] = [];
+  for (const mod of modules) {
+    for (const requirement of mod.requirements) {
+      for (const scenario of requirement.scenarios) {
+        // "Creation-only" fields (Scenario/Test Group description etc.) go on
+        // only the first row that introduces that container — matching how
+        // the import treats a repeated Scenario/Test Group Name as a find,
+        // not a second create.
+        let scenarioIntroduced = false;
+        for (const testGroup of scenario.testGroups) {
+          let testGroupIntroduced = false;
+          for (const testCase of testGroup.testCases) {
+            rows.push([
+              projectCode,
+              mod.name,
+              requirement.name,
+              scenario.name,
+              testGroup.name,
+              testCase.name,
+              testCase.preconditions ?? "",
+              testCase.steps.map((step) => step.step).join("\n"),
+              testCase.expectedResult,
+              testCase.priority,
+              scenarioIntroduced ? "" : scenario.description ?? "",
+              scenarioIntroduced ? "" : scenario.preconditions ?? "",
+              scenarioIntroduced ? "" : scenario.expectedResult,
+              testGroupIntroduced ? "" : testGroup.testObjective ?? "",
+            ]);
+            scenarioIntroduced = true;
+            testGroupIntroduced = true;
+          }
+        }
+      }
+    }
+  }
+  return rows;
+}
+
+export function generateProjectHierarchyCsv(rows: string[][]): string {
+  return toCsv([[...IMPORT_COLUMNS], ...rows]);
+}
+
+export async function generateProjectHierarchyXlsx(rows: string[][]): Promise<ExcelJS.Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Import");
+  sheet.addRow([...IMPORT_COLUMNS]);
+  rows.forEach((row) => sheet.addRow(row));
+  return workbook.xlsx.writeBuffer();
+}
+
+const RUN_RESULTS_HEADER = [
+  "Module",
+  "Requirement",
+  "Scenario",
+  "Test Group",
+  "Test Case",
+  "Priority",
+  "Result",
+  "Notes",
+  "Ran By",
+  "Ran At",
+];
+
+export function generateRunResultsCsv(
+  cases: Awaited<ReturnType<typeof listRunResultsForExport>>,
+): string {
+  const rows = cases.map((testRunCase) => {
+    const { testCase } = testRunCase;
+    return [
+      testCase.testGroup.scenario.requirement.module.name,
+      testCase.testGroup.scenario.requirement.name,
+      testCase.testGroup.scenario.name,
+      testCase.testGroup.name,
+      testCase.name,
+      testCase.priority,
+      testRunCase.testResult,
+      testRunCase.notes ?? "",
+      testRunCase.ranBy?.name ?? "",
+      testRunCase.ranAt ? testRunCase.ranAt.toISOString() : "",
+    ];
+  });
+  return toCsv([RUN_RESULTS_HEADER, ...rows]);
+}
+
+export function generateDashboardSummaryCsv(
+  dashboard: ProjectDashboard,
+  projectName: string,
+): string {
+  const rows: string[][] = [
+    ["Project", projectName],
+    [],
+    ["Metric", "Count"],
+    ["Modules", String(dashboard.counts.modules)],
+    ["Requirements", String(dashboard.counts.requirements)],
+    ["Scenarios", String(dashboard.counts.scenarios)],
+    ["Test Groups", String(dashboard.counts.testGroups)],
+    ["Test Cases", String(dashboard.counts.testCases)],
+    ["Test Progress %", String(dashboard.testProgress)],
+    [],
+    ["Test Cases by Result"],
+    ...Object.entries(dashboard.testCasesByResult).map(([result, count]) => [
+      result,
+      String(count),
+    ]),
+    [],
+    ["Test Cases by Priority"],
+    ...Object.entries(dashboard.testCasesByPriority).map(([priority, count]) => [
+      priority,
+      String(count),
+    ]),
+    [],
+    ["Coverage"],
+    ["In any run", String(dashboard.coverage.inAnyRun)],
+    ["Not in any run", String(dashboard.coverage.notInAnyRun)],
+  ];
+  return toCsv(rows);
+}

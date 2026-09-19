@@ -19,6 +19,8 @@ import { filesBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilePreview } from "@/components/FilePreview";
+import { FilterForm } from "@/components/FilterForm";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { IconButton } from "@/components/ui/Button";
@@ -26,7 +28,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { TrashIcon } from "@/components/icons";
-import { labelClass, mutedTextClass, pageClass } from "@/lib/ui";
+import { inputClass, labelClass, mutedTextClass, pageClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -40,18 +42,25 @@ export default async function ProjectFilesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; fileId?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    fileId?: string;
+    search?: string;
+    moduleId?: string;
+  }>;
 }) {
   const { id: projectId } = await params;
-  const { error, fileId } = await searchParams;
+  const { error, fileId, search, moduleId } = await searchParams;
   const session = await auth();
+  const hasFilters = Boolean(search || moduleId);
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
   const [project, groups, modules] = await Promise.all([
     getProjectById(projectId),
-    listProjectFilesByModule(projectId),
+    listProjectFilesByModule(projectId, { search, moduleId }),
     listModulesForProject(projectId),
   ]);
+  const totalFiles = groups.reduce((sum, group) => sum + group.files.length, 0);
 
   async function upload(formData: FormData) {
     "use server";
@@ -161,8 +170,36 @@ export default async function ProjectFilesPage({
         </form>
       </Card>
 
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search file name"
+            defaultValue={search}
+            className={`${inputClass} max-w-xs`}
+          />
+          <label className={labelClass}>
+            Module
+            <Select
+              name="moduleId"
+              defaultValue={moduleId ?? ""}
+              options={[
+                { value: "", label: "All modules" },
+                ...modules.map((module) => ({ value: module.id, label: module.name })),
+              ]}
+              ariaLabel="Module"
+              className="max-w-48"
+            />
+          </label>
+        </FilterForm>
+        <ResultCount total={totalFiles} />
+      </div>
+
       {groups.length === 0 ? (
-        <p className={mutedTextClass}>No files yet. Add one to get started.</p>
+        <p className={mutedTextClass}>
+          {hasFilters ? "No files match your search/filters." : "No files yet. Add one to get started."}
+        </p>
       ) : (
         groups.map((group) => (
           <section key={group.module} className="flex flex-col gap-3">

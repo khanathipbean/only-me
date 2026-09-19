@@ -27,6 +27,7 @@ import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { Avatar } from "@/components/ui/Avatar";
 import { ProjectForm } from "@/components/forms/ProjectForm";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
+import { isProjectOverdue } from "@/lib/deadlines";
 import { ClockIcon } from "@/components/icons";
 import { formatTimestamp } from "@/lib/dates";
 import {
@@ -66,6 +67,7 @@ export default async function ProjectsPage({
      *  on the bare list to find the row themselves. */
     edit?: string;
     archived?: string;
+    overdue?: string;
   }>;
 }) {
   const session = await auth();
@@ -79,15 +81,18 @@ export default async function ProjectsPage({
     new: openNew,
     edit: openEdit,
     archived,
+    overdue,
   } = await searchParams;
   const showArchived = archived === "1";
-  const hasFilters = Boolean(search || status || showArchived);
+  const showOverdue = overdue === "1";
+  const hasFilters = Boolean(search || status || showArchived || showOverdue);
   const canCreateProject = await isAdminAnywhere(session!.user.id);
 
   const result = await listProjectsForUserPage(session!.user.id, {
     search,
     status: status as ProjectStatus | undefined,
     archived: showArchived,
+    overdue: showOverdue,
     page: page ? Number(page) : undefined,
     pageSize: pageSize ? Number(pageSize) : undefined,
   });
@@ -96,7 +101,7 @@ export default async function ProjectsPage({
   /* Plain strings only: a server action may close over serialisable values —
    * see the identical note on the Modules page, which this mirrors. */
   const listQueryString = new URLSearchParams(
-    Object.entries({ search, status, archived }).filter(
+    Object.entries({ search, status, archived, overdue }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   ).toString();
@@ -253,6 +258,19 @@ export default async function ProjectsPage({
               className="max-w-36"
             />
           </label>
+          <label className={labelClass}>
+            Deadline
+            <Select
+              name="overdue"
+              defaultValue={overdue ?? ""}
+              options={[
+                { value: "", label: "All" },
+                { value: "1", label: "Overdue only" },
+              ]}
+              ariaLabel="Deadline"
+              className="max-w-36"
+            />
+          </label>
         </FilterForm>
         <ResultCount total={result.total} />
       </div>
@@ -309,6 +327,7 @@ export default async function ProjectsPage({
                           <span className="inline-flex items-center gap-1.5">
                             <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
                             {project.deletedAt && <Badge tone="gray">Archived</Badge>}
+                            {isProjectOverdue(project) && <Badge tone="red">Overdue</Badge>}
                           </span>
                         </td>
                       </>

@@ -9,6 +9,7 @@ import {
   archiveRequirement,
   createRequirement,
   deleteRequirement,
+  duplicateRequirement,
   listFeaturesForModule,
   listRequirementsForProjectPage,
   restoreRequirement,
@@ -201,6 +202,14 @@ export default async function RequirementsPage({
           );
         }
         redirect(listHref);
+      },
+      async duplicate() {
+        "use server";
+        invalidateRouteCache();
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await duplicateRequirement(requirementId, session!.user.id);
+        redirect(withToast(listHref, "Requirement duplicated"));
       },
       async archive() {
         "use server";
@@ -447,6 +456,14 @@ export default async function RequirementsPage({
                         />
                         <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
                           <div className="flex items-center gap-2">
+                            <ConfirmForm
+                              action={actions.duplicate}
+                              confirmMessage="Duplicate this Requirement? Its Scenarios are not copied."
+                            >
+                              <SubmitButton variant="secondary" pendingLabel="Duplicating…">
+                                Duplicate
+                              </SubmitButton>
+                            </ConfirmForm>
                             {showArchived ? (
                               <ConfirmForm
                                 action={actions.restore}

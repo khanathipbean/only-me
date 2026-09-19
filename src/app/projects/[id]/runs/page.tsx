@@ -22,6 +22,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { RowActions } from "@/components/ui/RowActions";
 import { Badge } from "@/components/ui/Badge";
+import { isTestRunOverdue } from "@/lib/deadlines";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
@@ -71,6 +72,7 @@ export default async function TestRunsPage({
     search?: string;
     status?: string;
     archived?: string;
+    overdue?: string;
     page?: string;
     pageSize?: string;
     error?: string;
@@ -78,13 +80,14 @@ export default async function TestRunsPage({
   }>;
 }) {
   const { id: projectId } = await params;
-  const { search, status, archived, page, pageSize, error, editId } = await searchParams;
+  const { search, status, archived, overdue, page, pageSize, error, editId } = await searchParams;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
 
   const showArchived = archived === "1";
-  const hasFilters = Boolean(search || status || showArchived);
+  const showOverdue = overdue === "1";
+  const hasFilters = Boolean(search || status || showArchived || showOverdue);
 
   const [project, result, phases] = await Promise.all([
     getProjectById(projectId),
@@ -92,6 +95,7 @@ export default async function TestRunsPage({
       search,
       status: status === "OPEN" || status === "CLOSED" ? status : undefined,
       archived: showArchived,
+      overdue: showOverdue,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     }),
@@ -102,7 +106,7 @@ export default async function TestRunsPage({
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all. */
   const listQueryString = new URLSearchParams(
-    Object.entries({ search, status, archived, page, pageSize }).filter(
+    Object.entries({ search, status, archived, overdue, page, pageSize }).filter(
       (entry): entry is [string, string] => Boolean(entry[1]),
     ),
   ).toString();
@@ -307,6 +311,19 @@ export default async function TestRunsPage({
             className="max-w-36"
           />
         </label>
+        <label className={labelClass}>
+          Deadline
+          <Select
+            name="overdue"
+            defaultValue={overdue ?? ""}
+            options={[
+              { value: "", label: "All" },
+              { value: "1", label: "Overdue only" },
+            ]}
+            ariaLabel="Deadline"
+            className="max-w-36"
+          />
+        </label>
       </FilterForm>
 
       {runs.length === 0 ? (
@@ -379,9 +396,12 @@ export default async function TestRunsPage({
                       )}
                     </td>
                     <td className={tdCenterClass}>
-                      <Badge tone={run.status === "OPEN" ? "blue" : "gray"}>
-                        {run.status === "OPEN" ? "Open" : "Closed"}
-                      </Badge>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Badge tone={run.status === "OPEN" ? "blue" : "gray"}>
+                          {run.status === "OPEN" ? "Open" : "Closed"}
+                        </Badge>
+                        {isTestRunOverdue(run) && <Badge tone="red">Overdue</Badge>}
+                      </span>
                     </td>
                     <td className={tdCenterClass}>
                       <div className="inline-flex items-center gap-1">

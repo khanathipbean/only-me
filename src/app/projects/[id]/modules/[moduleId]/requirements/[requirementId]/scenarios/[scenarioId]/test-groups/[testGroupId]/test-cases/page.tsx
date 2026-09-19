@@ -4,10 +4,17 @@ import { EDITOR_ROLES, ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/
 import { getTestGroupWithProjectId } from "@/lib/test-groups";
 import {
   ValidationError,
+  bulkArchiveTestCases,
   createTestCase,
   listTestCasesWithStepsForTestGroupPage,
   updateTestCase,
 } from "@/lib/test-cases";
+import { ConfirmForm } from "@/components/ConfirmForm";
+import { BulkSelectionProvider } from "@/components/BulkSelectionProvider";
+import { BulkSelectAllCheckbox } from "@/components/BulkSelectAllCheckbox";
+import { BulkSelectCheckbox } from "@/components/BulkSelectCheckbox";
+import { BulkActionBar } from "@/components/BulkActionBar";
+import { SubmitButton } from "@/components/SubmitButton";
 import { parseStepsJson } from "@/lib/test-case-form";
 import { getScenarioById } from "@/lib/scenarios";
 import { notFound, redirect } from "next/navigation";
@@ -214,6 +221,21 @@ export default async function TestCasesPage({
     redirect(withToast(`${basePath}/${testCase.id}`, "Test Case created"));
   }
 
+  async function bulkArchive(formData: FormData) {
+    "use server";
+    invalidateRouteCache();
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
+    const archived = await bulkArchiveTestCases(ids, session!.user.id);
+    redirect(
+      withToast(
+        listHref,
+        archived === 0 ? "No Test Cases were selected" : `Archived ${archived} Test Case${archived === 1 ? "" : "s"}`,
+      ),
+    );
+  }
+
   return (
     <main className={pageClass}>
       <Breadcrumb
@@ -297,33 +319,59 @@ export default async function TestCasesPage({
             : "No Test Cases yet. Create one to get started."}
         </p>
       ) : (
-        <div className={tableWrapClass}>
-          <table className={tableClass}>
-            <colgroup>
-              <col className="w-[34%]" />
-              <col className="w-[18%]" />
-              <col className="w-[17%]" />
-              <col className="w-[17%]" />
-              <col className="w-[14%]" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={thClass}>Name</th>
-                <th className={thCenterClass}>Priority</th>
-                <th className={thCenterClass}>Test Result</th>
-                <th className={thCenterClass}>Status</th>
-                <th className={thCenterClass}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {testCases.map((testCase) => (
-                <ExpandableRow
-                  key={testCase.id}
-                  colSpan={5}
-                  detailLabel={testCase.name}
-                  cells={
-                    <>
-                      <td className={tdClass}>
+        <BulkSelectionProvider>
+          <ConfirmForm
+            id="bulk-archive-test-cases"
+            action={bulkArchive}
+            confirmMessage="Archive the selected Test Cases?"
+            variant="secondary"
+          >
+            <BulkActionBar noun="Test Case">
+              <SubmitButton variant="secondary" pendingLabel="Archiving…">
+                Archive selected
+              </SubmitButton>
+            </BulkActionBar>
+          </ConfirmForm>
+
+          <div className={tableWrapClass}>
+            <table className={tableClass}>
+              <colgroup>
+                <col className="w-[6%]" />
+                <col className="w-[31%]" />
+                <col className="w-[17%]" />
+                <col className="w-[16%]" />
+                <col className="w-[16%]" />
+                <col className="w-[14%]" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className={thCenterClass}>
+                    <BulkSelectAllCheckbox ids={testCases.map((testCase) => testCase.id)} />
+                  </th>
+                  <th className={thClass}>Name</th>
+                  <th className={thCenterClass}>Priority</th>
+                  <th className={thCenterClass}>Test Result</th>
+                  <th className={thCenterClass}>Status</th>
+                  <th className={thCenterClass}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {testCases.map((testCase) => (
+                  <ExpandableRow
+                    key={testCase.id}
+                    colSpan={6}
+                    detailLabel={testCase.name}
+                    cells={
+                      <>
+                        <td className={tdCenterClass}>
+                          <BulkSelectCheckbox
+                            id={testCase.id}
+                            label={testCase.name}
+                            formId="bulk-archive-test-cases"
+                            name="testCaseId"
+                          />
+                        </td>
+                        <td className={tdClass}>
                         {/* A Test Case is the leaf of the hierarchy — nothing to
                             drill into — so the name keeps going to its own
                             detail page, unlike the two lists above it. */}
@@ -422,10 +470,11 @@ export default async function TestCasesPage({
                     </DetailFields>
                   }
                 />
-              ))}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </BulkSelectionProvider>
       )}
 
       <Pagination

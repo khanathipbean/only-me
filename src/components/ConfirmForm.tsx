@@ -12,11 +12,17 @@ import { dialogClass } from "@/lib/ui";
  * Project ID" input — is included, exactly as a native submit would.
  */
 export function ConfirmForm({
+  id,
   action,
   confirmMessage,
   variant = "primary",
   children,
 }: {
+  /** Lets inputs elsewhere on the page join this form via `form={id}`,
+   *  instead of being nested inside it — needed wherever the fields (e.g. a
+   *  bulk-select checkbox column) can't sit inside this form's own children
+   *  without illegally nesting it inside another form already on the page. */
+  id?: string;
   action: (formData: FormData) => void;
   confirmMessage: string;
   variant?: ButtonVariant;
@@ -41,7 +47,7 @@ export function ConfirmForm({
 
   return (
     <>
-      <form ref={formRef} action={action} onSubmit={handleSubmit}>
+      <form id={id} ref={formRef} action={action} onSubmit={handleSubmit}>
         {children}
       </form>
 

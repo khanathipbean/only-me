@@ -8,6 +8,7 @@ import {
   archiveModule,
   createModule,
   deleteModule,
+  duplicateModule,
   listModulesForProjectPage,
   renameModule,
   restoreModule,
@@ -135,6 +136,14 @@ export default async function ModulesPage({
         }
         redirect(listHref);
       },
+      async duplicate() {
+        "use server";
+        invalidateRouteCache();
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await duplicateModule(moduleId, session!.user.id);
+        redirect(withToast(listHref, "Module duplicated"));
+      },
       async archive() {
         "use server";
         invalidateRouteCache();
@@ -192,11 +201,24 @@ export default async function ModulesPage({
         title="Modules"
         subtitle="One menu of the system under test. Requirements are filed under these."
         actions={
-          <Modal
-            triggerLabel="+ New Module"
-            title="New Module"
-            openOnMount={!!error && !editId}
-          >
+          <>
+            <a
+              href={`/api/projects/${projectId}/export`}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+            >
+              Export as CSV
+            </a>
+            <a
+              href={`/api/projects/${projectId}/export?format=xlsx`}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+            >
+              Export as Excel
+            </a>
+            <Modal
+              triggerLabel="+ New Module"
+              title="New Module"
+              openOnMount={!!error && !editId}
+            >
             {error && !editId && (
               <p
                 role="alert"
@@ -223,7 +245,8 @@ export default async function ModulesPage({
                 <SubmitButton>Add module</SubmitButton>
               </div>
             </form>
-          </Modal>
+            </Modal>
+          </>
         }
       />
 
@@ -339,6 +362,14 @@ export default async function ModulesPage({
                           </form>
                           <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
                             <div className="flex items-center gap-2">
+                              <ConfirmForm
+                                action={actions.duplicate}
+                                confirmMessage="Duplicate this Module? Its Requirements are not copied."
+                              >
+                                <SubmitButton variant="secondary" pendingLabel="Duplicating…">
+                                  Duplicate
+                                </SubmitButton>
+                              </ConfirmForm>
                               {showArchived ? (
                                 <ConfirmForm
                                   action={actions.restore}

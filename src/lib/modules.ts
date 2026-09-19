@@ -136,6 +136,46 @@ export async function renameModule(id: string, name: string, actorId: string) {
   return renamed;
 }
 
+/** Unlike every other level's `duplicate`, a Module's name is unique per
+ * Project (`@@unique([projectId, name])`) — a straight copy would collide
+ * with the source itself, so this finds the first free "Name (Copy)" /
+ * "Name (Copy 2)" ... instead. */
+export async function duplicateModule(id: string, actorId: string) {
+  const source = await prisma.module.findUniqueOrThrow({ where: { id } });
+
+  let name = `${source.name} (Copy)`;
+  let suffix = 2;
+  while (
+    await prisma.module.findUnique({
+      where: { projectId_name: { projectId: source.projectId, name } },
+    })
+  ) {
+    name = `${source.name} (Copy ${suffix})`;
+    suffix++;
+  }
+
+  const last = await prisma.module.findFirst({
+    where: { projectId: source.projectId },
+    orderBy: { sequence: "desc" },
+    select: { sequence: true },
+  });
+
+  const copy = await prisma.module.create({
+    data: { projectId: source.projectId, name, sequence: (last?.sequence ?? -1) + 1 },
+  });
+
+  await writeAuditLog({
+    entityType: "Module",
+    entityId: copy.id,
+    action: "duplicate",
+    actorId,
+    projectId: source.projectId,
+    newValue: copy,
+  });
+
+  return copy;
+}
+
 export async function setModuleDeletedAt(
   id: string,
   deletedAt: Date | null,

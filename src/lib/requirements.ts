@@ -254,6 +254,34 @@ export async function updateRequirement(
   return requirement;
 }
 
+export async function duplicateRequirement(id: string, actorId: string) {
+  const source = await prisma.requirement.findUniqueOrThrow({ where: { id } });
+
+  const copy = await prisma.requirement.create({
+    data: {
+      projectId: source.projectId,
+      moduleId: source.moduleId,
+      name: source.name,
+      code: source.code,
+      description: source.description,
+      feature: source.feature,
+      priority: source.priority,
+      status: source.status,
+    },
+  });
+
+  await writeAuditLog({
+    entityType: "Requirement",
+    entityId: copy.id,
+    action: "duplicate",
+    actorId,
+    projectId: source.projectId,
+    newValue: copy,
+  });
+
+  return copy;
+}
+
 export async function setRequirementDeletedAt(
   id: string,
   deletedAt: Date | null,

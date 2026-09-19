@@ -357,6 +357,22 @@ export async function archiveTestCase(id: string, actorId: string) {
   return setTestCaseDeletedAt(id, actorId, "archive", new Date());
 }
 
+/** One-by-one rather than a single query: each archive writes its own audit
+ *  entry, and a row that's vanished or already archived out from under the
+ *  selection is skipped instead of failing the whole batch. */
+export async function bulkArchiveTestCases(ids: string[], actorId: string) {
+  let archived = 0;
+  for (const id of ids) {
+    try {
+      await archiveTestCase(id, actorId);
+      archived++;
+    } catch {
+      continue;
+    }
+  }
+  return archived;
+}
+
 export async function restoreTestCase(id: string, actorId: string) {
   return setTestCaseDeletedAt(id, actorId, "restore", null);
 }

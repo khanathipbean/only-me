@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Stat } from "@/components/ui/Stat";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
+import { isProjectOverdue, isTestRunOverdue } from "@/lib/deadlines";
 import { FILE_KIND_STYLE } from "@/components/fileKindStyle";
 import { NOTIFICATION_TYPE_STYLE } from "@/components/notificationStyle";
 import {
@@ -106,6 +107,7 @@ export function ProjectOverviewSummary({
             {project.name}
             <span className="text-sm font-normal text-muted">({project.code})</span>
             <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
+            {isProjectOverdue(project) && <Badge tone="red">Overdue</Badge>}
           </h1>
           {project.description && (
             <Tooltip
@@ -180,6 +182,7 @@ export function ProjectOverviewSummary({
                   <span className="flex items-center gap-1.5">
                     <span className="truncate font-medium text-foreground">{run.name}</span>
                     {run.phase && <Badge tone="gray">{run.phase}</Badge>}
+                    {isTestRunOverdue(run) && <Badge tone="red">Overdue</Badge>}
                   </span>
                   <span className="text-xs text-muted">
                     {run.status === "CLOSED" ? "Completed" : "Open"} · {run.percent}% passed
@@ -233,6 +236,15 @@ export function ProjectOverviewSummary({
               <dt className="text-muted">Owner</dt>
               <dd className="font-medium text-foreground">{project.owner.name}</dd>
             </div>
+            {project.endDate && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted">Deadline</dt>
+                <dd className="flex items-center gap-1.5 font-medium text-foreground">
+                  {project.endDate.toISOString().slice(0, 10)}
+                  {isProjectOverdue(project) && <Badge tone="red">Overdue</Badge>}
+                </dd>
+              </div>
+            )}
             <div className="flex justify-between gap-2">
               <dt className="text-muted">Last updated</dt>
               <dd className="text-right font-medium text-foreground">

@@ -130,10 +130,22 @@ export async function saveProjectFile(
   return created;
 }
 
+export type ProjectFileFilters = { search?: string; moduleId?: string };
+
 /** Every live file in the project, grouped under its module heading. */
-export async function listProjectFilesByModule(projectId: string) {
+export async function listProjectFilesByModule(
+  projectId: string,
+  filters: ProjectFileFilters = {},
+) {
   const files = await prisma.projectFile.findMany({
-    where: { projectId, deletedAt: null },
+    where: {
+      projectId,
+      deletedAt: null,
+      ...(filters.moduleId ? { moduleId: filters.moduleId } : {}),
+      ...(filters.search
+        ? { fileName: { contains: filters.search, mode: "insensitive" as const } }
+        : {}),
+    },
     orderBy: [{ module: "asc" }, { uploadedAt: "desc" }],
   });
 
