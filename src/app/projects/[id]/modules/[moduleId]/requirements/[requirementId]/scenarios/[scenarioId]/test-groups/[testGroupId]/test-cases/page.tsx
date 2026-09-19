@@ -227,7 +227,7 @@ export default async function TestCasesPage({
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
     const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
-    const archived = await bulkArchiveTestCases(ids, session!.user.id);
+    const archived = await bulkArchiveTestCases(testGroupId, ids, session!.user.id);
     redirect(
       withToast(
         listHref,
@@ -319,7 +319,7 @@ export default async function TestCasesPage({
             : "No Test Cases yet. Create one to get started."}
         </p>
       ) : (
-        <BulkSelectionProvider>
+        <BulkSelectionProvider key={listQueryString}>
           <ConfirmForm
             id="bulk-archive-test-cases"
             action={bulkArchive}

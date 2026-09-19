@@ -357,14 +357,35 @@ export async function archiveTestCase(id: string, actorId: string) {
   return setTestCaseDeletedAt(id, actorId, "archive", new Date());
 }
 
-/** One-by-one rather than a single query: each archive writes its own audit
- *  entry, and a row that's vanished or already archived out from under the
- *  selection is skipped instead of failing the whole batch. */
-export async function bulkArchiveTestCases(ids: string[], actorId: string) {
+/**
+ * `ids` comes straight off a form's checkboxes — client-controlled input, not
+ * something the caller's own role check can vouch for on its own. Narrowed to
+ * this Test Group before archiving anything, the same defense
+ * `addCasesToRun` uses for its own array-of-ids input: without it, a crafted
+ * request could name a Test Case from a project the caller has no role on at
+ * all, and it would be archived anyway.
+ *
+ * One-by-one rather than a single query: each archive writes its own audit
+ * entry, and a row that's vanished or already archived out from under the
+ * selection is skipped instead of failing the whole batch.
+ */
+export async function bulkArchiveTestCases(
+  testGroupId: string,
+  ids: string[],
+  actorId: string,
+) {
+  if (ids.length === 0) {
+    return 0;
+  }
+  const eligible = await prisma.testCase.findMany({
+    where: { id: { in: ids }, testGroupId, deletedAt: null },
+    select: { id: true },
+  });
+
   let archived = 0;
-  for (const id of ids) {
+  for (const testCase of eligible) {
     try {
-      await archiveTestCase(id, actorId);
+      await archiveTestCase(testCase.id, actorId);
       archived++;
     } catch {
       continue;
