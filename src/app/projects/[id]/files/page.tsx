@@ -40,10 +40,10 @@ export default async function ProjectFilesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; fileId?: string }>;
 }) {
   const { id: projectId } = await params;
-  const { error } = await searchParams;
+  const { error, fileId } = await searchParams;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
@@ -187,6 +187,7 @@ export default async function ProjectFilesPage({
                       isImage: file.contentType.startsWith("image/"),
                       kind: getFileKind(file.contentType, file.fileName),
                     }}
+                    openOnMount={file.id === fileId}
                     deleteSlot={
                       <ConfirmForm
                         action={removeAction(file.id)}

@@ -3,14 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Dialog } from "@/components/ui/Modal";
 import { Button, LinkButton } from "@/components/ui/Button";
-import {
-  FileCsvIcon,
-  FileExcelIcon,
-  FileIcon,
-  FileImageIcon,
-  FilePdfIcon,
-  FileWordIcon,
-} from "@/components/icons";
+import { FILE_KIND_STYLE } from "@/components/fileKindStyle";
 import type { FileKind } from "@/lib/project-files";
 
 export type ProjectFileCard = {
@@ -22,17 +15,6 @@ export type ProjectFileCard = {
   previewable: boolean;
   isImage: boolean;
   kind: FileKind;
-};
-
-/** Colour carries the type at a glance, the way Drive/Office icons do; the
- * glyph alone still reads fine without it. */
-const KIND_ICON: Record<FileKind, { Icon: typeof FileIcon; className: string }> = {
-  pdf: { Icon: FilePdfIcon, className: "text-red-600 dark:text-red-400" },
-  word: { Icon: FileWordIcon, className: "text-blue-600 dark:text-blue-400" },
-  excel: { Icon: FileExcelIcon, className: "text-green-600 dark:text-green-400" },
-  csv: { Icon: FileCsvIcon, className: "text-green-600 dark:text-green-400" },
-  image: { Icon: FileImageIcon, className: "text-purple-600 dark:text-purple-400" },
-  generic: { Icon: FileIcon, className: "text-muted" },
 };
 
 const NOTICE_CLASS =
@@ -73,16 +55,21 @@ type Fetched =
 export function FilePreview({
   file,
   deleteSlot,
+  openOnMount = false,
 }: {
   file: ProjectFileCard;
   /** Rendered in the card's top-right corner. A sibling of the open-preview
    * button, never inside it: a button nested in a button is invalid HTML and
    * browsers drop the inner one. */
   deleteSlot?: ReactNode;
+  /** Opens this card's dialog on arrival — the Overview summary's "Recent
+   *  files" links here with `?fileId=`, so clicking a specific file actually
+   *  opens that file instead of just landing on the list. */
+  openOnMount?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openOnMount);
   const [fetched, setFetched] = useState<Fetched>({ status: "loading" });
-  const { Icon, className: iconClassName } = KIND_ICON[file.kind];
+  const { Icon, className: iconClassName } = FILE_KIND_STYLE[file.kind];
 
   useEffect(() => {
     if (!open) {

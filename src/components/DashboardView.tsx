@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { testCaseHref, testCasesListHref, testGroupsListHref } from "@/lib/hrefs";
 import { Card } from "@/components/ui/Card";
+import { Stat } from "@/components/ui/Stat";
 import {
   Badge,
   type Tone,
@@ -782,51 +783,11 @@ function SummaryWidget({
  * that card a split bar and a legend, and every figure in the legend was
  * already on screen a few rows below under By Test Result — which carries
  * Not Run and a click through to the filter besides.
- */
-/**
- * A tinted icon tile, a rule, then what it counts above the figure.
  *
- * Side by side rather than stacked: the tile carries the colour, so the rule
- * is what separates "which of the six is this" from "what does it say", and
- * the card gets shorter by a row in the bargain.
+ * `Stat` itself now lives in `@/components/ui/Stat` — the Overview tab's
+ * summary reuses the exact same tile, and a plain module lets it do that
+ * without pulling this file's client boundary along for the ride.
  */
-function Stat({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string | number;
-}) {
-  return (
-    // A glass pane, not a flat tint: a soft gradient fill plus blur reads as
-    // a pane sitting just above the Card's surface, and the hairline top
-    // edge (brighter than the border's other three sides) is what sells
-    // "glass" rather than "tinted box" — light catching the top of a bevel.
-    <div className="relative overflow-hidden rounded-xl border border-black/[.06] bg-gradient-to-b from-black/[.05] to-black/[.015] px-4 py-5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:from-white/[.08] dark:to-white/[.02]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/70 dark:bg-white/15" />
-      <div className="flex items-center gap-3.5">
-        {/* One tint for all six, taken from the theme's own accent rather
-            than a colour per card: these are not six categories to tell
-            apart, they are six facts about one project, and the label beside
-            each already names it. */}
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand dark:bg-brand/15">
-          {icon}
-        </span>
-        <span aria-hidden="true" className="h-10 w-px shrink-0 bg-border" />
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-muted">{label}</p>
-          {/* Proportional figures, not tabular-nums: these sit alone, not in
-              a column that needs to align digit-for-digit, and tabular-nums
-              makes a standalone number like "5" look loose at display
-              size. */}
-          <p className="text-2xl font-semibold text-foreground">{value}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function BreakdownList({
   title,

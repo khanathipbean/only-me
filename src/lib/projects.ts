@@ -2,6 +2,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
+import { notifyProject } from "@/lib/notifications";
 import type { ProjectRole, ProjectStatus } from "@/generated/prisma/client";
 
 export class ValidationError extends Error {}
@@ -110,7 +111,20 @@ export async function listProjectsForUserPage(
     filters,
     () => prisma.project.count({ where }),
     ({ skip, take }) =>
-      prisma.project.findMany({ where, orderBy: { createdAt: "desc" }, skip, take }),
+      prisma.project.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+        include: {
+          owner: { select: { id: true, name: true, email: true, avatarKey: true } },
+          updatedBy: { select: { id: true, name: true } },
+          // Just the caller's own membership, so the list page can hide
+          // Edit/Archive for a row they're only a VIEWER on, without a
+          // separate query per row.
+          members: { where: { userId }, select: { role: true } },
+        },
+      }),
   );
 }
 
@@ -209,6 +223,16 @@ export async function archiveProject(id: string, actorId: string) {
     projectId: id,
   });
 
+  await notifyProject({
+    projectId: id,
+    type: "ENTITY_ARCHIVED",
+    title: "Project archived",
+    body: `${project.name} was archived.`,
+    link: `/projects/${id}`,
+    actorId,
+    excludeUserId: actorId,
+  });
+
   return project;
 }
 
@@ -224,6 +248,16 @@ export async function restoreProject(id: string, actorId: string) {
     action: "restore",
     actorId,
     projectId: id,
+  });
+
+  await notifyProject({
+    projectId: id,
+    type: "ENTITY_ARCHIVED",
+    title: "Project restored",
+    body: `${project.name} was restored.`,
+    link: `/projects/${id}`,
+    actorId,
+    excludeUserId: actorId,
   });
 
   return project;
