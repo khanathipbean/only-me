@@ -72,6 +72,12 @@ export function Tooltip({
     left: number;
     above: boolean;
     maxWidth: number;
+    /** The trigger's own edges, relative to the same container `top`/`left`
+     *  are measured from — kept around so the layout effect below can flip
+     *  `above` to `below` (or back) once it knows the tooltip's real height,
+     *  without having to re-measure the trigger itself. */
+    triggerTop: number;
+    triggerBottom: number;
   } | null>(null);
   const [portalTarget, setPortalTarget] = useState<Element | null>(null);
   /** How far the box has to move off centre to stay inside its container. */
@@ -101,6 +107,8 @@ export function Tooltip({
         left: rect.left + rect.width / 2 - containingRect.left,
         above,
         maxWidth: Math.min(MAX_WIDTH, containerWidth - GAP * 2),
+        triggerTop: rect.top - containingRect.top,
+        triggerBottom: rect.bottom - containingRect.top,
       });
       setPortalTarget(target);
     }, SHOW_DELAY_MS);
@@ -128,7 +136,19 @@ export function Tooltip({
     const bounds =
       portalTarget && portalTarget !== document.body
         ? portalTarget.getBoundingClientRect()
-        : { left: 0, right: window.innerWidth };
+        : { top: 0, left: 0, right: window.innerWidth };
+
+    // The "show above" guess in scheduleShow only knows there's SOME room
+    // above the trigger (more than 40px) — fine for a one-line label, but a
+    // tall multi-paragraph one (a Project description, say) can still run
+    // off the top of the viewport. Now that it's actually rendered and
+    // measurable, flip it below instead when that happens.
+    if (box.above && rect.top < bounds.top + GAP) {
+      setBox((current) =>
+        current ? { ...current, above: false, top: current.triggerBottom + GAP } : current,
+      );
+      return;
+    }
 
     let delta = 0;
     if (rect.left < bounds.left + GAP) {

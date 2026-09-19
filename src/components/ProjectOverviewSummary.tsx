@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Stat } from "@/components/ui/Stat";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
 import { FILE_KIND_STYLE } from "@/components/fileKindStyle";
 import { NOTIFICATION_TYPE_STYLE } from "@/components/notificationStyle";
@@ -89,7 +90,7 @@ export function ProjectOverviewSummary({
 
   const quickActions = [
     { label: "New module", href: `${base}/modules`, icon: <BoxIcon /> },
-    { label: "Upload file", href: `${base}/files`, icon: <FileTextIcon /> },
+    { label: "Upload file", href: `${base}/files`, icon: <FolderIcon /> },
     { label: "Import from file", href: `${base}/import`, icon: <UploadIcon /> },
     { label: "Start a test run", href: `${base}/runs`, icon: <PlayIcon /> },
     ...(canEdit
@@ -107,7 +108,14 @@ export function ProjectOverviewSummary({
             <Badge tone={projectStatusTone(project.status)}>{project.status}</Badge>
           </h1>
           {project.description && (
-            <p className="mt-1 line-clamp-1 text-sm text-muted">{project.description}</p>
+            <Tooltip
+              label={<span className="whitespace-pre-line">{project.description}</span>}
+              className="mt-1 block"
+            >
+              <p className="line-clamp-1 cursor-default text-sm text-muted">
+                {project.description}
+              </p>
+            </Tooltip>
           )}
         </div>
         {canEdit && (
@@ -169,7 +177,10 @@ export function ProjectOverviewSummary({
                   {run.status === "CLOSED" ? <CheckIcon /> : <ClockIcon />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-foreground">{run.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="truncate font-medium text-foreground">{run.name}</span>
+                    {run.phase && <Badge tone="gray">{run.phase}</Badge>}
+                  </span>
                   <span className="text-xs text-muted">
                     {run.status === "CLOSED" ? "Completed" : "Open"} · {run.percent}% passed
                   </span>

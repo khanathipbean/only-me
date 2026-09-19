@@ -71,12 +71,12 @@ export async function createProject(input: ProjectInput, ownerId: string) {
   return project;
 }
 
-export type ProjectFilters = { search?: string; status?: ProjectStatus };
+export type ProjectFilters = { search?: string; status?: ProjectStatus; archived?: boolean };
 
 /** Shared by the plain and paginated lists so their results can't drift. */
 function projectListWhere(userId: string, filters: ProjectFilters) {
   return {
-    deletedAt: null,
+    deletedAt: filters.archived ? { not: null } : null,
     members: { some: { userId } },
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.search

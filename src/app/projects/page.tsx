@@ -65,6 +65,7 @@ export default async function ProjectsPage({
      *  summary) can jump straight into editing instead of dropping someone
      *  on the bare list to find the row themselves. */
     edit?: string;
+    archived?: string;
   }>;
 }) {
   const session = await auth();
@@ -77,17 +78,30 @@ export default async function ProjectsPage({
     projectId: erroredProjectId,
     new: openNew,
     edit: openEdit,
+    archived,
   } = await searchParams;
-  const hasFilters = Boolean(search || status);
+  const showArchived = archived === "1";
+  const hasFilters = Boolean(search || status || showArchived);
   const canCreateProject = await isAdminAnywhere(session!.user.id);
 
   const result = await listProjectsForUserPage(session!.user.id, {
     search,
     status: status as ProjectStatus | undefined,
+    archived: showArchived,
     page: page ? Number(page) : undefined,
     pageSize: pageSize ? Number(pageSize) : undefined,
   });
   const projects = result.items;
+
+  /* Plain strings only: a server action may close over serialisable values —
+   * see the identical note on the Modules page, which this mirrors. */
+  const listQueryString = new URLSearchParams(
+    Object.entries({ search, status, archived }).filter(
+      (entry): entry is [string, string] => Boolean(entry[1]),
+    ),
+  ).toString();
+  const listPath = "/projects";
+  const listHref = listQueryString ? `${listPath}?${listQueryString}` : listPath;
 
   async function create(formData: FormData) {
     "use server";
@@ -152,11 +166,14 @@ export default async function ProjectsPage({
           );
         } catch (err) {
           if (err instanceof ValidationError || err instanceof DuplicateCodeError) {
-            redirect(`/projects?projectId=${id}&error=${encodeURIComponent(err.message)}`);
+            const query = new URLSearchParams(listQueryString);
+            query.set("projectId", id);
+            query.set("error", err.message);
+            redirect(`${listPath}?${query}`);
           }
           throw err;
         }
-        redirect("/projects");
+        redirect(listHref);
       },
       async archive() {
         "use server";
@@ -164,7 +181,7 @@ export default async function ProjectsPage({
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
         await archiveProject(id, session!.user.id);
-        redirect("/projects");
+        redirect(listHref);
       },
       async restore() {
         "use server";
@@ -172,7 +189,7 @@ export default async function ProjectsPage({
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
         await restoreProject(id, session!.user.id);
-        redirect("/projects");
+        redirect(listHref);
       },
     };
   }
@@ -223,15 +240,30 @@ export default async function ProjectsPage({
               className="max-w-40"
             />
           </label>
+          <label className={labelClass}>
+            Show
+            <Select
+              name="archived"
+              defaultValue={archived ?? ""}
+              options={[
+                { value: "", label: "Active" },
+                { value: "1", label: "Archived" },
+              ]}
+              ariaLabel="Show"
+              className="max-w-36"
+            />
+          </label>
         </FilterForm>
         <ResultCount total={result.total} />
       </div>
 
       {projects.length === 0 ? (
         <p className={mutedTextClass}>
-          {hasFilters
-            ? "No projects match your search/filters."
-            : "No projects yet. Create one to get started."}
+          {showArchived
+            ? "No archived projects."
+            : hasFilters
+              ? "No projects match your search/filters."
+              : "No projects yet. Create one to get started."}
         </p>
       ) : (
         <div className={tableWrapClass}>
