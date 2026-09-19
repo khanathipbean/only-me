@@ -267,6 +267,15 @@ export function CheckIcon(props: IconProps) {
   );
 }
 
+export function BellIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 2 6.5H4c.5-1 2-2.5 2-6.5Z" />
+      <path d="M9.5 17a2.5 2.5 0 0 0 5 0" />
+    </IconBase>
+  );
+}
+
 export function InfoIcon(props: IconProps) {
   return (
     <IconBase {...props}>

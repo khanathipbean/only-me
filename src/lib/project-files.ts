@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { MAX_UPLOAD_BYTES, downloadFile, uploadFile } from "@/lib/storage";
+import { notifyProject } from "@/lib/notifications";
 
 const FOLDER = "project-files";
 
@@ -101,7 +102,7 @@ export async function saveProjectFile(
     file.type || "application/octet-stream",
   );
 
-  return prisma.projectFile.create({
+  const created = await prisma.projectFile.create({
     data: {
       projectId,
       moduleId: target.id,
@@ -115,6 +116,18 @@ export async function saveProjectFile(
       uploadedById,
     },
   });
+
+  await notifyProject({
+    projectId,
+    type: "FILE_UPLOADED",
+    title: `New file uploaded to ${target.name}`,
+    body: `${file.name} was uploaded to the ${target.name} module.`,
+    link: `/projects/${projectId}/files`,
+    actorId: uploadedById,
+    excludeUserId: uploadedById,
+  });
+
+  return created;
 }
 
 /** Every live file in the project, grouped under its module heading. */

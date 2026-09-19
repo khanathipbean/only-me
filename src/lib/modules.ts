@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { purgeModule } from "@/lib/hard-delete";
 import { writeAuditLog } from "@/lib/audit";
+import { notifyProject } from "@/lib/notifications";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 
@@ -142,7 +143,7 @@ export async function setModuleDeletedAt(
   action: SoftDeleteAction,
 ) {
   const before = await prisma.module.findUniqueOrThrow({ where: { id } });
-  return setDeletedAt({
+  const result = await setDeletedAt({
     entityType: "Module",
     actorId,
     action,
@@ -150,6 +151,18 @@ export async function setModuleDeletedAt(
     projectId: before.projectId,
     update: (deletedAt) => prisma.module.update({ where: { id }, data: { deletedAt } }),
   });
+
+  await notifyProject({
+    projectId: before.projectId,
+    type: "ENTITY_ARCHIVED",
+    title: `Module ${action === "archive" ? "archived" : "restored"}`,
+    body: `${before.name} was ${action === "archive" ? "archived" : "restored"}.`,
+    link: `/projects/${before.projectId}/modules`,
+    actorId,
+    excludeUserId: actorId,
+  });
+
+  return result;
 }
 
 /** Shared by archive and delete: both refuse while anything still points at
@@ -201,6 +214,16 @@ export async function deleteModule(id: string, actorId: string, confirm: boolean
     oldValue: before,
   });
   const purged = await purgeModule(id);
+
+  await notifyProject({
+    projectId: before.projectId,
+    type: "ENTITY_ARCHIVED",
+    title: "Module deleted",
+    body: `${before.name} was permanently deleted.`,
+    link: `/projects/${before.projectId}/modules`,
+    actorId,
+    excludeUserId: actorId,
+  });
 
   return { ...before, purged };
 }

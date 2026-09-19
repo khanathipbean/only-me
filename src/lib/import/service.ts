@@ -180,6 +180,10 @@ export async function confirmImport(
         return seen;
       }
 
+      // Counts of newly-created rows per level, surfaced in the return value
+      // for the notification the caller sends once the import is confirmed.
+      const createdCounts = { modules: 0, requirements: 0, scenarios: 0, testGroups: 0, testCases: 0 };
+
       // Modules ------------------------------------------------------------
       const moduleIdByName = new Map<string, string>();
       const wantedModules = firstSeen(work, (w) => w.moduleName);
@@ -213,6 +217,7 @@ export async function confirmImport(
           const created = await tx.module.createManyAndReturn({
             data: missing.map((name) => ({ projectId, name, sequence: next++ })),
           });
+          createdCounts.modules = created.length;
           for (const made of created) {
             moduleIdByName.set(made.name, made.id);
           }
@@ -231,7 +236,7 @@ export async function confirmImport(
 
       // Requirements -------------------------------------------------------
       const requirementKey = (w: Work) =>
-        `${moduleIdByName.get(w.moduleName)} ${w.requirementName}`;
+        `${moduleIdByName.get(w.moduleName)} ${w.requirementName}`;
       const requirementIdByKey = new Map<string, string>();
       const wantedRequirements = firstSeen(work, requirementKey);
 
@@ -248,7 +253,7 @@ export async function confirmImport(
           select: { id: true, moduleId: true, name: true },
         });
         for (const requirement of existing) {
-          const key = `${requirement.moduleId} ${requirement.name}`;
+          const key = `${requirement.moduleId} ${requirement.name}`;
           if (!requirementIdByKey.has(key)) {
             requirementIdByKey.set(key, requirement.id);
           }
@@ -266,9 +271,10 @@ export async function confirmImport(
               priority: w.priority,
             })),
           });
+          createdCounts.requirements = created.length;
           for (const requirement of created) {
             requirementIdByKey.set(
-              `${requirement.moduleId} ${requirement.name}`,
+              `${requirement.moduleId} ${requirement.name}`,
               requirement.id,
             );
           }
@@ -318,6 +324,7 @@ export async function confirmImport(
               priority: w.priority,
             })),
           });
+          createdCounts.scenarios = created.length;
           for (const scenario of created) {
             scenarioIdByName.set(scenario.name, scenario.id);
           }
@@ -336,7 +343,7 @@ export async function confirmImport(
 
       // Test Groups --------------------------------------------------------
       const testGroupKey = (w: Work) =>
-        `${scenarioIdByName.get(w.data.scenarioName)} ${w.data.testGroupName}`;
+        `${scenarioIdByName.get(w.data.scenarioName)} ${w.data.testGroupName}`;
       const testGroupIdByKey = new Map<string, string>();
       const wantedTestGroups = firstSeen(work, testGroupKey);
 
@@ -352,7 +359,7 @@ export async function confirmImport(
           select: { id: true, scenarioId: true, name: true },
         });
         for (const group of existing) {
-          const key = `${group.scenarioId} ${group.name}`;
+          const key = `${group.scenarioId} ${group.name}`;
           if (!testGroupIdByKey.has(key)) {
             testGroupIdByKey.set(key, group.id);
           }
@@ -389,8 +396,9 @@ export async function confirmImport(
               };
             }),
           });
+          createdCounts.testGroups = created.length;
           for (const group of created) {
-            testGroupIdByKey.set(`${group.scenarioId} ${group.name}`, group.id);
+            testGroupIdByKey.set(`${group.scenarioId} ${group.name}`, group.id);
           }
           await tx.auditLog.createMany({
             data: created.map((group) => ({
@@ -414,7 +422,7 @@ export async function confirmImport(
        * a row whose match was already there before the import began. */
       type ExistingCase = Awaited<ReturnType<typeof tx.testCase.update>>;
       const caseKey = (w: Work) =>
-        `${testGroupIdByKey.get(testGroupKey(w))} ${w.data.testCaseName}`;
+        `${testGroupIdByKey.get(testGroupKey(w))} ${w.data.testCaseName}`;
       const duplicateByKey = new Map<string, ExistingCase>();
 
       if (work.length > 0) {
@@ -429,7 +437,7 @@ export async function confirmImport(
           },
         });
         for (const testCase of existing) {
-          const key = `${testCase.testGroupId} ${testCase.name}`;
+          const key = `${testCase.testGroupId} ${testCase.name}`;
           if (!duplicateByKey.has(key)) {
             duplicateByKey.set(key, testCase);
           }
@@ -568,6 +576,7 @@ export async function confirmImport(
         .filter((outcome): outcome is Outcome => Boolean(outcome));
       const succeededCount = toCreate.length + toUpdate.length;
       const skippedCount = plainSkips.length + toSkip.length;
+      createdCounts.testCases = toCreate.length;
 
       const importLog = await tx.importLog.create({
         data: {
@@ -584,6 +593,7 @@ export async function confirmImport(
         succeededCount,
         failedCount: 0,
         skippedCount,
+        createdCounts,
         importLogId: importLog.id,
       };
     },

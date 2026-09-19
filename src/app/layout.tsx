@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemeSync } from "@/components/ThemeSync";
 import { ToastListener } from "@/components/ToastListener";
 import { ProjectPicker } from "@/components/ProjectPicker";
+import { NotificationBell } from "@/components/NotificationBell";
 import { listProjectsForUser } from "@/lib/projects";
 import { IconLinkButton } from "@/components/ui/Button";
 import { UserPlusIcon } from "@/components/icons";
@@ -135,6 +136,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   am I looking at" sit together. It renders nothing off a
                   Project page, and nothing when there is only one Project. */}
               <ProjectPicker projects={pickerProjects} canCreateProject={isAdmin} />
+
+              <NotificationBell />
 
               {/* Hidden below sm: AccountMenu folds the same links into its
                   own menu there, so the header doesn't need to fit an admin

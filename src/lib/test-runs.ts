@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
+import { notifyProject } from "@/lib/notifications";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import type { Prisma, TestResult } from "@/generated/prisma/client";
 
@@ -234,6 +235,27 @@ export async function setRunStatus(id: string, status: "OPEN" | "CLOSED", actorI
     newValue: { status },
   });
 
+  if (status === "CLOSED") {
+    const byResult = await prisma.testRunCase.groupBy({
+      by: ["testResult"],
+      where: { testRunId: id },
+      _count: { _all: true },
+    });
+    const total = byResult.reduce((sum, row) => sum + row._count._all, 0);
+    const passed = byResult.find((row) => row.testResult === "PASSED")?._count._all ?? 0;
+    const percent = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+    await notifyProject({
+      projectId: before.projectId,
+      type: "TEST_RUN_CLOSED",
+      title: `Test Run "${run.name}" closed`,
+      body: `${passed} of ${total} test cases passed (${percent}%).`,
+      link: `/projects/${before.projectId}/runs/${id}`,
+      actorId,
+      excludeUserId: actorId,
+    });
+  }
+
   return run;
 }
 
@@ -451,6 +473,22 @@ export async function setRunCaseResult(
       ...(newerRound ? { mirrorHeldBy: newerRound.testRun.name } : {}),
     },
   });
+
+  if (input.testResult === "FAILED") {
+    const testCase = await prisma.testCase.findUniqueOrThrow({
+      where: { id: testCaseId },
+      select: { name: true },
+    });
+    await notifyProject({
+      projectId: run.projectId,
+      type: "TEST_CASE_FAILED",
+      title: "Test case failed in latest run",
+      body: `"${testCase.name}" failed in ${run.name}.`,
+      link: `/projects/${run.projectId}/runs/${testRunId}`,
+      actorId,
+      excludeUserId: actorId,
+    });
+  }
 
   return {
     ...runCase,

@@ -39,6 +39,8 @@ model User {
   uploadedFiles       ProjectFile[]
   createdTestRuns     TestRun[]     @relation("TestRunCreatedBy")
   ranTestRunCases     TestRunCase[] @relation("TestRunCaseRanBy")
+  notifications          Notification[] @relation("NotificationRecipient")
+  triggeredNotifications Notification[] @relation("NotificationActor")
 }
 
 enum ProjectStatus {
@@ -78,6 +80,7 @@ model Project {
   modules       Module[]
   requirements  Requirement[]
   testRuns      TestRun[]
+  notifications Notification[]
 }
 
 model ProjectMember {
@@ -98,14 +101,57 @@ model AuditLog {
   entityType String
   entityId   String
   action     String
-  actorId    String
+  /// Nullable so a deleted account doesn't block itself from being deleted:
+  /// this is a history log, not content ownership, so the record of what
+  /// happened is worth keeping even once nobody remembers who did it.
+  actorId    String?
   projectId  String
   occurredAt DateTime @default(now())
   oldValue   Json?
   newValue   Json?
 
-  actor   User    @relation(fields: [actorId], references: [id])
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
   project Project @relation(fields: [projectId], references: [id])
+}
+
+enum NotificationType {
+  IMPORT_COMPLETED
+  TEST_RUN_CLOSED
+  FILE_UPLOADED
+  ENTITY_ARCHIVED
+  TEST_CASE_FAILED
+  MEMBER_ADDED
+}
+
+/// One row per recipient, written at the moment the triggering event happens
+/// (fan-out on write) — simpler to query "my unread count" from than a single
+/// event row plus a separate per-user read-receipts table, and this app's
+/// scale doesn't need the latter's storage savings.
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  projectId   String
+  type        NotificationType
+  title       String
+  body        String
+  /// Where clicking the notification should go. Optional: a future event type
+  /// might not have a natural destination.
+  link        String?
+  /// Who/what triggered it. Null for system-originated events, if any appear
+  /// later; every trigger today has an actor.
+  actorId     String?
+  occurredAt  DateTime         @default(now())
+  readAt      DateTime?
+
+  /// Cascades: once the recipient is gone there's no inbox left for this row
+  /// to belong to, unlike AuditLog's actor below, which is worth keeping as
+  /// history even after the person who did it is deleted.
+  recipient User    @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id])
+  actor     User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, readAt])
+  @@index([recipientId, occurredAt])
 }
 
 /** Shared priority for Scenario and Test Case. */

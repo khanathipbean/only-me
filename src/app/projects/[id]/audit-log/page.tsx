@@ -154,7 +154,9 @@ export default async function AuditLogPage({
                   <td className={`${tdClass} whitespace-nowrap font-mono text-xs text-muted`}>
                     {entry.occurredAt.toISOString()}
                   </td>
-                  <td className={tdClass}>{entry.actor.name}</td>
+                  <td className={`${tdClass} ${entry.actor ? "" : "text-muted italic"}`}>
+                    {entry.actor?.name ?? "Deleted user"}
+                  </td>
                   <td className={tdClass}>{entry.action}</td>
                   <td className={`${tdClass} text-muted`}>
                     {entry.entityType} ({entry.entityId})

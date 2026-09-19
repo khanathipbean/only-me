@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { purgeRequirement } from "@/lib/hard-delete";
 import { writeAuditLog } from "@/lib/audit";
+import { notifyProject } from "@/lib/notifications";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
@@ -260,7 +261,7 @@ export async function setRequirementDeletedAt(
   action: SoftDeleteAction,
 ) {
   const before = await prisma.requirement.findUniqueOrThrow({ where: { id } });
-  return setDeletedAt({
+  const result = await setDeletedAt({
     entityType: "Requirement",
     actorId,
     action,
@@ -268,6 +269,18 @@ export async function setRequirementDeletedAt(
     projectId: before.projectId,
     update: (deletedAt) => prisma.requirement.update({ where: { id }, data: { deletedAt } }),
   });
+
+  await notifyProject({
+    projectId: before.projectId,
+    type: "ENTITY_ARCHIVED",
+    title: `Requirement ${action === "archive" ? "archived" : "restored"}`,
+    body: `${before.name} was ${action === "archive" ? "archived" : "restored"}.`,
+    link: `/projects/${before.projectId}/modules/${before.moduleId}/requirements`,
+    actorId,
+    excludeUserId: actorId,
+  });
+
+  return result;
 }
 
 /** Shared by archive and delete: both refuse while Scenarios still hang off
@@ -309,6 +322,16 @@ export async function deleteRequirement(id: string, actorId: string, confirm: bo
     oldValue: before,
   });
   const purged = await purgeRequirement(id);
+
+  await notifyProject({
+    projectId: before.projectId,
+    type: "ENTITY_ARCHIVED",
+    title: "Requirement deleted",
+    body: `${before.name} was permanently deleted.`,
+    link: `/projects/${before.projectId}/modules/${before.moduleId}/requirements`,
+    actorId,
+    excludeUserId: actorId,
+  });
 
   return { ...before, purged };
 }
