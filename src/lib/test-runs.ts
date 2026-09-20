@@ -172,6 +172,56 @@ export async function listCasesInRun(testRunId: string) {
   });
 }
 
+/** The same shape as `listCasesInRun`, one page at a time — a round with
+ *  thousands of cases rendered every one of them into the DOM at once
+ *  otherwise, on a page opened routinely rather than occasionally like the
+ *  export. `ranCount` is counted separately rather than derived from the
+ *  page's own rows, since "N of M run" has to mean the whole round, not just
+ *  whichever page happens to be showing. */
+export async function listCasesInRunPage(testRunId: string, filters: PageFilters = {}) {
+  const where = { testRunId };
+  const [page, ranCount] = await Promise.all([
+    paginate(
+      filters,
+      () => prisma.testRunCase.count({ where }),
+      ({ skip, take }) =>
+        prisma.testRunCase.findMany({
+          where,
+          include: {
+            ranBy: { select: { id: true, name: true } },
+            attachments: { orderBy: { uploadedAt: "desc" } },
+            testCase: {
+              select: {
+                id: true,
+                name: true,
+                priority: true,
+                deletedAt: true,
+                condition: true,
+                preconditions: true,
+                testData: true,
+                expectedResult: true,
+                steps: { orderBy: { sequence: "asc" } },
+                testGroup: {
+                  select: {
+                    id: true,
+                    name: true,
+                    sequence: true,
+                    scenario: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: [{ createdAt: "asc" }],
+          skip,
+          take,
+        }),
+    ),
+    prisma.testRunCase.count({ where: { testRunId, testResult: { not: "NOT_RUN" } } }),
+  ]);
+  return { ...page, ranCount };
+}
+
 /** Every case in a round with its full ancestor chain, for the results
  *  export — `listCasesInRun` stops at Scenario/Test Group because the page it
  *  serves groups by those; this needs Requirement and Module too. */

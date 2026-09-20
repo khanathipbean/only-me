@@ -94,6 +94,7 @@ model ProjectMember {
   user      User    @relation(fields: [userId], references: [id])
 
   @@unique([projectId, userId])
+  @@index([userId])
 }
 
 model AuditLog {
@@ -112,6 +113,12 @@ model AuditLog {
 
   actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
   project Project @relation(fields: [projectId], references: [id])
+
+  // Every read of this table filters by projectId and sorts by occurredAt —
+  // an unbounded, never-pruned log with no index at all otherwise means a
+  // full sequential scan on every Audit Trail page view.
+  @@index([projectId, occurredAt])
+  @@index([actorId])
 }
 
 enum NotificationType {
@@ -152,6 +159,7 @@ model Notification {
 
   @@index([recipientId, readAt])
   @@index([recipientId, occurredAt])
+  @@index([projectId, occurredAt])
 }
 
 /** Shared priority for Scenario and Test Case. */
@@ -210,6 +218,12 @@ model Scenario {
   requirement Requirement  @relation(fields: [requirementId], references: [id])
   owner       User?        @relation(fields: [ownerId], references: [id])
   testGroups  TestGroup[]
+
+  // Every list query filters on one of these plus `deletedAt`, and neither
+  // scalar had an index of its own — a sequential scan on what's meant to be
+  // one of the largest tables in the hierarchy.
+  @@index([projectId, deletedAt])
+  @@index([requirementId, deletedAt])
 }
 
 model TestGroup {
@@ -228,6 +242,8 @@ model TestGroup {
   scenario  Scenario   @relation(fields: [scenarioId], references: [id])
   owner     User?      @relation(fields: [ownerId], references: [id])
   testCases TestCase[]
+
+  @@index([scenarioId, deletedAt])
 }
 
 model TestCase {
@@ -257,6 +273,8 @@ model TestCase {
   steps       TestStep[]
   attachments Attachment[]
   runCases    TestRunCase[]
+
+  @@index([testGroupId, deletedAt])
 }
 
 /// A round of testing — a Sprint's regression pass, a release check. Exists so
@@ -348,6 +366,9 @@ model Attachment {
   testCase   TestCase?    @relation(fields: [testCaseId], references: [id])
   runCase    TestRunCase? @relation(fields: [runCaseId], references: [id])
   uploadedBy User         @relation(fields: [uploadedById], references: [id])
+
+  @@index([testCaseId])
+  @@index([runCaseId])
 }
 
 model ImportLog {

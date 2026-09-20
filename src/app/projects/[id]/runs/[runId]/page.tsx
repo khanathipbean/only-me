@@ -9,11 +9,12 @@ import {
   addCasesToRun,
   getRunById,
   listCandidateCases,
-  listCasesInRun,
+  listCasesInRunPage,
   removeCaseFromRun,
   setRunCaseResult,
   setRunStatus,
 } from "@/lib/test-runs";
+import { Pagination } from "@/components/ui/Pagination";
 import { withToast } from "@/lib/toast";
 import {
   AttachmentValidationError,
@@ -80,11 +81,23 @@ export default async function TestRunPage({
     error?: string;
     picking?: string;
     attachmentError?: string;
+    page?: string;
+    pageSize?: string;
   }>;
 }) {
   const { id: projectId, runId } = await params;
-  const { moduleId, requirementId, priority, lastResult, search, error, picking, attachmentError } =
-    await searchParams;
+  const {
+    moduleId,
+    requirementId,
+    priority,
+    lastResult,
+    search,
+    error,
+    picking,
+    attachmentError,
+    page,
+    pageSize,
+  } = await searchParams;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
@@ -99,8 +112,11 @@ export default async function TestRunPage({
   const isPicking = picking === "1";
   const hasFilters = Boolean(moduleId || requirementId || priority || lastResult || search);
 
-  const [cases, modules, requirements, candidates] = await Promise.all([
-    listCasesInRun(runId),
+  const [casePage, modules, requirements, candidates] = await Promise.all([
+    listCasesInRunPage(runId, {
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    }),
     listModulesForProject(projectId),
     listRequirementsForProject(projectId),
     listCandidateCases(projectId, runId, {
@@ -111,9 +127,10 @@ export default async function TestRunPage({
       search,
     }),
   ]);
+  const cases = casePage.items;
 
   const isOpen = run.status === "OPEN";
-  const ran = cases.filter((row) => row.testResult !== "NOT_RUN").length;
+  const ran = casePage.ranCount;
 
   const basePath = `/projects/${projectId}/runs/${runId}`;
   /* Grouped by Scenario then Test Group: the chain above a case is what tells
@@ -305,7 +322,7 @@ export default async function TestRunPage({
               </Badge>
             )}
             <span>
-              {ran} of {cases.length} run
+              {ran} of {casePage.total} run
             </span>
             {(run.startsOn || run.endsOn) && (
               <span className="text-muted">
@@ -455,7 +472,7 @@ export default async function TestRunPage({
         </p>
       )}
 
-      {cases.length === 0 ? (
+      {casePage.total === 0 ? (
         <p className={mutedTextClass}>
           No cases in this run yet. Use “Add test cases” to pick the ones to re-test.
         </p>
@@ -693,6 +710,13 @@ export default async function TestRunPage({
           ))}
         </div>
       )}
+
+      <Pagination
+        page={casePage.page}
+        totalPages={casePage.totalPages}
+        total={casePage.total}
+        pageSize={casePage.pageSize}
+      />
     </main>
   );
 }

@@ -11,36 +11,75 @@ export type PreviewedRow = ValidatedRow & {
   existingTestCaseId?: string;
 };
 
-/** Read-only: looks up potential Test Case duplicates by name under the matched Scenario/Test Group. Writes nothing. */
+/**
+ * Read-only: looks up potential Test Case duplicates by name under the
+ * matched Scenario/Test Group. Writes nothing.
+ *
+ * Batched one level at a time (Scenario, then Test Group, then Test Case)
+ * rather than the original per-row `findFirst` chain, which sent up to 3
+ * sequential queries per row — the exact N+1 shape `confirmImport` below was
+ * rewritten to avoid, but this preview step still had it. A 500-row file
+ * meant up to 1,500 round trips; against this app's pooled connection
+ * (`max: 1`, ~249ms/round-trip per the note on `confirmImport`) that's
+ * minutes, not seconds.
+ */
 export async function previewImport(projectId: string, projectCode: string, rows: ImportRow[]) {
-  const results: PreviewedRow[] = await Promise.all(
-    rows.map(async (row): Promise<PreviewedRow> => {
-      const validated = validateRow(row, projectCode);
-      if (!validated.valid) {
-        return { ...validated, duplicate: false };
-      }
+  const validated = rows.map((row) => ({ row, result: validateRow(row, projectCode) }));
+  const validRows = validated.filter((v) => v.result.valid).map((v) => v.row);
 
-      const scenario = await prisma.scenario.findFirst({
-        where: { projectId, name: row.scenarioName, deletedAt: null },
-      });
-      const testGroup = scenario
-        ? await prisma.testGroup.findFirst({
-            where: { scenarioId: scenario.id, name: row.testGroupName, deletedAt: null },
-          })
-        : null;
-      const existingTestCase = testGroup
-        ? await prisma.testCase.findFirst({
-            where: { testGroupId: testGroup.id, name: row.testCaseName, deletedAt: null },
-          })
-        : null;
+  const scenarios = await prisma.scenario.findMany({
+    where: {
+      projectId,
+      deletedAt: null,
+      name: { in: [...new Set(validRows.map((row) => row.scenarioName))] },
+    },
+    select: { id: true, name: true },
+  });
+  // Matches the original `findFirst` semantics: a name that isn't unique in
+  // the project resolves to an arbitrary one of its matches, same as before.
+  const scenarioByName = new Map(scenarios.map((s) => [s.name, s]));
 
-      return {
-        ...validated,
-        duplicate: Boolean(existingTestCase),
-        existingTestCaseId: existingTestCase?.id,
-      };
-    }),
-  );
+  const testGroups = scenarios.length
+    ? await prisma.testGroup.findMany({
+        where: {
+          scenarioId: { in: scenarios.map((s) => s.id) },
+          deletedAt: null,
+          name: { in: [...new Set(validRows.map((row) => row.testGroupName))] },
+        },
+        select: { id: true, name: true, scenarioId: true },
+      })
+    : [];
+  const testGroupByKey = new Map(testGroups.map((tg) => [`${tg.scenarioId}::${tg.name}`, tg]));
+
+  const testCases = testGroups.length
+    ? await prisma.testCase.findMany({
+        where: {
+          testGroupId: { in: testGroups.map((tg) => tg.id) },
+          deletedAt: null,
+          name: { in: [...new Set(validRows.map((row) => row.testCaseName))] },
+        },
+        select: { id: true, name: true, testGroupId: true },
+      })
+    : [];
+  const testCaseByKey = new Map(testCases.map((tc) => [`${tc.testGroupId}::${tc.name}`, tc]));
+
+  const results: PreviewedRow[] = validated.map(({ row, result }) => {
+    if (!result.valid) {
+      return { ...result, duplicate: false };
+    }
+
+    const scenario = scenarioByName.get(row.scenarioName);
+    const testGroup = scenario ? testGroupByKey.get(`${scenario.id}::${row.testGroupName}`) : undefined;
+    const existingTestCase = testGroup
+      ? testCaseByKey.get(`${testGroup.id}::${row.testCaseName}`)
+      : undefined;
+
+    return {
+      ...result,
+      duplicate: Boolean(existingTestCase),
+      existingTestCaseId: existingTestCase?.id,
+    };
+  });
 
   return {
     rows: results,
