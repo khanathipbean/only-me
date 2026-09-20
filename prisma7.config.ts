@@ -9,6 +9,14 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // `db push`/`migrate` run through the CLI, which loads this file
+    // directly — so DIRECT_URL, when set, takes priority here. The app's own
+    // runtime queries never go through this config file at all (they build
+    // their own adapter from DATABASE_URL — see src/lib/prisma.ts), so this
+    // only affects schema operations, not request traffic. Needed because
+    // Supabase's pooled connection (DATABASE_URL, PgBouncer transaction
+    // mode) can't hold the session-level advisory locks the schema engine
+    // needs — pointed at it, `db push` hangs indefinitely instead of failing.
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });

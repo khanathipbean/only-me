@@ -313,6 +313,8 @@ model TestRunCase {
   testCase TestCase @relation(fields: [testCaseId], references: [id])
   ranBy    User?    @relation("TestRunCaseRanBy", fields: [ranById], references: [id])
 
+  attachments Attachment[]
+
   @@unique([testRunId, testCaseId])
   @@index([testCaseId])
 }
@@ -327,9 +329,15 @@ model TestStep {
   testCase TestCase @relation(fields: [testCaseId], references: [id])
 }
 
+/// Belongs to exactly one of TestCase or TestRunCase — never both, never
+/// neither. A Test Case's own reference material lives on `testCaseId`; a
+/// screenshot attached to one round's result on `runCaseId`, since the same
+/// Test Case run across several rounds needs a different failure captured
+/// against each round, not one shared bucket.
 model Attachment {
   id           String   @id @default(cuid())
-  testCaseId   String
+  testCaseId   String?
+  runCaseId    String?
   storageKey   String
   fileName     String
   contentType  String   @default("application/octet-stream")
@@ -337,8 +345,9 @@ model Attachment {
   uploadedById String
   uploadedAt   DateTime @default(now())
 
-  testCase   TestCase @relation(fields: [testCaseId], references: [id])
-  uploadedBy User     @relation(fields: [uploadedById], references: [id])
+  testCase   TestCase?    @relation(fields: [testCaseId], references: [id])
+  runCase    TestRunCase? @relation(fields: [runCaseId], references: [id])
+  uploadedBy User         @relation(fields: [uploadedById], references: [id])
 }
 
 model ImportLog {

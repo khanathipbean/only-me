@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { notifyProject } from "@/lib/notifications";
 import { paginate, type PageFilters } from "@/lib/pagination";
+import { deleteFile } from "@/lib/storage";
 import type { Prisma, TestResult } from "@/generated/prisma/client";
 
 export class TestRunValidationError extends Error {}
@@ -124,6 +125,19 @@ export async function getRunById(id: string) {
   return prisma.testRun.findUnique({ where: { id }, include: RUN_WITH_PROGRESS });
 }
 
+/** Plus a synthesized `projectId`, the same shape `getTestCaseWithProjectId`
+ *  returns — this is what the run-case attachment routes check role against. */
+export async function getRunCaseWithProjectId(id: string) {
+  const runCase = await prisma.testRunCase.findUnique({
+    where: { id },
+    include: { testRun: { select: { projectId: true } } },
+  });
+  if (!runCase) {
+    return null;
+  }
+  return { ...runCase, projectId: runCase.testRun.projectId };
+}
+
 /** Every case in a round, with the chain above it so the list can group by
  *  Scenario and Test Group instead of repeating four levels on every row. */
 export async function listCasesInRun(testRunId: string) {
@@ -131,12 +145,18 @@ export async function listCasesInRun(testRunId: string) {
     where: { testRunId },
     include: {
       ranBy: { select: { id: true, name: true } },
+      attachments: { orderBy: { uploadedAt: "desc" } },
       testCase: {
         select: {
           id: true,
           name: true,
           priority: true,
           deletedAt: true,
+          condition: true,
+          preconditions: true,
+          testData: true,
+          expectedResult: true,
+          steps: { orderBy: { sequence: "asc" } },
           testGroup: {
             select: {
               id: true,
@@ -255,6 +275,17 @@ function requireOpen(status: "OPEN" | "CLOSED") {
   if (status === "CLOSED") {
     throw new TestRunValidationError("This run is closed. Reopen it to make changes.");
   }
+}
+
+/** Same guard, for `attachments.ts` — a round's evidence is part of its
+ *  record too, so it stops changing the moment the round closes, exactly
+ *  like the result it's attached to. */
+export async function assertRunOpenForCase(runCaseId: string) {
+  const runCase = await prisma.testRunCase.findUniqueOrThrow({
+    where: { id: runCaseId },
+    include: { testRun: { select: { status: true } } },
+  });
+  requireOpen(runCase.testRun.status);
 }
 
 export async function setRunStatus(id: string, status: "OPEN" | "CLOSED", actorId: string) {
@@ -416,9 +447,23 @@ export async function removeCaseFromRun(testRunId: string, testCaseId: string, a
   const run = await prisma.testRun.findUniqueOrThrow({ where: { id: testRunId } });
   requireOpen(run.status);
 
-  await prisma.testRunCase.delete({
+  const runCase = await prisma.testRunCase.findUniqueOrThrow({
     where: { testRunId_testCaseId: { testRunId, testCaseId } },
   });
+  // No `onDelete: Cascade` on Attachment.runCase — deleting a TestRunCase
+  // that still has one attached would fail on the foreign key. Storage
+  // objects are removed after the transaction commits, same reasoning as
+  // `purgeTestCases`: an object store isn't part of it, and a failure there
+  // must not undo a delete the database has already accepted.
+  const attachments = await prisma.attachment.findMany({
+    where: { runCaseId: runCase.id },
+    select: { storageKey: true },
+  });
+  await prisma.$transaction([
+    prisma.attachment.deleteMany({ where: { runCaseId: runCase.id } }),
+    prisma.testRunCase.delete({ where: { id: runCase.id } }),
+  ]);
+  await Promise.all(attachments.map((attachment) => deleteFile(attachment.storageKey)));
 
   await writeAuditLog({
     entityType: "TestRun",

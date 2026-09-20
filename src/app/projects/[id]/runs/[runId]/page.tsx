@@ -15,14 +15,27 @@ import {
   setRunStatus,
 } from "@/lib/test-runs";
 import { withToast } from "@/lib/toast";
+import {
+  AttachmentValidationError,
+  deleteAttachment,
+  getRunCaseAttachmentWithProjectId,
+  saveRunCaseAttachment,
+} from "@/lib/attachments";
+import { canPreview, getFileKind } from "@/lib/project-files";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { CasePicker } from "@/components/CasePicker";
 import { ConfirmForm } from "@/components/ConfirmForm";
+import { DismissibleAlert } from "@/components/DismissibleAlert";
+import { FilePreview } from "@/components/FilePreview";
 import { FilterForm } from "@/components/FilterForm";
 import { nameOr, testRunBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
+import { ExpandableRow } from "@/components/ui/ExpandableRow";
+import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
+import { IconButton } from "@/components/ui/Button";
+import { TrashIcon } from "@/components/icons";
 import { isTestRunOverdue } from "@/lib/deadlines";
 
 import { SubmitButton } from "@/components/SubmitButton";
@@ -39,7 +52,6 @@ import {
   tdClass,
   thCenterClass,
   thClass,
-  trHoverClass,
 } from "@/lib/ui";
 import type { TestResult } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
@@ -67,10 +79,11 @@ export default async function TestRunPage({
     search?: string;
     error?: string;
     picking?: string;
+    attachmentError?: string;
   }>;
 }) {
   const { id: projectId, runId } = await params;
-  const { moduleId, requirementId, priority, lastResult, search, error, picking } =
+  const { moduleId, requirementId, priority, lastResult, search, error, picking, attachmentError } =
     await searchParams;
   const session = await auth();
 
@@ -223,6 +236,53 @@ export default async function TestRunPage({
         // Dropping the round's record of a case is not reversible by putting
         // it back — a re-added case starts with no result.
         redirect(withToast(basePath, "Test Case removed from this run"));
+      },
+    };
+  }
+
+  /** Bound per row: evidence (a screenshot, a log) attached to one round's
+   *  result, not to the Test Case itself — the same Test Case run again next
+   *  round gets its own, separate set. */
+  function attachmentActions(runCaseId: string) {
+    return {
+      async upload(formData: FormData) {
+        "use server";
+        invalidateRouteCache();
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        const file = formData.get("file");
+        if (!(file instanceof File)) {
+          redirect(`${basePath}?attachmentError=${encodeURIComponent("Choose a file first")}`);
+        }
+        try {
+          await saveRunCaseAttachment(runCaseId, file, session!.user.id);
+        } catch (err) {
+          if (err instanceof AttachmentValidationError || err instanceof TestRunValidationError) {
+            redirect(`${basePath}?attachmentError=${encodeURIComponent(err.message)}`);
+          }
+          throw err;
+        }
+        redirect(withToast(basePath, "Attachment uploaded"));
+      },
+      remove(attachmentId: string) {
+        return async function removeAttachment() {
+          "use server";
+          invalidateRouteCache();
+          const session = await auth();
+          await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+          const attachment = await getRunCaseAttachmentWithProjectId(attachmentId);
+          if (attachment && attachment.runCaseId === runCaseId) {
+            try {
+              await deleteAttachment(attachmentId);
+            } catch (err) {
+              if (err instanceof TestRunValidationError) {
+                redirect(`${basePath}?attachmentError=${encodeURIComponent(err.message)}`);
+              }
+              throw err;
+            }
+          }
+          redirect(withToast(basePath, "Attachment deleted"));
+        };
       },
     };
   }
@@ -385,6 +445,10 @@ export default async function TestRunPage({
         </p>
       )}
 
+      {attachmentError && (
+        <DismissibleAlert clearParams={["attachmentError"]}>{attachmentError}</DismissibleAlert>
+      )}
+
       {!isOpen && (
         <p className={mutedTextClass}>
           This run is closed, so its results are read-only. Reopen it to make changes.
@@ -406,11 +470,13 @@ export default async function TestRunPage({
               <div className={tableWrapClass}>
                 <table className={tableClass}>
                   <colgroup>
-                    <col className="w-[44%]" />
-                    <col className="w-[12%]" />
-                    <col className="w-[18%]" />
-                    <col className="w-[16%]" />
+                    <col className="w-[36%]" />
                     <col className="w-[10%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[8%]" />
                   </colgroup>
                   <thead>
                     <tr>
@@ -419,71 +485,205 @@ export default async function TestRunPage({
                       <th className={thCenterClass}>Result in this run</th>
                       <th className={thClass}>Notes</th>
                       <th className={thCenterClass}>Ran</th>
+                      <th className={thCenterClass}>Attachments</th>
+                      <th className={thCenterClass} />
                     </tr>
                   </thead>
                   <tbody>
                     {group.rows.map((row) => {
                       const actions = caseActions(row.testCase.id);
+                      const attachmentActionsForRow = attachmentActions(row.id);
                       return (
-                        <tr key={row.id} className={trHoverClass}>
-                          <td className={tdClass}>
-                            <span className="text-foreground">{row.testCase.name}</span>
-                            {row.testCase.deletedAt && (
-                              <span className="ml-2 text-xs text-muted">(case archived)</span>
-                            )}
-                          </td>
-                          <td className={tdCenterClass}>
-                            <Badge tone={priorityTone(row.testCase.priority)}>
-                              {row.testCase.priority}
-                            </Badge>
-                          </td>
-                          <td className={tdCenterClass}>
-                            {isOpen ? (
-                              <form action={actions.record} className="flex items-center gap-2">
-                                <Select
-                                  name="testResult"
-                                  defaultValue={row.testResult}
-                                  options={TEST_RESULT_OPTIONS}
-                                  ariaLabel={`Result for ${row.testCase.name}`}
-                                  className="max-w-36"
-                                />
-                                <input
-                                  type="hidden"
-                                  name="notes"
-                                  value={row.notes ?? ""}
-                                  readOnly
-                                />
-                                <SubmitButton variant="secondary">
-                                  Save
-                                </SubmitButton>
-                              </form>
-                            ) : (
-                              <Badge tone={testResultTone(row.testResult)}>
-                                {row.testResult.replace(/_/g, " ")}
-                              </Badge>
-                            )}
-                          </td>
-                          <td className={`${tdClass} text-muted`}>{row.notes ?? "—"}</td>
-                          <td className={`${tdCenterClass} text-xs text-muted`}>
-                            {row.ranAt ? (
-                              <>
-                                {row.ranAt.toISOString().slice(0, 10)}
-                                {row.ranBy && <div>{row.ranBy.name}</div>}
-                              </>
-                            ) : isOpen ? (
-                              <ConfirmForm
-                                action={actions.remove}
-                                confirmMessage="Take this case out of the run?"
-                              >
-                                <SubmitButton variant="secondary" pendingLabel="Removing…">
-                                  Remove
-                                </SubmitButton>
-                              </ConfirmForm>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                        </tr>
+                        <ExpandableRow
+                          key={row.id}
+                          colSpan={7}
+                          detailLabel={row.testCase.name}
+                          cells={
+                            <>
+                              <td className={tdClass}>
+                                <span className="text-foreground">{row.testCase.name}</span>
+                                {row.testCase.deletedAt && (
+                                  <span className="ml-2 text-xs text-muted">(case archived)</span>
+                                )}
+                              </td>
+                              <td className={tdCenterClass}>
+                                <Badge tone={priorityTone(row.testCase.priority)}>
+                                  {row.testCase.priority}
+                                </Badge>
+                              </td>
+                              <td className={tdCenterClass}>
+                                {isOpen ? (
+                                  <form action={actions.record} className="flex items-center gap-2">
+                                    <Select
+                                      name="testResult"
+                                      defaultValue={row.testResult}
+                                      options={TEST_RESULT_OPTIONS}
+                                      ariaLabel={`Result for ${row.testCase.name}`}
+                                      className="max-w-36"
+                                    />
+                                    <input
+                                      type="hidden"
+                                      name="notes"
+                                      value={row.notes ?? ""}
+                                      readOnly
+                                    />
+                                    <SubmitButton variant="secondary">Save</SubmitButton>
+                                  </form>
+                                ) : (
+                                  <Badge tone={testResultTone(row.testResult)}>
+                                    {row.testResult.replace(/_/g, " ")}
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className={`${tdClass} text-muted`}>{row.notes ?? "—"}</td>
+                              <td className={`${tdCenterClass} text-xs text-muted`}>
+                                {row.ranAt ? (
+                                  <>
+                                    {row.ranAt.toISOString().slice(0, 10)}
+                                    {row.ranBy && <div>{row.ranBy.name}</div>}
+                                  </>
+                                ) : isOpen ? (
+                                  <ConfirmForm
+                                    action={actions.remove}
+                                    confirmMessage="Take this case out of the run?"
+                                  >
+                                    <SubmitButton variant="secondary" pendingLabel="Removing…">
+                                      Remove
+                                    </SubmitButton>
+                                  </ConfirmForm>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className={`${tdCenterClass} text-xs text-muted`}>
+                                {row.attachments.length > 0 ? row.attachments.length : "—"}
+                              </td>
+                            </>
+                          }
+                          detail={
+                            <div className="grid gap-6 px-1 lg:grid-cols-2 lg:gap-8">
+                              <section className="flex flex-col gap-3">
+                                <h3 className="text-sm font-semibold tracking-wide text-foreground uppercase">
+                                  Test Case Details
+                                </h3>
+                                <DetailFields columns={1}>
+                                  <DetailField label="Expected Result">
+                                    {row.testCase.expectedResult}
+                                  </DetailField>
+                                  {row.testCase.condition && (
+                                    <DetailField label="Condition">
+                                      {row.testCase.condition}
+                                    </DetailField>
+                                  )}
+                                  <DetailField label="Preconditions">
+                                    {row.testCase.preconditions}
+                                  </DetailField>
+                                  {row.testCase.testData && (
+                                    <DetailField label="Test Data">
+                                      {row.testCase.testData}
+                                    </DetailField>
+                                  )}
+                                  <DetailField label="Test Steps">
+                                    {row.testCase.steps.length === 0 ? null : (
+                                      <ol className="flex flex-col gap-1">
+                                        {row.testCase.steps.map((step, index) => (
+                                          <li key={step.id} className="flex gap-2">
+                                            <span className="w-5 shrink-0 text-muted">
+                                              {index + 1}.
+                                            </span>
+                                            <span>
+                                              <span className="whitespace-pre-wrap">
+                                                {step.step}
+                                              </span>
+                                              {step.expectedResult && (
+                                                <>
+                                                  {" "}
+                                                  <span className="text-muted">→</span>{" "}
+                                                  <span className="whitespace-pre-wrap italic">
+                                                    {step.expectedResult}
+                                                  </span>
+                                                </>
+                                              )}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    )}
+                                  </DetailField>
+                                </DetailFields>
+                              </section>
+
+                              <section className="flex flex-col gap-3 border-t border-border pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
+                                <h3 className="text-sm font-semibold tracking-wide text-foreground uppercase">
+                                  Attachments
+                                </h3>
+                                {row.attachments.length > 0 && (
+                                <ul className="grid gap-4 sm:grid-cols-2">
+                                  {row.attachments.map((attachment) => (
+                                    <li key={attachment.id} className="min-w-0">
+                                      <FilePreview
+                                        file={{
+                                          id: attachment.id,
+                                          fileName: attachment.fileName,
+                                          uploadedAt: attachment.uploadedAt
+                                            .toISOString()
+                                            .slice(0, 10),
+                                          size: attachment.size,
+                                          href: `/api/run-cases/${row.id}/attachments/${attachment.id}`,
+                                          previewable: canPreview(attachment.contentType),
+                                          isImage: attachment.contentType.startsWith("image/"),
+                                          kind: getFileKind(
+                                            attachment.contentType,
+                                            attachment.fileName,
+                                          ),
+                                        }}
+                                        deleteSlot={
+                                          isOpen ? (
+                                            <ConfirmForm
+                                              action={attachmentActionsForRow.remove(
+                                                attachment.id,
+                                              )}
+                                              confirmMessage={`Remove ${attachment.fileName} from this result?`}
+                                              variant="danger"
+                                            >
+                                              <IconButton
+                                                type="submit"
+                                                variant="ghost"
+                                                aria-label={`Remove ${attachment.fileName}`}
+                                                title="Remove"
+                                                className="text-muted hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                                              >
+                                                <TrashIcon />
+                                              </IconButton>
+                                            </ConfirmForm>
+                                          ) : undefined
+                                        }
+                                      />
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                              {isOpen && (
+                                <form
+                                  action={attachmentActionsForRow.upload}
+                                  encType="multipart/form-data"
+                                  className="flex items-center gap-3"
+                                >
+                                  <input
+                                    type="file"
+                                    name="file"
+                                    required
+                                    className="text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-brand-hover"
+                                  />
+                                  <SubmitButton variant="secondary" pendingLabel="Uploading…">
+                                    Upload Attachment
+                                  </SubmitButton>
+                                </form>
+                              )}
+                              </section>
+                            </div>
+                          }
+                        />
                       );
                     })}
                   </tbody>

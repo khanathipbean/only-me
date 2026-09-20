@@ -46,12 +46,24 @@ async function purgeTestCases(tx: Tx, testCaseIds: string[]): Promise<Purged> {
   }
 
   const attachments = await tx.attachment.findMany({
-    where: { testCaseId: { in: testCaseIds } },
+    where: {
+      OR: [
+        { testCaseId: { in: testCaseIds } },
+        // A round's own evidence, attached to its TestRunCase rather than the
+        // Test Case itself — about to be deleted below, and just as unreachable
+        // via its own foreign key without this.
+        { runCase: { testCaseId: { in: testCaseIds } } },
+      ],
+    },
     select: { storageKey: true },
   });
 
   await tx.testStep.deleteMany({ where: { testCaseId: { in: testCaseIds } } });
-  await tx.attachment.deleteMany({ where: { testCaseId: { in: testCaseIds } } });
+  await tx.attachment.deleteMany({
+    where: {
+      OR: [{ testCaseId: { in: testCaseIds } }, { runCase: { testCaseId: { in: testCaseIds } } }],
+    },
+  });
   // A Test Case's result in every round it was ever part of. Nothing else
   // holds that, so deleting the case really does discard its history.
   await tx.testRunCase.deleteMany({ where: { testCaseId: { in: testCaseIds } } });

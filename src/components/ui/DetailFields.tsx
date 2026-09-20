@@ -6,8 +6,23 @@ import type { ReactNode } from "react";
  * these two would otherwise drag that whole file — state, effects and all —
  * into the browser bundle.
  */
-export function DetailFields({ children }: { children: ReactNode }) {
-  return <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">{children}</dl>;
+const COLUMNS_CLASS = {
+  1: "grid-cols-1",
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-3",
+} as const;
+
+export function DetailFields({
+  children,
+  columns = 2,
+}: {
+  children: ReactNode;
+  /** Most field lists read better in two columns; a row of short fields
+   *  (Preconditions/Expected Result/Condition/Test Data, say) can ask for
+   *  three instead so the row doesn't leave one side empty. */
+  columns?: keyof typeof COLUMNS_CLASS;
+}) {
+  return <dl className={`grid gap-x-6 gap-y-3 ${COLUMNS_CLASS[columns]}`}>{children}</dl>;
 }
 
 export function DetailField({
@@ -26,7 +41,20 @@ export function DetailField({
   wide?: boolean;
 }) {
   return (
-    <div className={`flex items-center gap-3 ${wide ? "sm:col-span-2" : ""}`}>
+    <div
+      // `items-start`, not `items-center`: grid cells stretch to the tallest
+      // cell in their row by default, and centering within that taller cell
+      // is what pushed a short field's label down out of line with a
+      // multi-line neighbour (e.g. a short "Expected Result" beside a
+      // several-step "Test Steps" list).
+      className="flex items-start gap-3"
+      // A Tailwind class name has to match a fixed set of column counts
+      // (`sm:col-span-2`, `sm:col-span-3`, ...) to be generated at all; an
+      // inline style sidesteps that so "wide" spans correctly whatever
+      // `columns` the parent `DetailFields` was given. Below `sm` the grid
+      // has no explicit column count yet, so this is a no-op there.
+      style={wide ? { gridColumn: "1 / -1" } : undefined}
+    >
       {icon && <span className="shrink-0">{icon}</span>}
       <div className="flex min-w-0 flex-col gap-0.5">
         <dt className="text-xs font-semibold tracking-wide text-muted uppercase">{label}</dt>
