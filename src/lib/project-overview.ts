@@ -23,6 +23,7 @@ export async function getProjectOverviewSummary(projectId: string) {
     requirementCount,
     testRunCount,
     fileCount,
+    memberCount,
     recentModules,
     recentRuns,
     recentFiles,
@@ -32,6 +33,7 @@ export async function getProjectOverviewSummary(projectId: string) {
     prisma.requirement.count({ where: { projectId, deletedAt: null } }),
     prisma.testRun.count({ where: { projectId, deletedAt: null } }),
     prisma.projectFile.count({ where: { projectId, deletedAt: null } }),
+    prisma.projectMember.count({ where: { projectId } }),
     prisma.module.findMany({
       where: { projectId, deletedAt: null },
       include: WITH_REQUIREMENT_COUNT,
@@ -87,6 +89,7 @@ export async function getProjectOverviewSummary(projectId: string) {
       requirements: requirementCount,
       testRuns: testRunCount,
       files: fileCount,
+      members: memberCount,
     },
     recentModules: recentModules.map((module) => ({
       id: module.id,

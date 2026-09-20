@@ -65,8 +65,8 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
 
       <div className="grid w-full max-w-4xl gap-3 sm:grid-cols-2">
         {actions.map((action) => (
-          <Link key={action.href} href={action.href}>
-            <Card className="flex items-center gap-3 text-left transition-colors hover:border-brand">
+          <Link key={action.href} href={action.href} className="flex">
+            <Card className="flex w-full items-center gap-3 text-left transition-colors hover:border-brand">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand [&>svg]:size-5">
                 {action.icon}
               </span>

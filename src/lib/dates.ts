@@ -32,6 +32,21 @@ export function formatTimestamp(date: Date): string {
   return TIMESTAMP.format(date);
 }
 
+/** Built once, same reasoning as `TIMESTAMP` above. */
+const DATE_ONLY = new Intl.DateTimeFormat("en-US", {
+  timeZone: TIME_ZONE,
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+/** A day with no time on it: "Sep 11, 2026" — for a date that only ever
+ *  means a day (created-on, due-by), where a time of day would just be
+ *  midnight UTC dressed up as information. */
+export function formatDate(date: Date): string {
+  return DATE_ONLY.format(date);
+}
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
