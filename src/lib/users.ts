@@ -119,3 +119,30 @@ export async function changePassword(
     data: { passwordHash: await hashPassword(newPassword) },
   });
 }
+
+/**
+ * The "forgot password" flow, and deliberately not `changePassword`'s: there
+ * is no mail infrastructure anywhere in this app to prove the requester owns
+ * the address (see `docs/agents` / the Tier 2 gap list — self-service reset
+ * was scoped out for exactly this reason), and `email` here is a self-chosen
+ * login identifier rather than a verified inbox. Knowing the email is
+ * therefore the whole check, by explicit product choice for this app's
+ * threat model — not an oversight.
+ */
+export async function resetPasswordByEmail(email: string, newPassword: string) {
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new ProfileValidationError(
+      `New password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+    );
+  }
+
+  const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (!user) {
+    throw new ProfileValidationError("No account uses that email");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(newPassword) },
+  });
+}

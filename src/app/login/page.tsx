@@ -1,5 +1,6 @@
 import { AuthError } from "next-auth";
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -163,6 +164,12 @@ export default async function LoginPage({
                   toggleClassName={glassToggleClass}
                 />
               </label>
+              <Link
+                href="/forgot-password"
+                className="-mt-2 self-end text-sm text-white/60 hover:text-white"
+              >
+                Forgot password?
+              </Link>
               <SubmitButton size="lg" className="mt-2 w-full" pendingLabel="Signing in…">
                 Sign in
               </SubmitButton>
