@@ -4,8 +4,20 @@ import { IMPORT_COLUMNS } from "@/lib/import/parse";
 import type { ProjectDashboard } from "@/lib/dashboard";
 import type { listRunResultsForExport } from "@/lib/test-runs";
 
+/**
+ * Escapes a CSV cell, and neutralizes "CSV injection" first: a cell opened
+ * in Excel/Sheets/LibreOffice that starts with `=`, `+`, `-`, or `@` is read
+ * as a formula, not literal text — a Test Case/Requirement/Scenario named
+ * `=HYPERLINK("http://evil","click")` would execute the moment whoever
+ * exports the project opens the file. A leading `'` is the standard
+ * mitigation (OWASP's own recommendation): Excel treats it as "force this
+ * cell to text" and hides the quote; a value that legitimately started with
+ * one of those characters keeps a visible leading `'` in other viewers,
+ * which is the accepted trade-off for not executing arbitrary formulas.
+ */
 function csvCell(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function toCsv(rows: string[][]): string {
@@ -91,11 +103,21 @@ export function generateProjectHierarchyCsv(rows: string[][]): string {
   return toCsv([[...IMPORT_COLUMNS], ...rows]);
 }
 
+/** A real .xlsx cell carries its own type in the file's XML, unlike a CSV
+ *  cell (plain text a spreadsheet app has to guess about) — so a string
+ *  value here isn't at risk of being reinterpreted as a formula the way
+ *  `csvCell` guards against. The same leading-character prefix is still
+ *  applied, cheaply, so this doesn't rely on that distinction holding in
+ *  every application that might open the file. */
+function xlsxCell(value: string): string {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
 export async function generateProjectHierarchyXlsx(rows: string[][]): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Import");
   sheet.addRow([...IMPORT_COLUMNS]);
-  rows.forEach((row) => sheet.addRow(row));
+  rows.forEach((row) => sheet.addRow(row.map(xlsxCell)));
   return workbook.xlsx.writeBuffer();
 }
 

@@ -78,26 +78,37 @@ export type ProjectFilters = {
   overdue?: boolean;
 };
 
-/** Shared by the plain and paginated lists so their results can't drift. */
+/** Shared by the plain and paginated lists so their results can't drift.
+ *
+ * `status` and `overdue` each contribute their own entry to `AND` rather
+ * than spreading into one object: both can set a `status` condition (an
+ * explicit filter, and overdue's own "not COMPLETED"), and spreading would
+ * let whichever came last silently win — which previously dropped the
+ * overdue exclusion entirely whenever an explicit status was also chosen,
+ * so `status=COMPLETED&overdue=1` returned COMPLETED projects despite
+ * `isProjectOverdue` never considering a COMPLETED project overdue. An `AND`
+ * array keeps both conditions in force; a genuine contradiction (like that
+ * COMPLETED case) now correctly yields no rows instead of wrong ones. */
 function projectListWhere(userId: string, filters: ProjectFilters) {
   return {
     deletedAt: filters.archived ? { not: null } : null,
     members: { some: { userId } },
-    ...(filters.status ? { status: filters.status } : {}),
-    ...(filters.overdue
-      ? {
-          endDate: { lt: new Date() },
-          ...(filters.status ? {} : { status: { not: "COMPLETED" as const } }),
-        }
-      : {}),
-    ...(filters.search
-      ? {
-          OR: [
-            { name: { contains: filters.search, mode: "insensitive" as const } },
-            { code: { contains: filters.search, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
+    AND: [
+      ...(filters.status ? [{ status: filters.status }] : []),
+      ...(filters.overdue
+        ? [{ endDate: { lt: new Date() } }, { status: { not: "COMPLETED" as const } }]
+        : []),
+      ...(filters.search
+        ? [
+            {
+              OR: [
+                { name: { contains: filters.search, mode: "insensitive" as const } },
+                { code: { contains: filters.search, mode: "insensitive" as const } },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 }
 

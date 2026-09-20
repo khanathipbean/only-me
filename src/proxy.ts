@@ -21,9 +21,14 @@ export const proxy = auth;
  * them instead turned an expired session into a 307 to the login *page*, so
  * `fetch` followed it, got HTML with status 200, and the caller fell over
  * parsing JSON rather than seeing it had been signed out.
+ *
+ * Each excluded name requires a following `/` or end-of-string
+ * (`(?=/|$)`), not just a matching prefix — otherwise a future route like
+ * `/login-history` or `/forgot-password-notes` would also skip auth just
+ * for starting with one of these names.
  */
 export const config = {
   matcher: [
-    "/((?!api|login|forgot-password|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!(?:api|login|forgot-password)(?:/|$)|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

@@ -70,20 +70,26 @@ export type TestRunFilters = {
   overdue?: boolean;
 };
 
+/** Same reasoning as `projectListWhere`'s `AND` array: `status` and
+ *  `overdue` can each want to constrain `status` (an explicit filter, and
+ *  overdue's own "must still be OPEN"), and spreading both into one object
+ *  let whichever came last silently win — dropping the overdue exclusion
+ *  whenever an explicit status was also chosen, so `status=CLOSED&overdue=1`
+ *  returned CLOSED runs despite `isTestRunOverdue` never considering a
+ *  CLOSED run overdue. */
 function runWhere(projectId: string, filters: TestRunFilters) {
   return {
     projectId,
     deletedAt: filters.archived ? { not: null } : null,
-    ...(filters.status ? { status: filters.status } : {}),
-    ...(filters.overdue
-      ? {
-          endsOn: { lt: new Date() },
-          ...(filters.status ? {} : { status: "OPEN" as const }),
-        }
-      : {}),
-    ...(filters.search
-      ? { name: { contains: filters.search, mode: "insensitive" as const } }
-      : {}),
+    AND: [
+      ...(filters.status ? [{ status: filters.status }] : []),
+      ...(filters.overdue
+        ? [{ endsOn: { lt: new Date() } }, { status: "OPEN" as const }]
+        : []),
+      ...(filters.search
+        ? [{ name: { contains: filters.search, mode: "insensitive" as const } }]
+        : []),
+    ],
   };
 }
 
