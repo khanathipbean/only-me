@@ -20,6 +20,85 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Running this machine as a LAN server
+
+The deployed app on Netlify is unchanged by any of this — it builds from the
+Git repository with the environment variables set in its own dashboard, and
+there is no Netlify configuration file in this repository for a local setup
+to interfere with.
+
+This machine can also serve the app to others on the same network, against
+its **own** database, so nothing done here reaches the deployed rows.
+
+### One-time setup
+
+```bash
+npm install
+npm run db:dev            # starts Postgres on 127.0.0.1:54330 (keeps its data)
+npm run db:local -- db push   # creates the tables in that database
+npm run db:local -- seed      # creates the first admin account
+```
+
+Every database command goes through `db:local`, which reads `.env.local` and
+refuses to run against anything but a local host. The plain `npx prisma ...`
+and `npm run db:seed` read `.env` instead — the deployed database — so use
+them only when that is what you mean.
+
+`.env.local` holds this machine's `DATABASE_URL` and is git-ignored. Set
+`AUTH_SECRET` in it before the first run:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+File attachments are off until `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+are set in `.env.local`. Everything else works without them. To turn them on,
+create a second Supabase project with a bucket named `uploads` — see the
+comments in `.env.local`.
+
+### Running it
+
+```bash
+npm run build
+npm run start:server
+```
+
+Others reach it at `http://<this-machine-ip>:3000`. Find the address with:
+
+```powershell
+ipconfig
+```
+
+and read the **IPv4 Address** of the adapter that is actually connected
+(usually `Wi-Fi` or `Ethernet`) — something like `192.168.1.42`.
+
+Windows Firewall blocks inbound connections by default, so the port has to be
+opened once, from an **Administrator** PowerShell:
+
+```powershell
+New-NetFirewallRule -DisplayName "only-me dev server" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private
+```
+
+`-Profile Private` keeps the rule to networks marked Private. On a network
+marked Public, Windows treats every other machine as untrusted and the rule
+will not apply — change the network's profile rather than widening the rule.
+
+`npm run dev:server` does the same over `next dev`, for working on the code
+while someone else looks at it.
+
+### What is shared with Netlify, and what is not
+
+| | Deployed (Netlify) | This machine |
+| --- | --- | --- |
+| Database | Supabase | Postgres on this machine |
+| Accounts | Supabase | separate — created here |
+| Files | Supabase Storage | off, or a second Supabase project |
+| Sessions | own `AUTH_SECRET` | own `AUTH_SECRET` |
+| Code | this repository | this repository |
+
+The code is the only thing in common. Nothing written on one appears on the
+other.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
