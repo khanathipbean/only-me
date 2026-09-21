@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { ExpandableText } from "@/components/ui/ExpandableText";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { Badge, projectStatusTone } from "@/components/ui/Badge";
 import { isProjectOverdue, isTestRunOverdue } from "@/lib/deadlines";
 import { FILE_KIND_STYLE } from "@/components/fileKindStyle";
@@ -9,9 +10,11 @@ import {
   CalendarIcon,
   CheckIcon,
   ChevronRightIcon,
+  ClipboardListIcon,
   ClockIcon,
   FileTextIcon,
   FolderIcon,
+  LayersIcon,
   PlayIcon,
   TagIcon,
   UploadIcon,
@@ -70,6 +73,7 @@ const STAT_TONE = {
   blue: "bg-blue-500/10 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400",
   green: "bg-green-500/10 text-green-600 dark:bg-green-500/15 dark:text-green-400",
   orange: "bg-orange-500/10 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400",
+  purple: "bg-purple-500/10 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400",
 } as const;
 
 function StatTile({
@@ -125,7 +129,7 @@ export function ProjectOverviewSummary({
       label: "Create module",
       description: "Organize requirements",
       href: `${base}/modules`,
-      icon: <BoxIcon />,
+      icon: <LayersIcon />,
       tone: "indigo" as const,
     },
     {
@@ -212,18 +216,25 @@ export function ProjectOverviewSummary({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          icon={<BoxIcon />}
+          icon={<LayersIcon />}
           label="Modules"
           value={summary.counts.modules}
           tone="indigo"
           href={`${base}/modules`}
         />
+        {/* Notes where Requirements used to be. Every other tile is one
+            tab: Modules, Test Runs, Files. Requirements is not a tab at all
+            — it lives under a Module — and its link went to `/modules`, the
+            same place the tile beside it already went, so the row had four
+            tiles and three destinations. The count itself is still on the
+            Dashboard, which is where a number about the size of the test
+            structure belongs. */}
         <StatTile
-          icon={<FileTextIcon />}
-          label="Requirements"
-          value={summary.counts.requirements}
-          tone="blue"
-          href={`${base}/modules`}
+          icon={<ClipboardListIcon />}
+          label="Notes"
+          value={summary.counts.notes}
+          tone="purple"
+          href={`${base}/notes`}
         />
         <StatTile
           icon={<PlayIcon />}
@@ -242,15 +253,49 @@ export function ProjectOverviewSummary({
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel icon={<BoxIcon className="size-4 text-muted" />} title="Recent modules" viewAllHref={`${base}/modules`}>
-          {summary.recentModules.length === 0 ? (
-            <EmptyRow>No modules yet.</EmptyRow>
+        {/* Notes, where Modules used to be. A project's Modules are drawn
+            once and then sit still, so "recent" among them meant the same
+            five names for months; a Note is written whenever something is
+            decided. Modules keep their stat tile above, which is the link
+            into them. */}
+        <Panel
+          icon={<ClipboardListIcon className="size-4 text-muted" />}
+          title="Recent notes"
+          viewAllHref={`${base}/notes`}
+        >
+          {summary.recentNotes.length === 0 ? (
+            <EmptyRow>No notes yet.</EmptyRow>
           ) : (
-            summary.recentModules.map((module) => (
-              <Link key={module.id} href={`${base}/modules/${module.id}/requirements`} className={rowClass}>
+            summary.recentNotes.map((note) => (
+              /* Straight to the Notes page with this row already open —
+                 `noteId` is what the list reads to decide which one starts
+                 expanded. Opening the body here instead would mean shipping
+                 every body to a page that mostly does not show them. */
+              <Link key={note.id} href={`${base}/notes?noteId=${note.id}`} className={rowClass}>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 [&>svg]:size-5">
+                  <ClipboardListIcon />
+                </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-foreground">{module.name}</span>
-                  <span className="text-xs text-muted">{module.requirementCount} requirement(s)</span>
+                  <span className="flex items-center gap-1.5">
+                    {/* The panel is a third of the page wide and the tag
+                        takes part of that, so a title of any length is cut.
+                        The tooltip is where the rest of it lives. */}
+                    <Tooltip label={note.title} className="flex min-w-0">
+                      <span className="min-w-0 truncate font-medium text-foreground">
+                        {note.title}
+                      </span>
+                    </Tooltip>
+                    {note.feature && (
+                      <span className="shrink-0">
+                        <Badge tone="gray" variant="outline">
+                          {note.feature}
+                        </Badge>
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs text-muted">
+                    {note.module} · {formatDate(note.on)}
+                  </span>
                 </span>
                 <ChevronRightIcon className="size-4 shrink-0 text-muted" />
               </Link>

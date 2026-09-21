@@ -3,16 +3,10 @@ import { getFileKind } from "@/lib/project-files";
 
 const RECENT_TAKE = 5;
 
-/* Live Requirements only, same shape `listModulesForProjectPage` already
- * uses — so a module's count here matches what the Modules list shows. */
-const WITH_REQUIREMENT_COUNT = {
-  _count: { select: { requirements: { where: { deletedAt: null } } } },
-} as const;
-
 /**
  * Everything the Overview tab's summary needs for a project that already has
  * data — counts for the stat tiles, and the 5 most recent rows for each of
- * Modules/Test Runs/Files/activity. Not built on `getProjectDashboard`: that
+ * Notes/Test Runs/Files/activity. Not built on `getProjectDashboard`: that
  * function's counts are derived from its filtered scenario tree (so a Module
  * with no Requirements yet wouldn't show up), which is the right shape for
  * the Dashboard tab but not a plain "how many are there" total.
@@ -20,24 +14,30 @@ const WITH_REQUIREMENT_COUNT = {
 export async function getProjectOverviewSummary(projectId: string) {
   const [
     moduleCount,
-    requirementCount,
+    noteCount,
     testRunCount,
     fileCount,
     memberCount,
-    recentModules,
+    recentNotes,
     recentRuns,
     recentFiles,
     recentActivity,
   ] = await Promise.all([
     prisma.module.count({ where: { projectId, deletedAt: null } }),
-    prisma.requirement.count({ where: { projectId, deletedAt: null } }),
+    prisma.note.count({ where: { projectId, deletedAt: null } }),
     prisma.testRun.count({ where: { projectId, deletedAt: null } }),
     prisma.projectFile.count({ where: { projectId, deletedAt: null } }),
     prisma.projectMember.count({ where: { projectId } }),
-    prisma.module.findMany({
+    /* Notes rather than Modules. A project's Modules are drawn once and
+     * then sit still — this one has seventeen, all created inside three
+     * days, so "recent" among them is a timestamp difference of seconds and
+     * the same five names for months. A Note is written whenever something
+     * is decided, which is what the word is for. Modules keep their stat
+     * tile, which is the link into them. */
+    prisma.note.findMany({
       where: { projectId, deletedAt: null },
-      include: WITH_REQUIREMENT_COUNT,
-      orderBy: { createdAt: "desc" },
+      include: { module: { select: { name: true } } },
+      orderBy: [{ occurredOn: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       take: RECENT_TAKE,
     }),
     prisma.testRun.findMany({
@@ -86,15 +86,19 @@ export async function getProjectOverviewSummary(projectId: string) {
   return {
     counts: {
       modules: moduleCount,
-      requirements: requirementCount,
+      notes: noteCount,
       testRuns: testRunCount,
       files: fileCount,
       members: memberCount,
     },
-    recentModules: recentModules.map((module) => ({
-      id: module.id,
-      name: module.name,
-      requirementCount: module._count.requirements,
+    recentNotes: recentNotes.map((note) => ({
+      id: note.id,
+      title: note.title,
+      module: note.module.name,
+      feature: note.feature,
+      /* The date it is about, falling back to when it was written — the same
+       * pair the Notes list orders by, so the two agree. */
+      on: note.occurredOn ?? note.createdAt,
     })),
     recentRuns: runsWithProgress,
     recentFiles: recentFiles.map((file) => ({
