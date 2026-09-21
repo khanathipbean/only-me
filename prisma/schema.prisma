@@ -37,6 +37,7 @@ model User {
   uploadedAttachments Attachment[]
   performedImports    ImportLog[]
   uploadedFiles       ProjectFile[]
+  createdNotes        Note[]
   createdTestRuns     TestRun[]     @relation("TestRunCreatedBy")
   ranTestRunCases     TestRunCase[] @relation("TestRunCaseRanBy")
   notifications          Notification[] @relation("NotificationRecipient")
@@ -81,6 +82,7 @@ model Project {
   requirements  Requirement[]
   testRuns      TestRun[]
   notifications Notification[]
+  notes         Note[]
 }
 
 model ProjectMember {
@@ -412,6 +414,46 @@ model ProjectFile {
   @@index([projectId, module])
 }
 
+/// Prose kept against a Module: what a meeting decided, why a Requirement
+/// reads the way it does — the things that belong to the testing without
+/// belonging to any one Test Case.
+model Note {
+  id        String @id @default(cuid())
+  projectId String
+  /// Required. A note with no Module is a note nobody finds again, and the
+  /// Module is the only level above Requirement that a note reliably maps to
+  /// — `Requirement.feature` is a free-text label, not a table to point at.
+  moduleId  String
+  /// Sub-area of the Module, the same label a Requirement carries — see
+  /// `Requirement.feature`. Free text against a suggestion list, not a table:
+  /// a Feature is a name people use, not a thing with a life of its own.
+  feature   String?
+  title     String
+  /// Stored exactly as typed and rendered the same way. Never parsed as
+  /// Markdown: that would let a `<script>` someone typed here run on this
+  /// app's own origin, which is the reason SVG is kept out of the inline
+  /// file types too (see `INLINE_TYPES` in src/lib/project-files.ts).
+  body      String
+  /// When the thing being written about happened, which is not when the row
+  /// was created — a Monday meeting written up on Wednesday is ordinary, and
+  /// ordering by `createdAt` would put the list in a misleading order.
+  occurredOn  DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  project   Project @relation(fields: [projectId], references: [id])
+  module    Module  @relation(fields: [moduleId], references: [id])
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  /// The list is always one Project's, usually narrowed to one Module.
+  @@index([projectId, moduleId])
+  /// Matches `Requirement`'s, for the same reason: the Feature filter and
+  /// the suggestion list both read features one Module at a time.
+  @@index([moduleId, feature])
+}
+
 /// One menu of the system under test — Dashboard, Workflow, Sprints.
 ///
 /// A table rather than a text column because the same names are chosen over
@@ -432,6 +474,7 @@ model Module {
   project      Project       @relation(fields: [projectId], references: [id])
   requirements Requirement[]
   files        ProjectFile[]
+  notes        Note[]
 
   @@unique([projectId, name])
 }

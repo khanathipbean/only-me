@@ -65,15 +65,25 @@ export type RequirementInput = {
   status?: WorkflowStatus;
 };
 
-/** Every distinct Feature already used in a Module, for the picker. */
+/**
+ * Every distinct Feature already used in a Module, for the picker.
+ *
+ * Requirements *and* Notes, because both carry one and the whole point of
+ * the normaliser below is that a Feature is one group however it was
+ * spelled. Read from Requirements alone, a label first typed on a Note would
+ * never be suggested again — and the second person to type it would spell it
+ * differently and split the group in two, which is exactly what this list
+ * exists to prevent.
+ */
 export async function listFeaturesForModule(moduleId: string) {
-  const rows = await prisma.requirement.findMany({
-    where: { moduleId, deletedAt: null, feature: { not: null } },
-    select: { feature: true },
-    distinct: ["feature"],
-    orderBy: { feature: "asc" },
-  });
-  return rows.map((row) => row.feature as string);
+  const used = { moduleId, deletedAt: null, feature: { not: null } } as const;
+  const [fromRequirements, fromNotes] = await Promise.all([
+    prisma.requirement.findMany({ where: used, select: { feature: true }, distinct: ["feature"] }),
+    prisma.note.findMany({ where: used, select: { feature: true }, distinct: ["feature"] }),
+  ]);
+  return [
+    ...new Set([...fromRequirements, ...fromNotes].map((row) => row.feature as string)),
+  ].sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -82,7 +92,7 @@ export async function listFeaturesForModule(moduleId: string) {
  * existing spelling wins. Free text drifts otherwise — the same reason this
  * project stopped storing a file's Module as free text.
  */
-async function normalizeFeature(moduleId: string, raw: string | null | undefined) {
+export async function normalizeFeature(moduleId: string, raw: string | null | undefined) {
   const trimmed = raw?.trim();
   if (!trimmed) {
     return null;

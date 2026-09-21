@@ -209,13 +209,14 @@ export async function setModuleDeletedAt(
  * this Module — a Requirement or a file left behind would lose the heading
  * it is filed under, and nothing in the UI would show it had happened. */
 async function assertModuleNotInUse(id: string) {
-  const [requirements, files] = await Promise.all([
+  const [requirements, files, notes] = await Promise.all([
     prisma.requirement.count({ where: { moduleId: id, deletedAt: null } }),
     prisma.projectFile.count({ where: { moduleId: id, deletedAt: null } }),
+    prisma.note.count({ where: { moduleId: id, deletedAt: null } }),
   ]);
-  if (requirements > 0 || files > 0) {
+  if (requirements > 0 || files > 0 || notes > 0) {
     throw new ModuleValidationError(
-      `Still in use by ${requirements} requirement(s) and ${files} file(s). Move them first.`,
+      `Still in use by ${requirements} requirement(s), ${files} file(s) and ${notes} note(s). Move them first.`,
     );
   }
 }
