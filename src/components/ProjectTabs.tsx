@@ -26,6 +26,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     { label: "Dashboard", href: `${overviewHref}/dashboard` },
     { label: "Modules", href: `${overviewHref}/modules` },
     { label: "Test Runs", href: `${overviewHref}/runs` },
+    { label: "Notes", href: `${overviewHref}/notes` },
     { label: "Files", href: `${overviewHref}/files` },
     { label: "Import", href: `${overviewHref}/import` },
     { label: "Audit Trail", href: `${overviewHref}/audit-log` },

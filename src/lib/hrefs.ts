@@ -22,6 +22,10 @@ export function modulesListHref(projectId: string) {
   return `${projectHref(projectId)}/modules`;
 }
 
+export function notesListHref(projectId: string) {
+  return `${projectHref(projectId)}/notes`;
+}
+
 export function requirementsListHref(projectId: string, moduleId: string) {
   return `${modulesListHref(projectId)}/${moduleId}/requirements`;
 }

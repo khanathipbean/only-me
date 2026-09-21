@@ -1,5 +1,6 @@
 import {
   modulesListHref,
+  notesListHref,
   requirementsListHref,
   scenariosListHref,
   testCasesListHref,
@@ -86,6 +87,10 @@ export function filesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
 
 export function importBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [...projectBreadcrumb(project), { label: "Import", href: `/projects/${project.id}/import` }];
+}
+
+export function notesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [...projectBreadcrumb(project), { label: "Notes", href: notesListHref(project.id) }];
 }
 
 export function modulesListBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
