@@ -81,10 +81,15 @@ export default async function NotesPage({
     pageSize?: string;
     error?: string;
     editId?: string;
+    /** Arrives from the Overview's Recent notes: the row it names starts
+     *  expanded, so what someone clicked is open on the page they land on.
+     *  Deliberately not part of `listQueryString` — it describes one
+     *  arrival, not a filter to carry through every later action. */
+    noteId?: string;
   }>;
 }) {
   const { id: projectId } = await params;
-  const { search, moduleId, feature, archived, page, pageSize, error, editId } =
+  const { search, moduleId, feature, archived, page, pageSize, error, editId, noteId } =
     await searchParams;
   const session = await auth();
 
@@ -414,6 +419,7 @@ export default async function NotesPage({
                     key={note.id}
                     colSpan={5}
                     detailLabel={note.title}
+                    openOnMount={noteId === note.id}
                     cells={
                       <>
                         <td className={tdClass}>

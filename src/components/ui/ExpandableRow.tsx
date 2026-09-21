@@ -30,6 +30,7 @@ export function ExpandableRow({
   detail,
   colSpan,
   detailLabel,
+  openOnMount = false,
 }: {
   /** The `<td>`s for every column except the trailing actions column. */
   cells: ReactNode;
@@ -41,8 +42,11 @@ export function ExpandableRow({
   colSpan: number;
   /** Names the row in the toggle's accessible label, e.g. the row's title. */
   detailLabel: string;
+  /** Starts expanded — for a link that arrives pointing at one row, so the
+   *  thing someone clicked is open when the page they land on renders. */
+  openOnMount?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openOnMount);
   const panelId = useId();
   const toggleLabel = open ? `Hide details for ${detailLabel}` : `Show details for ${detailLabel}`;
 
