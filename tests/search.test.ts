@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { searchAll } from "@/lib/search";
 import { createScenario } from "@/lib/scenarios";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+import { createModule } from "@/lib/modules";
+import { archiveNote, createNote } from "@/lib/notes";
 import { createTestGroup } from "@/lib/test-groups";
 import { createTestCase } from "@/lib/test-cases";
 
@@ -144,6 +146,66 @@ describe("global search", () => {
 
     const byId = await searchAll(ownerB.id, testCase.id);
     expect(byId).toHaveLength(0);
+  });
+
+  it("finds a Note by a word that appears only in its body", async () => {
+    const owner = await createUser("search-note1@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-N1");
+    const testModule = await createModule(project.id, "Policy Search", owner.id);
+    await createNote(
+      project.id,
+      {
+        moduleId: testModule.id,
+        title: "Sprint 6 planning",
+        body: "Policy Template ต้องรองรับการ zimbabwean clone",
+      },
+      owner.id,
+    );
+
+    /* The point of the whole type: every other result matches on a name, so
+     * a word that lives only in the prose would find nothing at all. */
+    const results = await searchAll(owner.id, "zimbabwean");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      type: "Note",
+      label: "Sprint 6 planning",
+      projectId: project.id,
+      position: "Policy Search",
+      href: `/projects/${project.id}/notes`,
+    });
+  });
+
+  it("does not leak a Note from a Project the caller is not a member of", async () => {
+    const owner = await createUser("search-note2@example.com");
+    const outsider = await createUser("search-note3@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-N2");
+    const testModule = await createModule(project.id, "Private Module", owner.id);
+    await createNote(
+      project.id,
+      { moduleId: testModule.id, title: "Confidential retro", body: "wildebeest" },
+      owner.id,
+    );
+
+    expect(await searchAll(owner.id, "wildebeest")).toHaveLength(1);
+    expect(await searchAll(outsider.id, "wildebeest")).toHaveLength(0);
+  });
+
+  it("leaves an archived Note out of the results", async () => {
+    const owner = await createUser("search-note4@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-N3");
+    const testModule = await createModule(project.id, "Archive Module", owner.id);
+    const note = await createNote(
+      project.id,
+      { moduleId: testModule.id, title: "Old retro", body: "narwhal" },
+      owner.id,
+    );
+
+    expect(await searchAll(owner.id, "narwhal")).toHaveLength(1);
+    await archiveNote(note.id, owner.id);
+    expect(await searchAll(owner.id, "narwhal")).toHaveLength(0);
   });
 
   it("returns no results for a blank query and does not error", async () => {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import {
+  notesListHref,
   requirementsListHref,
   scenariosListHref,
   testCaseHref,
@@ -13,7 +14,8 @@ export type SearchResultType =
   | "Requirement"
   | "Scenario"
   | "TestGroup"
-  | "TestCase";
+  | "TestCase"
+  | "Note";
 
 export type SearchResult = {
   type: SearchResultType;
@@ -50,7 +52,8 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
 
   const textMatch = { contains: trimmed, mode: "insensitive" as const };
 
-  const [projects, modules, requirements, scenarios, testGroups, testCases] = await Promise.all([
+  const [projects, modules, requirements, scenarios, testGroups, testCases, notes] =
+    await Promise.all([
     prisma.project.findMany({
       where: {
         id: { in: memberProjectIds },
@@ -116,6 +119,22 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
             },
           },
         },
+      },
+    }),
+    /* Title *and* body — the only type here matched on prose rather than a
+     * name, because a note's worth is mostly in its body. `contains` on a
+     * long text column is a sequential scan; at this size that costs
+     * nothing, and full-text search is the answer when it stops being
+     * nothing, not before. */
+    prisma.note.findMany({
+      where: {
+        projectId: { in: memberProjectIds },
+        deletedAt: null,
+        OR: [{ title: textMatch }, { body: textMatch }],
+      },
+      include: {
+        project: { select: { id: true, name: true } },
+        module: { select: { name: true } },
       },
     }),
   ]);
@@ -194,6 +213,17 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
         testGroupId: testCase.testGroup.id,
         testCaseId: testCase.id,
       }),
+    })),
+    ...notes.map((note) => ({
+      type: "Note" as const,
+      id: note.id,
+      label: note.title,
+      projectId: note.project.id,
+      projectName: note.project.name,
+      /* The Module it is filed under, the same way a Requirement shows its
+       * Module — a note's place is one level, not a chain. */
+      position: note.module.name,
+      href: notesListHref(note.project.id),
     })),
   ];
 

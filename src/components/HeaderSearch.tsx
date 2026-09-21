@@ -11,6 +11,7 @@ import {
   FileTextIcon,
   FolderIcon,
   LayersIcon,
+  ClipboardListIcon,
   ListChecksIcon,
 } from "@/components/icons";
 
@@ -23,6 +24,7 @@ const RESULT_TYPE_TONE: Record<string, Tone> = {
   Scenario: "blue",
   TestGroup: "amber",
   TestCase: "green",
+  Note: "gray",
 };
 
 /** Fixed order, so the groups sit where you last saw them however the
@@ -34,6 +36,7 @@ const GROUPS = [
   { type: "Scenario", heading: "Scenarios", icon: <BranchIcon /> },
   { type: "TestGroup", heading: "Test Groups", icon: <FolderIcon /> },
   { type: "TestCase", heading: "Test Cases", icon: <ListChecksIcon /> },
+  { type: "Note", heading: "Notes", icon: <ClipboardListIcon /> },
 ] as const;
 
 /**
@@ -56,11 +59,16 @@ function viewAllHref(type: string, items: SearchResult[], term: string): string 
     return `/projects?${query}`;
   }
 
-  if (type === "Module") {
+  /* Modules and Notes each have a list of their own per Project, so the link
+   * works whenever every match in the group sits in the same one — otherwise
+   * it would have to pick a Project and drop the rest without saying. */
+  if (type === "Module" || type === "Note") {
     const projectIds = new Set(items.map((item) => item.projectId));
-    return projectIds.size === 1
-      ? `/projects/${items[0].projectId}/modules?${query}`
-      : null;
+    if (projectIds.size !== 1) {
+      return null;
+    }
+    const path = type === "Module" ? "modules" : "notes";
+    return `/projects/${items[0].projectId}/${path}?${query}`;
   }
 
   return null;
