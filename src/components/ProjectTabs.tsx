@@ -7,14 +7,28 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
   const pathname = usePathname();
   const overviewHref = `/projects/${projectId}`;
 
+  /*
+   * Three groups, left to right: read, work, reach for.
+   *
+   * Overview and Dashboard are both places you go to look at numbers and
+   * change nothing, and they used to sit either side of the two pages you
+   * actually work in. Modules and Test Runs are the work — authoring the
+   * tests and running them. Files, Import and Audit Trail are occasional:
+   * Audit Trail last of all, since it is opened to settle a question about
+   * who changed what rather than to get anything done.
+   *
+   * The order before this was not designed — Dashboard, Files and Import
+   * arrived together in one commit and Test Runs was slotted in later, so
+   * nothing had ever placed the seven against each other.
+   */
   const tabs = [
     { label: "Overview", href: overviewHref },
+    { label: "Dashboard", href: `${overviewHref}/dashboard` },
     { label: "Modules", href: `${overviewHref}/modules` },
     { label: "Test Runs", href: `${overviewHref}/runs` },
-    { label: "Dashboard", href: `${overviewHref}/dashboard` },
-    { label: "Audit Trail", href: `${overviewHref}/audit-log` },
     { label: "Files", href: `${overviewHref}/files` },
     { label: "Import", href: `${overviewHref}/import` },
+    { label: "Audit Trail", href: `${overviewHref}/audit-log` },
   ];
 
   return (
