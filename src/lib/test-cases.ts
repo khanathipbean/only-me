@@ -34,9 +34,17 @@ function validateTestCaseInput(input: Partial<TestCaseInput>) {
   if (!input.steps || input.steps.length === 0) {
     throw new ValidationError("at least one Test Step is required");
   }
+  /* A step's own expectedResult is optional, and was the one rule nothing
+   * else in the app agreed with. The importer writes "" to every step but the
+   * last (`stepRows`), because a sheet has one Expected Result describing the
+   * outcome of the whole thing — so opening an imported Test Case and saving
+   * it, changing nothing, was refused until someone typed a character into
+   * each blank. The step editor never marked the field required either. Which
+   * steps are worth an expectation of their own is the tester's call; the
+   * Test Case still has a required overall Expected Result. */
   for (const step of input.steps) {
-    if (!step.step || !step.expectedResult) {
-      throw new ValidationError("every Test Step needs its own step and expectedResult");
+    if (!step.step) {
+      throw new ValidationError("every Test Step needs its own step");
     }
   }
 }

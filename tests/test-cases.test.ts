@@ -493,4 +493,62 @@ describe("test case routes", () => {
     const attachments = await prisma.attachment.count({ where: { testCaseId: created.id } });
     expect(attachments).toBe(0);
   });
+  it("accepts a Test Step with no expected result of its own, but still refuses a blank step", async () => {
+    const { owner, testGroup } = await setup("tc-owner9@example.com", "PRJ-TC-9");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+
+    // The shape the importer writes: one overall Expected Result on the last
+    // step, nothing on the ones before it.
+    const created = await createTestCaseRoute(
+      jsonRequest(`http://test/api/test-groups/${testGroup.id}/test-cases`, "POST", {
+        name: "เปิดหน้า Glossary จากเมนู Governance",
+        expectedResult: "ระบบเปิดหน้า Glossary และแสดงรายการ Glossary",
+        priority: "HIGH",
+        steps: [
+          { step: "เปิดเมนู Governance", expectedResult: "" },
+          { step: "เลือก Glossary", expectedResult: "ระบบเปิดหน้า Glossary" },
+        ],
+      }),
+      { params: Promise.resolve({ id: testGroup.id }) },
+    );
+    expect(created.status).toBe(201);
+    const testCase = await created.json();
+
+    const stored = await prisma.testStep.findMany({
+      where: { testCaseId: testCase.id },
+      orderBy: { sequence: "asc" },
+    });
+    expect(stored.map((step) => step.expectedResult)).toEqual([
+      "",
+      "ระบบเปิดหน้า Glossary",
+    ]);
+
+    // Saving it again unchanged is what used to be refused.
+    const resaved = await patchTestCase(
+      jsonRequest(`http://test/api/test-cases/${testCase.id}`, "PATCH", {
+        name: testCase.name,
+        expectedResult: testCase.expectedResult,
+        priority: "HIGH",
+        steps: [
+          { step: "เปิดเมนู Governance", expectedResult: "" },
+          { step: "เลือก Glossary", expectedResult: "ระบบเปิดหน้า Glossary" },
+        ],
+      }),
+      { params: Promise.resolve({ id: testCase.id }) },
+    );
+    expect(resaved.status).toBe(200);
+
+    // The step's own text is still required — a row with neither is not a step.
+    const blankStep = await createTestCaseRoute(
+      jsonRequest(`http://test/api/test-groups/${testGroup.id}/test-cases`, "POST", {
+        name: "Blank step",
+        expectedResult: "Something",
+        priority: "LOW",
+        steps: [{ step: "", expectedResult: "" }],
+      }),
+      { params: Promise.resolve({ id: testGroup.id }) },
+    );
+    expect(blankStep.status).toBe(400);
+    expect((await blankStep.json()).error).toMatch(/needs its own step/i);
+  });
 });
