@@ -461,7 +461,7 @@ export default async function NotesPage({
                             the body is shown exactly as it was typed, which
                             is also what keeps a `<script>` someone pasted
                             from ever becoming one. */}
-                        <p className="max-w-[80ch] text-sm whitespace-pre-wrap text-foreground">
+                        <p className="text-sm whitespace-pre-wrap text-foreground">
                           {note.body || <span className="text-muted">No body.</span>}
                         </p>
                         <p className="text-xs text-muted">
