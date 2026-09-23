@@ -16,6 +16,9 @@ export const IMPORT_COLUMNS = [
   "Scenario Preconditions",
   "Scenario Expected Result",
   "Test Group Objective",
+  "Requirement Code",
+  "Requirement Description",
+  "Requirement Feature",
 ] as const;
 
 export type ImportRow = {
@@ -41,6 +44,14 @@ export type ImportRow = {
   scenarioPreconditions: string;
   scenarioExpectedResult: string;
   testGroupObjective: string;
+  /** Unlike the Scenario/Test Group fields above, these are applied to an
+   * existing Requirement too, not only to the row that creates one: a sheet is
+   * how these are maintained, so a second import is how a correction arrives.
+   * A blank cell still means "leave it alone" — an older sheet without these
+   * columns reads as three empty strings, and must not wipe what is there. */
+  requirementCode: string;
+  requirementDescription: string;
+  requirementFeature: string;
 };
 
 /**
@@ -77,6 +88,9 @@ function toRow(rowNumber: number, record: Record<string, unknown>): ImportRow {
     scenarioPreconditions: get("Scenario Preconditions"),
     scenarioExpectedResult: get("Scenario Expected Result"),
     testGroupObjective: get("Test Group Objective"),
+    requirementCode: get("Requirement Code"),
+    requirementDescription: get("Requirement Description"),
+    requirementFeature: get("Requirement Feature"),
   };
 }
 

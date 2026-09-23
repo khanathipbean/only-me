@@ -64,6 +64,10 @@ export async function getProjectHierarchyRows(projectId: string, projectCode: st
   const rows: string[][] = [];
   for (const mod of modules) {
     for (const requirement of mod.requirements) {
+      // Same "once per container" rule as the Scenario fields below, one level
+      // up: repeating a Requirement's description on all 40 of its rows would
+      // be noise in the sheet someone has to edit.
+      let requirementIntroduced = false;
       for (const scenario of requirement.scenarios) {
         // "Creation-only" fields (Scenario/Test Group description etc.) go on
         // only the first row that introduces that container — matching how
@@ -88,7 +92,11 @@ export async function getProjectHierarchyRows(projectId: string, projectCode: st
               scenarioIntroduced ? "" : scenario.preconditions ?? "",
               scenarioIntroduced ? "" : scenario.expectedResult,
               testGroupIntroduced ? "" : testGroup.testObjective ?? "",
+              requirementIntroduced ? "" : requirement.code ?? "",
+              requirementIntroduced ? "" : requirement.description ?? "",
+              requirementIntroduced ? "" : requirement.feature ?? "",
             ]);
+            requirementIntroduced = true;
             scenarioIntroduced = true;
             testGroupIntroduced = true;
           }

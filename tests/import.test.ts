@@ -13,6 +13,7 @@ import { POST as validateImportRoute } from "@/app/api/projects/[id]/import/vali
 import { POST as confirmImportRoute } from "@/app/api/projects/[id]/import/confirm/route";
 import { IMPORT_COLUMNS } from "@/lib/import/parse";
 import { UNASSIGNED_NAME } from "@/lib/requirements";
+import { getProjectHierarchyRows } from "@/lib/export";
 
 const mockAuth = vi.mocked(auth);
 
@@ -678,5 +679,175 @@ describe("import", () => {
       step: "Enter valid credentials and click Login",
       expectedResult: "Result",
     });
+  });
+  /* The three Requirement columns. Unlike every other level, these are
+   * written to a Requirement that already exists — the sheet is where they
+   * are maintained, so a second import is how a correction arrives. */
+
+  function requirementRow(overrides: Record<string, string> = {}) {
+    return {
+      rowNumber: 1,
+      projectCode: overrides.projectCode ?? "",
+      moduleName: "Data Sharing",
+      requirementName: "Users can reach the dashboard",
+      scenarioName: "Scenario",
+      testGroupName: "Group",
+      testCaseName: "Case",
+      preconditions: "",
+      testSteps: "Step",
+      expectedResult: "Result",
+      priority: "MEDIUM",
+      requirementCode: "",
+      requirementDescription: "",
+      requirementFeature: "",
+      ...overrides,
+    };
+  }
+
+  async function confirmRow(projectId: string, data: Record<string, unknown>) {
+    return confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${projectId}/import/confirm`, "POST", {
+        rows: [{ rowNumber: 1, data }],
+      }),
+      { params: Promise.resolve({ id: projectId }) },
+    );
+  }
+
+  it("sets a new Requirement's Code, Description and Feature from the sheet", async () => {
+    const owner = await createUser("imp-req1@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-R1");
+
+    await confirmRow(
+      project.id,
+      requirementRow({
+        projectCode: "PRJ-IMP-R1",
+        requirementCode: "REQ-DSD-001",
+        requirementDescription: "The user reaches the dashboard and picks a Domain.",
+        requirementFeature: "Sharing Dashboard",
+      }),
+    );
+
+    const requirement = await prisma.requirement.findFirstOrThrow({
+      where: { projectId: project.id, name: "Users can reach the dashboard" },
+    });
+    expect(requirement).toMatchObject({
+      code: "REQ-DSD-001",
+      description: "The user reaches the dashboard and picks a Domain.",
+      feature: "Sharing Dashboard",
+    });
+  });
+
+  it("updates those fields on a Requirement that already exists, and records what changed", async () => {
+    const owner = await createUser("imp-req2@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-R2");
+
+    await confirmRow(
+      project.id,
+      requirementRow({ projectCode: "PRJ-IMP-R2", requirementCode: "REQ-001" }),
+    );
+    await confirmRow(
+      project.id,
+      requirementRow({
+        projectCode: "PRJ-IMP-R2",
+        requirementCode: "REQ-DSD-001",
+        requirementDescription: "Corrected in the sheet.",
+      }),
+    );
+
+    const requirements = await prisma.requirement.findMany({
+      where: { projectId: project.id, name: "Users can reach the dashboard" },
+    });
+    // Corrected in place — not a second Requirement alongside the first.
+    expect(requirements).toHaveLength(1);
+    expect(requirements[0]).toMatchObject({
+      code: "REQ-DSD-001",
+      description: "Corrected in the sheet.",
+    });
+
+    const entries = await prisma.auditLog.findMany({
+      where: { entityType: "Requirement", entityId: requirements[0].id, action: "import-update" },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].oldValue).toEqual({ code: "REQ-001", description: null });
+    expect(entries[0].newValue).toEqual({
+      code: "REQ-DSD-001",
+      description: "Corrected in the sheet.",
+    });
+  });
+
+  it("leaves a stored value alone when the sheet's cell is blank", async () => {
+    const owner = await createUser("imp-req3@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-R3");
+
+    await confirmRow(
+      project.id,
+      requirementRow({
+        projectCode: "PRJ-IMP-R3",
+        requirementCode: "REQ-DSD-001",
+        requirementDescription: "Written the first time.",
+        requirementFeature: "Sharing Dashboard",
+      }),
+    );
+
+    // An older sheet, from before these columns existed: every one blank.
+    await confirmRow(project.id, requirementRow({ projectCode: "PRJ-IMP-R3" }));
+
+    const requirement = await prisma.requirement.findFirstOrThrow({
+      where: { projectId: project.id, name: "Users can reach the dashboard" },
+    });
+    expect(requirement).toMatchObject({
+      code: "REQ-DSD-001",
+      description: "Written the first time.",
+      feature: "Sharing Dashboard",
+    });
+  });
+
+  it("writes no audit entry when the sheet repeats what is already stored", async () => {
+    const owner = await createUser("imp-req4@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-R4");
+
+    const row = requirementRow({
+      projectCode: "PRJ-IMP-R4",
+      requirementCode: "REQ-DSD-001",
+      requirementDescription: "Unchanged.",
+    });
+    await confirmRow(project.id, row);
+    await confirmRow(project.id, row);
+
+    const requirement = await prisma.requirement.findFirstOrThrow({
+      where: { projectId: project.id, name: "Users can reach the dashboard" },
+    });
+    const entries = await prisma.auditLog.findMany({
+      where: { entityType: "Requirement", entityId: requirement.id, action: "import-update" },
+    });
+    expect(entries).toHaveLength(0);
+  });
+
+  it("round-trips all three through export and back", async () => {
+    const owner = await createUser("imp-req5@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const project = await createProject("PRJ-IMP-R5");
+
+    await confirmRow(
+      project.id,
+      requirementRow({
+        projectCode: "PRJ-IMP-R5",
+        requirementCode: "REQ-DSD-001",
+        requirementDescription: "Survives the round trip.",
+        requirementFeature: "Sharing Dashboard",
+      }),
+    );
+
+    const rows = await getProjectHierarchyRows(project.id, "PRJ-IMP-R5");
+    expect(rows).toHaveLength(1);
+
+    const byColumn = Object.fromEntries(IMPORT_COLUMNS.map((column, i) => [column, rows[0][i]]));
+    expect(byColumn["Requirement Code"]).toBe("REQ-DSD-001");
+    expect(byColumn["Requirement Description"]).toBe("Survives the round trip.");
+    expect(byColumn["Requirement Feature"]).toBe("Sharing Dashboard");
   });
 });

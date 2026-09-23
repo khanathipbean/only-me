@@ -13,20 +13,33 @@ const COUNT_LABELS: Record<string, string> = {
   testCases: "test case",
 };
 
-/** "28 requirements and 12 test cases" — only the levels that actually got a
- * new row, so an import that only updated existing Test Cases doesn't claim
- * to have created anything. */
-function describeCreatedCounts(counts: Record<string, number>) {
+function list(counts: Record<string, number>) {
   const parts = Object.entries(counts)
     .filter(([, count]) => count > 0)
     .map(([key, count]) => `${count} ${COUNT_LABELS[key]}${count === 1 ? "" : "s"}`);
-  if (parts.length === 0) {
-    return "No new items were created.";
+  if (parts.length <= 1) {
+    return parts[0];
   }
-  if (parts.length === 1) {
-    return `Imported ${parts[0]}.`;
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** "28 requirements and 12 test cases" — only the levels that actually got a
+ * new row, so an import that only updated existing Test Cases doesn't claim
+ * to have created anything. An import can now also correct a Requirement that
+ * already existed, which creates nothing: reporting only the created counts
+ * would call that "No new items were created" and read as if the file had
+ * been ignored. */
+function describeCounts(created: Record<string, number>, updated: Record<string, number>) {
+  const sentences: string[] = [];
+  const createdList = list(created);
+  const updatedList = list(updated);
+  if (createdList) {
+    sentences.push(`Imported ${createdList}.`);
   }
-  return `Imported ${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}.`;
+  if (updatedList) {
+    sentences.push(`Updated ${updatedList}.`);
+  }
+  return sentences.length > 0 ? sentences.join(" ") : "No new items were created.";
 }
 
 export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, userId }) => {
@@ -49,7 +62,7 @@ export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, u
       projectId,
       type: "IMPORT_COMPLETED",
       title: `Import completed for ${project.code}`,
-      body: describeCreatedCounts(summary.createdCounts),
+      body: describeCounts(summary.createdCounts, summary.updatedCounts),
       link: `/projects/${projectId}/audit-log`,
       actorId: userId,
       excludeUserId: userId,

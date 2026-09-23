@@ -222,6 +222,10 @@ export async function confirmImport(
       // Counts of newly-created rows per level, surfaced in the return value
       // for the notification the caller sends once the import is confirmed.
       const createdCounts = { modules: 0, requirements: 0, scenarios: 0, testGroups: 0, testCases: 0 };
+      /* Separate from `createdCounts`: a re-import that only corrects
+       * Requirement details creates nothing, and reporting that as "No new
+       * items were created" would read as if the file had been ignored. */
+      const updatedCounts = { requirements: 0 };
 
       // Modules ------------------------------------------------------------
       const moduleIdByName = new Map<string, string>();
@@ -289,12 +293,24 @@ export async function confirmImport(
               name: w.requirementName,
             })),
           },
-          select: { id: true, moduleId: true, name: true },
+          select: {
+            id: true,
+            moduleId: true,
+            name: true,
+            // Fetched to compare against: a cell that repeats what is already
+            // stored should write nothing, so re-importing an unchanged sheet
+            // leaves no trail in the audit log.
+            code: true,
+            description: true,
+            feature: true,
+          },
         });
+        const existingByKey = new Map<string, (typeof existing)[number]>();
         for (const requirement of existing) {
           const key = `${requirement.moduleId} ${requirement.name}`;
           if (!requirementIdByKey.has(key)) {
             requirementIdByKey.set(key, requirement.id);
+            existingByKey.set(key, requirement);
           }
         }
 
@@ -308,6 +324,11 @@ export async function confirmImport(
               moduleId: moduleIdByName.get(w.moduleName)!,
               name: w.requirementName,
               priority: w.priority,
+              // Empty cell stays null rather than becoming "", so "not given"
+              // and "given as blank" read the same everywhere downstream.
+              code: w.data.requirementCode || null,
+              description: w.data.requirementDescription || null,
+              feature: w.data.requirementFeature || null,
             })),
           });
           createdCounts.requirements = created.length;
@@ -326,6 +347,59 @@ export async function confirmImport(
               projectId,
               newValue: requirement,
             })),
+          });
+        }
+
+        /* The one level where an import writes to a row that already existed.
+         * Requirement details are maintained in the sheet, so a second import
+         * is how a correction arrives — whereas a repeated Scenario Name is
+         * just the same container named again on every one of its rows, and
+         * writing its description back each time would undo edits made in the
+         * app. Only a non-empty cell writes, and only where it differs: an
+         * older sheet has none of these columns, and reading three empty
+         * strings must never wipe what is already stored. */
+        for (const [key, w] of wantedRequirements) {
+          const current = existingByKey.get(key);
+          if (!current) {
+            continue;
+          }
+
+          const patch: { code?: string; description?: string; feature?: string } = {};
+          if (w.data.requirementCode && w.data.requirementCode !== current.code) {
+            patch.code = w.data.requirementCode;
+          }
+          if (
+            w.data.requirementDescription &&
+            w.data.requirementDescription !== current.description
+          ) {
+            patch.description = w.data.requirementDescription;
+          }
+          if (w.data.requirementFeature && w.data.requirementFeature !== current.feature) {
+            patch.feature = w.data.requirementFeature;
+          }
+          if (Object.keys(patch).length === 0) {
+            continue;
+          }
+
+          await tx.requirement.update({ where: { id: current.id }, data: patch });
+          updatedCounts.requirements += 1;
+          await tx.auditLog.create({
+            data: {
+              entityType: "Requirement",
+              entityId: current.id,
+              action: "import-update",
+              actorId,
+              projectId,
+              // Only the fields this import touched, so the entry reads as
+              // what changed rather than a copy of the whole row.
+              oldValue: Object.fromEntries(
+                Object.keys(patch).map((field) => [
+                  field,
+                  current[field as keyof typeof patch] ?? null,
+                ]),
+              ),
+              newValue: patch,
+            },
           });
         }
       }
@@ -633,6 +707,7 @@ export async function confirmImport(
         failedCount: 0,
         skippedCount,
         createdCounts,
+        updatedCounts,
         importLogId: importLog.id,
       };
     },
