@@ -61,7 +61,14 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${
+      // `w-fit` because `inline-flex` stops deciding the width once the pill
+      // is a flex or grid item: a column container stretches it to the full
+      // width by default, and the Test Group preview showed a DRAFT pill run
+      // the whole way across the dialog. A pill is only ever as wide as what
+      // it says, so the rule belongs here rather than on each caller — the
+      // two callers beside that one were already wrapping their badges in a
+      // row `<div>`, which hid the same trap.
+      className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${
         variant === "outline" ? OUTLINE_CLASS : TONE_CLASS[tone]
       }`}
     >
