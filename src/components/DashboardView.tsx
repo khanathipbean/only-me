@@ -18,6 +18,7 @@ import {
   workflowStatusTone,
 } from "@/components/ui/Badge";
 import { Button, IconButton, LinkButton } from "@/components/ui/Button";
+import { useBackdropDismiss } from "@/components/ui/Modal";
 import {
   BranchIcon,
   FileTextIcon,
@@ -1276,6 +1277,7 @@ const PREVIEW_TONE: Record<PreviewType, Tone> = {
  */
 function PreviewModal({ target, onClose }: { target: PreviewTarget | null; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const backdrop = useBackdropDismiss(onClose);
 
   useEffect(() => {
     if (target) {
@@ -1289,6 +1291,9 @@ function PreviewModal({ target, onClose }: { target: PreviewTarget | null; onClo
     <dialog
       ref={dialogRef}
       onClose={onClose}
+      // Nothing here is edited — it shows a record and offers a link to it —
+      // so a click beside it means "done looking".
+      {...backdrop}
       className={`${dialogClass} max-w-2xl`}
     >
       {target && (

@@ -139,7 +139,14 @@ export function FilePreview({
       </div>
 
       {/* Wide: a PDF page at readable zoom needs more than the default. */}
-      <Dialog open={open} onClose={() => setOpen(false)} title={file.fileName} width="full">
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title={file.fileName}
+        width="full"
+        // Viewing a document, not filling anything in.
+        dismissOnBackdrop
+      >
         <div className="flex flex-col gap-4">
           {/* 70vh, not more: the dialog's own body is capped at 85vh and also
               holds the title row, padding and the buttons below. Asking for
