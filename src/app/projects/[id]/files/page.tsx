@@ -14,6 +14,7 @@ import {
 } from "@/lib/project-files";
 import { listModulesForProject } from "@/lib/modules";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { formatDate } from "@/lib/dates";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { filesBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
@@ -217,7 +218,7 @@ export default async function ProjectFilesPage({
                     file={{
                       id: file.id,
                       fileName: file.fileName,
-                      uploadedAt: file.uploadedAt.toISOString().slice(0, 10),
+                      uploadedAt: formatDate(file.uploadedAt),
                       size: file.size,
                       href: `/api/projects/${projectId}/files/${file.id}`,
                       previewable: canPreview(file.contentType),

@@ -32,19 +32,41 @@ export function formatTimestamp(date: Date): string {
   return TIMESTAMP.format(date);
 }
 
-/** Built once, same reasoning as `TIMESTAMP` above. */
-const DATE_ONLY = new Intl.DateTimeFormat("en-US", {
+/** Built once, same reasoning as `TIMESTAMP` above. `en-GB`, not `en-US`:
+ *  day first, the order this team reads and writes dates in, and the order
+ *  `TIMESTAMP` above already renders. Two date formats disagreeing about
+ *  which number is the month is the kind of thing nobody notices until a
+ *  deadline is read wrong. */
+const DATE_ONLY = new Intl.DateTimeFormat("en-GB", {
   timeZone: TIME_ZONE,
   day: "numeric",
   month: "short",
   year: "numeric",
 });
 
-/** A day with no time on it: "Sep 11, 2026" — for a date that only ever
+/** A day with no time on it: "11 Sept 2026" — for a date that only ever
  *  means a day (created-on, due-by), where a time of day would just be
  *  midnight UTC dressed up as information. */
 export function formatDate(date: Date): string {
   return DATE_ONLY.format(date);
+}
+
+/**
+ * The `yyyy-mm-dd` an `<input type="date">` requires — **not** something to
+ * show anyone.
+ *
+ * It looks like a formatter and is not one: the HTML spec fixes this shape,
+ * so it is the one date string in the app that must never follow the reading
+ * order above. It lived as a private copy in two pages, where it was also
+ * being used for display, which is how a run's dates came out as
+ * "2026-09-01 → 2026-09-15" in the header. Named for the input so the next
+ * person reaches for `formatDate` when they mean to show a date.
+ *
+ * `toISOString` and not a local formatting: these are stored at UTC midnight
+ * and mean a day, so the UTC calendar day is the right one to hand back.
+ */
+export function toDateInputValue(date: Date | null | undefined): string {
+  return date ? date.toISOString().slice(0, 10) : "";
 }
 
 const MINUTE = 60_000;

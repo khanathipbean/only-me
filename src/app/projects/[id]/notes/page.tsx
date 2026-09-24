@@ -20,7 +20,7 @@ import { ResultCount } from "@/components/ui/ResultCount";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { notesBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
-import { formatDate, formatTimestamp } from "@/lib/dates";
+import { formatDate, formatTimestamp, toDateInputValue } from "@/lib/dates";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
@@ -49,12 +49,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const project = await getProjectById(id);
   return { title: project ? `Notes · ${project.name}` : "Notes" };
-}
-
-/** A `<input type="date">` value, or "" — the same shape the Test Runs form
- *  uses for its dates. */
-function toDayValue(date: Date | null) {
-  return date ? date.toISOString().slice(0, 10) : "";
 }
 
 /** Parsed back at UTC midnight: this field is a day, not a moment, and
@@ -270,7 +264,7 @@ export default async function NotesPage({
           <input
             type="date"
             name="occurredOn"
-            defaultValue={toDayValue(defaults?.occurredOn ?? null)}
+            defaultValue={toDateInputValue(defaults?.occurredOn ?? null)}
             className={inputClass}
           />
           <span className="text-xs font-normal text-muted">

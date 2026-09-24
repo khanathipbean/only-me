@@ -31,6 +31,7 @@ import { canPreview, getFileKind } from "@/lib/project-files";
 import { FilePreview } from "@/components/FilePreview";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { formatDate } from "@/lib/dates";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
@@ -411,7 +412,7 @@ export default async function TestCaseDetailPage({
                   file={{
                     id: attachment.id,
                     fileName: attachment.fileName,
-                    uploadedAt: attachment.uploadedAt.toISOString().slice(0, 10),
+                    uploadedAt: formatDate(attachment.uploadedAt),
                     size: attachment.size,
                     href: `/api/test-cases/${testCaseId}/attachments/${attachment.id}`,
                     previewable: canPreview(attachment.contentType),

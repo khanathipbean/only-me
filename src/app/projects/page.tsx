@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { toDateInputValue } from "@/lib/dates";
 import {
   DuplicateCodeError,
   ValidationError,
@@ -351,8 +352,8 @@ export default async function ProjectsPage({
                               name: project.name,
                               description: project.description,
                               status: project.status,
-                              startDate: project.startDate?.toISOString().slice(0, 10),
-                              endDate: project.endDate?.toISOString().slice(0, 10),
+                              startDate: toDateInputValue(project.startDate),
+                              endDate: toDateInputValue(project.endDate),
                             }}
                           />
                         </RowActions>
