@@ -658,6 +658,19 @@ export async function removeCaseFromRun(testRunId: string, testCaseId: string, a
   const runCase = await prisma.testRunCase.findUniqueOrThrow({
     where: { testRunId_testCaseId: { testRunId, testCaseId } },
   });
+
+  /* A recorded result is the round's record of what happened, and removing
+   * the case takes it — along with whatever was attached as evidence — with
+   * no way back. The rule existed before this line, but only as the condition
+   * deciding whether the page rendered a Remove button at all: nothing in the
+   * function itself said so, and a caller that isn't a table row (the bulk
+   * panel, a future API route) would have walked straight past it. */
+  if (runCase.ranAt) {
+    throw new TestRunValidationError(
+      "This case already has a result in this run. Removing it would discard that result and anything attached to it.",
+    );
+  }
+
   // No `onDelete: Cascade` on Attachment.runCase — deleting a TestRunCase
   // that still has one attached would fail on the foreign key. Storage
   // objects are removed after the transaction commits, same reasoning as

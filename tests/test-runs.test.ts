@@ -12,6 +12,7 @@ import {
   listCandidateCases,
   listCasesInRunPage,
   listRunsForProjectPage,
+  removeCaseFromRun,
   setRunCaseResult,
   setRunStatus,
   summariseRunResults,
@@ -455,5 +456,32 @@ describe("test runs", () => {
 
     expect(byName.get("Untouched")!.results).toEqual([]);
     expect(byName.get("Untouched")!.ranCount).toBe(0);
+  });
+  it("refuses to remove a case whose result is already recorded, and still removes one that is not", async () => {
+    const { owner, project, cases } = await seed("run-owner13@example.com", "PRJ-RUN-13");
+    const run = await createRun(project.id, { name: "Guarded" }, owner.id);
+    await addCasesToRun(
+      run.id,
+      cases.map((testCase) => testCase.id),
+      owner.id,
+    );
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "PASSED" }, owner.id);
+
+    /* The page only ever rendered Remove for a case with no `ranAt`, so this
+     * was never reachable from a table row — but the rule lived in that markup
+     * and nowhere else, and removing the case discards the result and every
+     * attachment with it. */
+    await expect(removeCaseFromRun(run.id, cases[0].id, owner.id)).rejects.toBeInstanceOf(
+      TestRunValidationError,
+    );
+    // Nothing was taken on the way to refusing.
+    expect(
+      await prisma.testRunCase.count({ where: { testRunId: run.id, testCaseId: cases[0].id } }),
+    ).toBe(1);
+
+    await removeCaseFromRun(run.id, cases[1].id, owner.id);
+    expect(
+      await prisma.testRunCase.count({ where: { testRunId: run.id, testCaseId: cases[1].id } }),
+    ).toBe(0);
   });
 });
