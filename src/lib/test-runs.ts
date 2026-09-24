@@ -803,3 +803,49 @@ export async function setRunCaseResult(
     mirrorHeldBy: newerRound?.testRun.name ?? null,
   };
 }
+
+/**
+ * The same two actions, over several cases at once.
+ *
+ * Both loop the single-case functions rather than reaching for `updateMany` /
+ * `deleteMany`. Those would be one statement each and would skip everything
+ * that makes the single versions correct: the result mirror onto `TestCase`
+ * with its newest-round rule, the attachment rows and the storage objects
+ * behind them, and an audit entry per case. A bulk path that quietly does
+ * less than the path beside it is the kind of difference nobody finds until
+ * the numbers disagree.
+ */
+export async function setRunCaseResults(
+  testRunId: string,
+  testCaseIds: string[],
+  input: { testResult: TestResult },
+  actorId: string,
+) {
+  for (const testCaseId of testCaseIds) {
+    await setRunCaseResult(testRunId, testCaseId, input, actorId);
+  }
+  return { updated: testCaseIds.length };
+}
+
+/**
+ * Cases with a result are skipped, not refused: someone ticking twenty rows
+ * should not have the whole action fail because one of them has been run.
+ * What was skipped comes back so the caller can say so — silently doing less
+ * than the button promised is the failure this returns a number to avoid.
+ */
+export async function removeCasesFromRun(
+  testRunId: string,
+  testCaseIds: string[],
+  actorId: string,
+) {
+  const removable = await prisma.testRunCase.findMany({
+    where: { testRunId, testCaseId: { in: testCaseIds }, ranAt: null },
+    select: { testCaseId: true },
+  });
+  const removableIds = new Set(removable.map((row) => row.testCaseId));
+
+  for (const testCaseId of removableIds) {
+    await removeCaseFromRun(testRunId, testCaseId, actorId);
+  }
+  return { removed: removableIds.size, skipped: testCaseIds.length - removableIds.size };
+}

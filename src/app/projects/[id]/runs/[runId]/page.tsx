@@ -11,7 +11,9 @@ import {
   listCandidateCases,
   listCasesInRunPage,
   removeCaseFromRun,
+  removeCasesFromRun,
   setRunCaseResult,
+  setRunCaseResults,
   setRunStatus,
   summariseRunResults,
   summariseRunScope,
@@ -28,6 +30,12 @@ import { canPreview, getFileKind } from "@/lib/project-files";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { formatDate } from "@/lib/dates";
 import { CasePicker } from "@/components/CasePicker";
+import {
+  RunCaseSelectCell,
+  RunCaseSelectHeader,
+  RunCaseSelectToggle,
+  RunCaseSelection,
+} from "@/components/RunCaseSelection";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { FilePreview } from "@/components/FilePreview";
@@ -46,6 +54,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { TEST_RESULT_OPTIONS, PRIORITY_OPTIONS } from "@/lib/enums";
 import {
+  formRowClass,
   inputClass,
   labelClass,
   mutedTextClass,
@@ -218,6 +227,62 @@ export default async function TestRunPage({
     );
   }
 
+  /* The panel's two actions. Page-level rather than bound per row: the panel
+   * belongs to the selection, not to any one case, and the ids arrive in the
+   * form it submits. */
+  async function recordSelected(formData: FormData) {
+    "use server";
+    invalidateRouteCache();
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
+    const testResult = formData.get("testResult") as TestResult;
+    try {
+      await setRunCaseResults(runId, ids, { testResult }, session!.user.id);
+    } catch (err) {
+      if (err instanceof TestRunValidationError) {
+        redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+      }
+      throw err;
+    }
+    redirect(
+      withToast(
+        basePath,
+        `Recorded ${testResult.replace(/_/g, " ").toLowerCase()} for ${ids.length} case${ids.length === 1 ? "" : "s"}`,
+      ),
+    );
+  }
+
+  async function removeSelected(formData: FormData) {
+    "use server";
+    invalidateRouteCache();
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
+    let removed = 0;
+    let skipped = 0;
+    try {
+      ({ removed, skipped } = await removeCasesFromRun(runId, ids, session!.user.id));
+    } catch (err) {
+      if (err instanceof TestRunValidationError) {
+        redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+      }
+      throw err;
+    }
+    /* Says what happened, not what was asked for: a case that gained a result
+     * between ticking it and pressing the button is skipped here, and a toast
+     * reading "Removed 5" when 4 went would be the lie the counting exists to
+     * avoid. */
+    redirect(
+      withToast(
+        basePath,
+        skipped > 0
+          ? `Removed ${removed}; kept ${skipped} that already had a result`
+          : `Removed ${removed} case${removed === 1 ? "" : "s"} from this run`,
+      ),
+    );
+  }
+
   async function closeRun() {
     "use server";
     invalidateRouteCache();
@@ -342,6 +407,14 @@ export default async function TestRunPage({
 
   return (
     <main className={pageClass}>
+      {/* Wraps the header as well as the list: the Select button belongs with
+          the round's other page-level actions, and it reads the same state the
+          panel does. */}
+      <RunCaseSelection
+        cases={cases.map((row) => ({ testCaseId: row.testCase.id, ran: Boolean(row.ranAt) }))}
+        setResultAction={recordSelected}
+        removeAction={removeSelected}
+      >
       <Breadcrumb
         segments={testRunBreadcrumb({ id: projectId, name: nameOr(project, projectId) }, run)}
       />
@@ -555,10 +628,21 @@ export default async function TestRunPage({
           cases" — those pick from what is not in the round yet, these narrow
           what is. Only shown once there is a round to narrow. */}
       {casePage.totalInRun > 0 && (
+        /* Select sits with the filters rather than up in the page header:
+           narrowing the list and then acting on what is left is one move, and
+           the header's other buttons are about the round as a whole. Open
+           rounds only — a closed one is read-only, and offering the mode then
+           refusing every action in it is worse than not offering it. */
+        <div className="flex flex-wrap items-end justify-between gap-3">
+        {/* `formRowClass`, not a grid: two fields don't need columns, and a
+            grid track told the search box to fill whatever was left — most of
+            the row, on a wide monitor. `flex-1` matters as much: `inputClass`
+            is `w-full`, so without a definite width to be full of, the field
+            claimed the whole line and pushed Result onto the next one. */}
         <FilterForm
           action={basePath}
           showClear={Boolean(result || caseSearch)}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_auto]"
+          className={`${formRowClass} flex-1`}
           ownLayout
         >
           {/* No visible label: the placeholder already says what it searches,
@@ -571,7 +655,8 @@ export default async function TestRunPage({
             defaultValue={caseSearch ?? ""}
             placeholder="Search name or code, e.g. TC-PM-044"
             aria-label="Search cases in this run"
-            className={`${inputClass} self-end`}
+            /* `max-w-xs`, the width every other search box on the site takes. */
+            className={`${inputClass} max-w-xs self-end`}
           />
           <label className={labelClass}>
             Result
@@ -579,9 +664,12 @@ export default async function TestRunPage({
               name="result"
               defaultValue={result ?? ""}
               options={[{ value: "", label: "Any result" }, ...TEST_RESULT_OPTIONS]}
+              className="max-w-40"
             />
           </label>
         </FilterForm>
+        {isOpen && <RunCaseSelectToggle />}
+        </div>
       )}
 
       {casePage.totalInRun === 0 ? (
@@ -649,7 +737,11 @@ export default async function TestRunPage({
               <div className={tableWrapClass}>
                 <table className={tableClass}>
                   <colgroup>
-                    <col className="w-[36%]" />
+                    {/* The checkbox column is always in the grid, empty while
+                        select mode is off, so turning it on doesn't reflow
+                        every other column. */}
+                    <col className="w-[3%]" />
+                    <col className="w-[33%]" />
                     <col className="w-[10%]" />
                     <col className="w-[16%]" />
                     <col className="w-[14%]" />
@@ -659,6 +751,10 @@ export default async function TestRunPage({
                   </colgroup>
                   <thead>
                     <tr>
+                      <RunCaseSelectHeader
+                        className={thCenterClass}
+                        testCaseIds={group.rows.map((row) => row.testCase.id)}
+                      />
                       <th className={thClass}>Test Case</th>
                       <th className={thCenterClass}>Priority</th>
                       <th className={thCenterClass}>Result in this run</th>
@@ -679,10 +775,15 @@ export default async function TestRunPage({
                       return (
                         <ExpandableRow
                           key={row.id}
-                          colSpan={7}
+                          colSpan={8}
                           detailLabel={row.testCase.name}
                           cells={
                             <>
+                              <RunCaseSelectCell
+                                className={tdCenterClass}
+                                testCaseId={row.testCase.id}
+                                name={row.testCase.name}
+                              />
                               <td className={tdClass}>
                                 <span className="text-foreground">{row.testCase.name}</span>
                                 {row.testCase.deletedAt && (
@@ -877,6 +978,8 @@ export default async function TestRunPage({
           })}
         </div>
       )}
+
+      </RunCaseSelection>
 
       <Pagination
         page={casePage.page}

@@ -13,7 +13,9 @@ import {
   listCasesInRunPage,
   listRunsForProjectPage,
   removeCaseFromRun,
+  removeCasesFromRun,
   setRunCaseResult,
+  setRunCaseResults,
   setRunStatus,
   summariseRunResults,
   summariseRunScope,
@@ -483,5 +485,47 @@ describe("test runs", () => {
     expect(
       await prisma.testRunCase.count({ where: { testRunId: run.id, testCaseId: cases[1].id } }),
     ).toBe(0);
+  });
+  it("acts on several cases at once, skipping the removes it must not do", async () => {
+    const { owner, project, cases } = await seed("run-owner14@example.com", "PRJ-RUN-14");
+    const run = await createRun(project.id, { name: "Bulk" }, owner.id);
+    await addCasesToRun(
+      run.id,
+      cases.map((testCase) => testCase.id),
+      owner.id,
+    );
+
+    const all = cases.map((testCase) => testCase.id);
+    await setRunCaseResults(run.id, all, { testResult: "PASSED" }, owner.id);
+
+    const recorded = await prisma.testRunCase.findMany({ where: { testRunId: run.id } });
+    expect(recorded.every((row) => row.testResult === "PASSED")).toBe(true);
+    // Looped through the single-case function, so the mirror onto the Test
+    // Case still happens — an updateMany would have skipped it silently.
+    const mirrored = await prisma.testCase.findMany({ where: { id: { in: all } } });
+    expect(mirrored.every((row) => row.testResult === "PASSED")).toBe(true);
+
+    // Every one of them now has a result, so none may be removed.
+    expect(await removeCasesFromRun(run.id, all, owner.id)).toEqual({ removed: 0, skipped: 3 });
+    expect(await prisma.testRunCase.count({ where: { testRunId: run.id } })).toBe(3);
+
+    // A mixed selection: the unrun one goes, the rest are kept and counted.
+    const fresh = await createTestCase(
+      (await prisma.testGroup.findFirstOrThrow({ where: { name: `Group PRJ-RUN-14` } })).id,
+      {
+        name: "Not run yet",
+        expectedResult: "ok",
+        priority: "MEDIUM",
+        steps: [{ step: "s", expectedResult: "r" }],
+      },
+      owner.id,
+    );
+    await addCasesToRun(run.id, [fresh.id], owner.id);
+
+    expect(await removeCasesFromRun(run.id, [...all, fresh.id], owner.id)).toEqual({
+      removed: 1,
+      skipped: 3,
+    });
+    expect(await prisma.testRunCase.count({ where: { testRunId: run.id } })).toBe(3);
   });
 });
