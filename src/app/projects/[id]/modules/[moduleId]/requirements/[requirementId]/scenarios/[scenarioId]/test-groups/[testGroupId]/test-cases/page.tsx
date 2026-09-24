@@ -10,7 +10,7 @@ import {
   updateTestCase,
 } from "@/lib/test-cases";
 import { ConfirmForm } from "@/components/ConfirmForm";
-import { BulkSelectionProvider } from "@/components/BulkSelectionProvider";
+import { BulkSelectToggle, BulkSelectionProvider } from "@/components/BulkSelectionProvider";
 import { BulkSelectAllCheckbox } from "@/components/BulkSelectAllCheckbox";
 import { BulkSelectCheckbox } from "@/components/BulkSelectCheckbox";
 import { BulkActionBar } from "@/components/BulkActionBar";
@@ -247,6 +247,11 @@ export default async function TestCasesPage({
           testGroup,
         )}
       />
+      {/* Wraps the header too: the Select button belongs with the page's own
+          actions, and it reads the same state the checkboxes do. Keyed on the
+          filters so changing them starts a fresh selection rather than
+          carrying ticks for rows that are no longer listed. */}
+      <BulkSelectionProvider key={listQueryString}>
       <PageHeader
         title={
           <>
@@ -255,6 +260,8 @@ export default async function TestCasesPage({
           </>
         }
         actions={
+          <>
+          {testCases.length > 0 && <BulkSelectToggle />}
           <Modal
             triggerLabel="+ New Test Case"
             title="New Test Case"
@@ -266,6 +273,7 @@ export default async function TestCasesPage({
               error={editId ? undefined : error}
             />
           </Modal>
+          </>
         }
       />
 
@@ -319,7 +327,7 @@ export default async function TestCasesPage({
             : "No Test Cases yet. Create one to get started."}
         </p>
       ) : (
-        <BulkSelectionProvider key={listQueryString}>
+        <>
           <ConfirmForm
             id="bulk-archive-test-cases"
             action={bulkArchive}
@@ -474,7 +482,7 @@ export default async function TestCasesPage({
               </tbody>
             </table>
           </div>
-        </BulkSelectionProvider>
+        </>
       )}
 
       <Pagination
@@ -483,6 +491,7 @@ export default async function TestCasesPage({
         total={testCasePage.total}
         pageSize={testCasePage.pageSize}
       />
+      </BulkSelectionProvider>
     </main>
   );
 }

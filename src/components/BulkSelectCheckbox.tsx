@@ -16,7 +16,10 @@ export function BulkSelectCheckbox({
   formId: string;
   name: string;
 }) {
-  const { selected, toggle } = useBulkSelection();
+  const { active, selected, toggle } = useBulkSelection();
+  if (!active) {
+    return null;
+  }
   return (
     <input
       type="checkbox"

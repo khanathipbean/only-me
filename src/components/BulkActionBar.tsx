@@ -7,8 +7,8 @@ import { useBulkSelection } from "@/components/BulkSelectionProvider";
  *  the count comes straight from `BulkSelectionProvider`'s state, not a DOM
  *  query, so it stays in sync with every `BulkSelectCheckbox`/select-all. */
 export function BulkActionBar({ noun, children }: { noun: string; children: ReactNode }) {
-  const { selected } = useBulkSelection();
-  if (selected.size === 0) {
+  const { active, selected } = useBulkSelection();
+  if (!active || selected.size === 0) {
     return null;
   }
 

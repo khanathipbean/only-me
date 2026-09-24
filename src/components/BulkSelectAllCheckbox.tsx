@@ -3,8 +3,11 @@
 import { useBulkSelection } from "@/components/BulkSelectionProvider";
 
 export function BulkSelectAllCheckbox({ ids }: { ids: string[] }) {
-  const { selected, selectAll, clear } = useBulkSelection();
+  const { active, selected, selectAll, clear } = useBulkSelection();
   const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+  if (!active) {
+    return null;
+  }
   return (
     <input
       type="checkbox"
