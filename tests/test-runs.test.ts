@@ -14,6 +14,7 @@ import {
   listRunsForProjectPage,
   setRunCaseResult,
   setRunStatus,
+  summariseRunResults,
   summariseRunScope,
 } from "@/lib/test-runs";
 
@@ -376,5 +377,83 @@ describe("test runs", () => {
     const scope = await summariseRunScope(run.id);
     expect(scope.modules.map((mod) => mod.name)).toEqual(["Access", "Billing"]);
     expect(scope.requirementCount).toBe(3);
+
+    // Each Module carries how it is going, counted only over its own cases.
+    await setRunCaseResult(run.id, inRun[0].id, { testResult: "FAILED" }, owner.id);
+    const after = await summariseRunScope(run.id);
+    expect(after.modules.find((mod) => mod.name === "Access")!.results).toEqual([
+      { result: "NOT_RUN", count: 1 },
+      { result: "FAILED", count: 1 },
+    ]);
+    expect(after.modules.find((mod) => mod.name === "Billing")!.results).toEqual([
+      { result: "NOT_RUN", count: 1 },
+    ]);
+  });
+  it("filters a round by result and by case name, without letting either touch the round's own totals", async () => {
+    const { owner, project, cases } = await seed("run-owner11@example.com", "PRJ-RUN-11");
+    const run = await createRun(project.id, { name: "Filtering" }, owner.id);
+    await addCasesToRun(
+      run.id,
+      cases.map((testCase) => testCase.id),
+      owner.id,
+    );
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "FAILED" }, owner.id);
+    await setRunCaseResult(run.id, cases[1].id, { testResult: "PASSED" }, owner.id);
+
+    const failed = await listCasesInRunPage(run.id, { result: "FAILED" });
+    expect(failed.items.map((row) => row.testCase.id)).toEqual([cases[0].id]);
+    expect(failed.total).toBe(1);
+    /* The point of the test: "N of M run" is a statement about the round, so
+     * neither number may follow the filter. Reading "1 of 1 run" while the
+     * round holds three cases would be worse than having no filter. */
+    expect(failed.totalInRun).toBe(3);
+    expect(failed.ranCount).toBe(2);
+
+    const notRun = await listCasesInRunPage(run.id, { result: "NOT_RUN" });
+    expect(notRun.items.map((row) => row.testCase.id)).toEqual([cases[2].id]);
+
+    // Case-insensitive, and matched against the name, which carries the code.
+    const byName = await listCasesInRunPage(run.id, { search: "case b" });
+    expect(byName.items.map((row) => row.testCase.id)).toEqual([cases[1].id]);
+    expect(byName.totalInRun).toBe(3);
+
+    const both = await listCasesInRunPage(run.id, { result: "PASSED", search: "Case A" });
+    expect(both.items).toHaveLength(0);
+
+    const totals = await summariseRunResults(run.id);
+    expect(totals).toEqual([
+      { result: "NOT_RUN", count: 1 },
+      { result: "PASSED", count: 1 },
+      { result: "FAILED", count: 1 },
+    ]);
+  });
+  it("gives each round in the list its result breakdown, and a ran count that agrees with it", async () => {
+    const { owner, project, cases } = await seed("run-owner12@example.com", "PRJ-RUN-12");
+
+    const worked = await createRun(project.id, { name: "Worked on" }, owner.id);
+    await addCasesToRun(
+      worked.id,
+      cases.map((testCase) => testCase.id),
+      owner.id,
+    );
+    await setRunCaseResult(worked.id, cases[0].id, { testResult: "PASSED" }, owner.id);
+    await setRunCaseResult(worked.id, cases[1].id, { testResult: "FAILED" }, owner.id);
+
+    // A round with no cases at all still has to come back, with nothing in it.
+    await createRun(project.id, { name: "Untouched" }, owner.id);
+
+    const { items } = await listRunsForProjectPage(project.id);
+    const byName = new Map(items.map((run) => [run.name, run]));
+
+    expect(byName.get("Worked on")!.results).toEqual([
+      { result: "NOT_RUN", count: 1 },
+      { result: "PASSED", count: 1 },
+      { result: "FAILED", count: 1 },
+    ]);
+    // Derived from the same rows as the breakdown, so the two cannot disagree.
+    expect(byName.get("Worked on")!.ranCount).toBe(2);
+
+    expect(byName.get("Untouched")!.results).toEqual([]);
+    expect(byName.get("Untouched")!.ranCount).toBe(0);
   });
 });

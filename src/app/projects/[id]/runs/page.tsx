@@ -13,20 +13,23 @@ import {
   updateRun,
 } from "@/lib/test-runs";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { formatDate, toDateInputValue } from "@/lib/dates";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
 import { nameOr, testRunsBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ResultCount } from "@/components/ui/ResultCount";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { RowActions } from "@/components/ui/RowActions";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, testResultTone } from "@/components/ui/Badge";
 import { isTestRunOverdue } from "@/lib/deadlines";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { invalidateRouteCache } from "@/lib/revalidate";
 import {
   inputClass,
@@ -57,10 +60,6 @@ function parseDay(value: FormDataEntryValue | null) {
   }
   const date = new Date(`${text}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function toDayValue(date: Date | null) {
-  return date ? date.toISOString().slice(0, 10) : "";
 }
 
 export default async function TestRunsPage({
@@ -276,55 +275,61 @@ export default async function TestRunsPage({
         </p>
       )}
 
-      <FilterForm showClear={hasFilters}>
-        <input
-          type="text"
-          name="search"
-          placeholder="Search run name"
-          defaultValue={search}
-          className={`${inputClass} max-w-xs`}
-        />
-        <label className={labelClass}>
-          Status
-          <Select
-            name="status"
-            defaultValue={status ?? ""}
-            options={[
-              { value: "", label: "All" },
-              { value: "OPEN", label: "Open" },
-              { value: "CLOSED", label: "Closed" },
-            ]}
-            ariaLabel="Status"
-            className="max-w-40"
+      {/* Wrapped with the count the way every other list page does it: the
+          number of matching rows beside the filters, rather than only at the
+          bottom in Pagination's own "X total". */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterForm showClear={hasFilters} className="flex-1">
+          <input
+            type="text"
+            name="search"
+            placeholder="Search run name"
+            defaultValue={search}
+            className={`${inputClass} max-w-xs`}
           />
-        </label>
-        <label className={labelClass}>
-          Show
-          <Select
-            name="archived"
-            defaultValue={archived ?? ""}
-            options={[
-              { value: "", label: "Active" },
-              { value: "1", label: "Archived" },
-            ]}
-            ariaLabel="Show"
-            className="max-w-36"
-          />
-        </label>
-        <label className={labelClass}>
-          Deadline
-          <Select
-            name="overdue"
-            defaultValue={overdue ?? ""}
-            options={[
-              { value: "", label: "All" },
-              { value: "1", label: "Overdue only" },
-            ]}
-            ariaLabel="Deadline"
-            className="max-w-36"
-          />
-        </label>
-      </FilterForm>
+          <label className={labelClass}>
+            Status
+            <Select
+              name="status"
+              defaultValue={status ?? ""}
+              options={[
+                { value: "", label: "All" },
+                { value: "OPEN", label: "Open" },
+                { value: "CLOSED", label: "Closed" },
+              ]}
+              ariaLabel="Status"
+              className="max-w-40"
+            />
+          </label>
+          <label className={labelClass}>
+            Show
+            <Select
+              name="archived"
+              defaultValue={archived ?? ""}
+              options={[
+                { value: "", label: "Active" },
+                { value: "1", label: "Archived" },
+              ]}
+              ariaLabel="Show"
+              className="max-w-36"
+            />
+          </label>
+          <label className={labelClass}>
+            Deadline
+            <Select
+              name="overdue"
+              defaultValue={overdue ?? ""}
+              options={[
+                { value: "", label: "All" },
+                { value: "1", label: "Overdue only" },
+              ]}
+              ariaLabel="Deadline"
+              className="max-w-36"
+            />
+            </label>
+        </FilterForm>
+        <ResultCount total={result.total} />
+      </div>
 
       {runs.length === 0 ? (
         <p className={mutedTextClass}>
@@ -337,11 +342,13 @@ export default async function TestRunsPage({
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>
+            {/* Progress takes the room the result badges need; Dates gives it
+                up, a fixed-width date range having had more than it used. */}
             <colgroup>
-              <col className="w-[34%]" />
-              <col className="w-[20%]" />
+              <col className="w-[30%]" />
               <col className="w-[16%]" />
-              <col className="w-[16%]" />
+              <col className="w-[26%]" />
+              <col className="w-[14%]" />
               <col className="w-[14%]" />
             </colgroup>
             <thead>
@@ -382,17 +389,31 @@ export default async function TestRunsPage({
                     </td>
                     <td className={`${tdClass} text-muted`}>
                       {run.startsOn || run.endsOn
-                        ? `${toDayValue(run.startsOn) || "—"} → ${toDayValue(run.endsOn) || "—"}`
+                        ? `${run.startsOn ? formatDate(run.startsOn) : "—"} → ${run.endsOn ? formatDate(run.endsOn) : "—"}`
                         : "—"}
                     </td>
                     <td className={`${tdCenterClass} tabular-nums`}>
                       {total === 0 ? (
                         <span className="text-muted">no cases yet</span>
                       ) : (
-                        <>
-                          {run.ranCount} / {total}
-                          <span className="ml-2 text-xs text-muted">{pct}%</span>
-                        </>
+                        <div className="flex flex-col items-center gap-1.5">
+                          <span>
+                            {run.ranCount} / {total}
+                            <span className="ml-2 text-xs text-muted">{pct}%</span>
+                          </span>
+                          {/* The fraction says how far along, not how it is
+                              going — a round can be finished and still be
+                              mostly red. Under it rather than in a column of
+                              its own: it is the same question, answered in
+                              more detail. */}
+                          <span className="flex flex-wrap justify-center gap-1">
+                            {run.results.map((entry) => (
+                              <Badge key={entry.result} tone={testResultTone(entry.result)}>
+                                {entry.result.replace(/_/g, " ")} {entry.count}
+                              </Badge>
+                            ))}
+                          </span>
+                        </div>
                       )}
                     </td>
                     <td className={tdCenterClass}>
@@ -420,6 +441,7 @@ export default async function TestRunsPage({
                             </p>
                           )}
                           <form
+                            id={`edit-run-${run.id}`}
                             action={actions.update}
                             className="grid grid-cols-1 gap-4 sm:grid-cols-2"
                           >
@@ -450,7 +472,7 @@ export default async function TestRunsPage({
                               <input
                                 type="date"
                                 name="startsOn"
-                                defaultValue={toDayValue(run.startsOn)}
+                                defaultValue={toDateInputValue(run.startsOn)}
                                 className={inputClass}
                               />
                             </label>
@@ -459,57 +481,75 @@ export default async function TestRunsPage({
                               <input
                                 type="date"
                                 name="endsOn"
-                                defaultValue={toDayValue(run.endsOn)}
+                                defaultValue={toDateInputValue(run.endsOn)}
                                 className={inputClass}
                               />
                             </label>
-                            <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
-                              <DialogCloseButton />
-                              <SubmitButton disabled={run.status === "CLOSED"}>
-                                Save
-                              </SubmitButton>
-                            </div>
                           </form>
 
-                          <section className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-5">
-                            {run.status === "OPEN" ? (
-                              <ConfirmForm
-                                action={actions.close}
-                                confirmMessage="Close this run? Its results can't be changed until it is reopened."
+                          {/* One row, not two. Close run and Archive used to sit
+                              in a section of their own below the form, which put
+                              them where the eye expects Cancel and Save — so the
+                              button people reach for by position was the one that
+                              ends the round. They keep the left, away from that
+                              reach; Cancel and Save take the right, where every
+                              other dialog in the app puts them.
+
+                              Save reaches the form by id rather than by being
+                              inside it, which is what `FormSubmitButton` is for:
+                              `useFormStatus` only reports an ancestor form, so a
+                              plain SubmitButton out here would never show its
+                              pending state. */}
+                          <section className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
+                            <div className="flex flex-wrap gap-2">
+                              {run.status === "OPEN" ? (
+                                <ConfirmForm
+                                  action={actions.close}
+                                  confirmMessage="Close this run? Its results can't be changed until it is reopened."
+                                >
+                                  <SubmitButton variant="secondary" pendingLabel="Closing…">
+                                    Close run
+                                  </SubmitButton>
+                                </ConfirmForm>
+                              ) : (
+                                <ConfirmForm
+                                  action={actions.reopen}
+                                  confirmMessage="Reopen this run so its results can be changed again?"
+                                >
+                                  <SubmitButton variant="secondary" pendingLabel="Reopening…">
+                                    Reopen run
+                                  </SubmitButton>
+                                </ConfirmForm>
+                              )}
+                              {showArchived ? (
+                                <ConfirmForm
+                                  action={actions.restore}
+                                  confirmMessage="Restore this run?"
+                                >
+                                  <SubmitButton variant="secondary" pendingLabel="Restoring…">
+                                    Restore
+                                  </SubmitButton>
+                                </ConfirmForm>
+                              ) : (
+                                <ConfirmForm
+                                  action={actions.archive}
+                                  confirmMessage="Archive this run? Its results are kept."
+                                >
+                                  <SubmitButton variant="secondary" pendingLabel="Archiving…">
+                                    Archive
+                                  </SubmitButton>
+                                </ConfirmForm>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <DialogCloseButton />
+                              <FormSubmitButton
+                                formId={`edit-run-${run.id}`}
+                                disabled={run.status === "CLOSED"}
                               >
-                                <SubmitButton variant="secondary" pendingLabel="Closing…">
-                                  Close run
-                                </SubmitButton>
-                              </ConfirmForm>
-                            ) : (
-                              <ConfirmForm
-                                action={actions.reopen}
-                                confirmMessage="Reopen this run so its results can be changed again?"
-                              >
-                                <SubmitButton variant="secondary" pendingLabel="Reopening…">
-                                  Reopen run
-                                </SubmitButton>
-                              </ConfirmForm>
-                            )}
-                            {showArchived ? (
-                              <ConfirmForm
-                                action={actions.restore}
-                                confirmMessage="Restore this run?"
-                              >
-                                <SubmitButton variant="secondary" pendingLabel="Restoring…">
-                                  Restore
-                                </SubmitButton>
-                              </ConfirmForm>
-                            ) : (
-                              <ConfirmForm
-                                action={actions.archive}
-                                confirmMessage="Archive this run? Its results are kept."
-                              >
-                                <SubmitButton variant="secondary" pendingLabel="Archiving…">
-                                  Archive
-                                </SubmitButton>
-                              </ConfirmForm>
-                            )}
+                                Save
+                              </FormSubmitButton>
+                            </div>
                           </section>
                         </RowActions>
                       </div>

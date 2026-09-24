@@ -58,6 +58,12 @@ const LIVE_CASE = {
   testGroup: { deletedAt: null, scenario: { deletedAt: null } },
 } as const;
 
+/* The order the summary reads in, worst-news-first after the unrun ones, and
+ * typed rather than borrowed from `TEST_RESULT_OPTIONS` — that list exists to
+ * fill a <select> and its values are plain strings. */
+const RESULT_ORDER = ["NOT_RUN", "PASSED", "FAILED", "BLOCKED", "SKIPPED"] as const satisfies
+  readonly TestResult[];
+
 const RUN_WITH_PROGRESS = {
   _count: { select: { cases: true } },
   createdBy: { select: { id: true, name: true } },
@@ -111,19 +117,40 @@ export async function listRunsForProjectPage(
       }),
   );
 
-  // How far each round has got, counted in one grouped query rather than one
-  // per row — a project with many rounds would otherwise be N round trips.
+  /* How each round stands, in one grouped query rather than one per row — a
+   * project with many rounds would otherwise be N round trips. Grouped by
+   * result as well as by round, so the list can say how a round is going and
+   * not only how far along it is: `ranCount` then falls out of the same rows
+   * instead of costing a second query. */
   const runIds = page.items.map((run) => run.id);
-  const ranRows = await prisma.testRunCase.groupBy({
-    by: ["testRunId"],
-    where: { testRunId: { in: runIds }, testResult: { not: "NOT_RUN" } },
+  const rows = await prisma.testRunCase.groupBy({
+    by: ["testRunId", "testResult"],
+    where: { testRunId: { in: runIds } },
     _count: { _all: true },
   });
-  const ranByRun = new Map(ranRows.map((row) => [row.testRunId, row._count._all]));
+  const byRun = new Map<string, Map<TestResult, number>>();
+  for (const row of rows) {
+    const counts = byRun.get(row.testRunId) ?? new Map<TestResult, number>();
+    counts.set(row.testResult, row._count._all);
+    byRun.set(row.testRunId, counts);
+  }
 
   return {
     ...page,
-    items: page.items.map((run) => ({ ...run, ranCount: ranByRun.get(run.id) ?? 0 })),
+    items: page.items.map((run) => {
+      const counts = byRun.get(run.id);
+      const results = RESULT_ORDER.map((result) => ({
+        result,
+        count: counts?.get(result) ?? 0,
+      })).filter((entry) => entry.count > 0);
+      return {
+        ...run,
+        results,
+        ranCount: results
+          .filter((entry) => entry.result !== "NOT_RUN")
+          .reduce((sum, entry) => sum + entry.count, 0),
+      };
+    }),
   };
 }
 
@@ -229,9 +256,29 @@ export async function listCasesInRun(testRunId: string) {
  *  export. `ranCount` is counted separately rather than derived from the
  *  page's own rows, since "N of M run" has to mean the whole round, not just
  *  whichever page happens to be showing. */
-export async function listCasesInRunPage(testRunId: string, filters: PageFilters = {}) {
-  const where = { testRunId };
-  const [page, ranCount] = await Promise.all([
+export type RunCaseFilters = PageFilters & {
+  /** One result to show. During a round the question is almost always "what
+   *  is left" or "what failed" — both are this filter. */
+  result?: TestResult;
+  /** Matched against the Test Case's name, which carries its code
+   *  ("TC-PM-044 …"), so typing either finds it. */
+  search?: string;
+};
+
+export async function listCasesInRunPage(testRunId: string, filters: RunCaseFilters = {}) {
+  const where = {
+    testRunId,
+    ...(filters.result ? { testResult: filters.result } : {}),
+    ...(filters.search
+      ? { testCase: { name: { contains: filters.search, mode: "insensitive" as const } } }
+      : {}),
+  };
+
+  /* `ranCount` and `totalInRun` deliberately ignore `where`: "N of M run" is a
+   * statement about the round, and a filter that made it read "3 of 5" while
+   * the round holds 59 cases would be worse than no filter at all. Same
+   * reason `filteredTotal` is reported separately rather than reusing it. */
+  const [page, ranCount, totalInRun] = await Promise.all([
     paginate(
       filters,
       () => prisma.testRunCase.count({ where }),
@@ -245,8 +292,29 @@ export async function listCasesInRunPage(testRunId: string, filters: PageFilters
         }),
     ),
     prisma.testRunCase.count({ where: { testRunId, testResult: { not: "NOT_RUN" } } }),
+    prisma.testRunCase.count({ where: { testRunId } }),
   ]);
-  return { ...page, ranCount };
+  return { ...page, ranCount, totalInRun };
+}
+
+/**
+ * How the round stands, by result — the whole round, never the filtered view.
+ *
+ * "30 of 59 run" says how far along it is but not how it is going; a round
+ * can be finished and still be mostly red. One grouped count answers both,
+ * and gives the result filter something to hang off: every number here is a
+ * link that narrows the list to exactly those rows.
+ */
+export async function summariseRunResults(testRunId: string) {
+  const rows = await prisma.testRunCase.groupBy({
+    by: ["testResult"],
+    where: { testRunId },
+    _count: { _all: true },
+  });
+  const counts = new Map(rows.map((row) => [row.testResult, row._count._all]));
+  return RESULT_ORDER.map((result) => ({ result, count: counts.get(result) ?? 0 })).filter(
+    (entry) => entry.count > 0,
+  );
 }
 
 /**
@@ -279,7 +347,37 @@ export async function summariseRunScope(testRunId: string) {
     prisma.requirement.count({ where: { scenarios: inThisRun } }),
   ]);
 
-  return { modules, requirementCount };
+  /* And how each Module is going, since the page bands the list by Module and
+   * "the round is 40% done" says nothing about whether one of them is the part
+   * that is failing.
+   *
+   * One grouped query per Module rather than one for all of them: Prisma's
+   * groupBy takes scalar columns of the table it is on, and the Module here is
+   * four relations away. The alternative — reading every TestRunCase with its
+   * moduleId and folding in JS — is one query but grows with the round, while
+   * this grows with the number of Modules the round touches, which the list
+   * above has just shown to be two or three. */
+  const withResults = await Promise.all(
+    modules.map(async (mod) => {
+      const rows = await prisma.testRunCase.groupBy({
+        by: ["testResult"],
+        where: {
+          testRunId,
+          testCase: { testGroup: { scenario: { requirement: { moduleId: mod.id } } } },
+        },
+        _count: { _all: true },
+      });
+      const counts = new Map(rows.map((row) => [row.testResult, row._count._all]));
+      return {
+        ...mod,
+        results: RESULT_ORDER.map((result) => ({ result, count: counts.get(result) ?? 0 })).filter(
+          (entry) => entry.count > 0,
+        ),
+      };
+    }),
+  );
+
+  return { modules: withResults, requirementCount };
 }
 
 /** Every case in a round with its full ancestor chain, for the results

@@ -13,6 +13,7 @@ import {
   removeCaseFromRun,
   setRunCaseResult,
   setRunStatus,
+  summariseRunResults,
   summariseRunScope,
 } from "@/lib/test-runs";
 import { Pagination } from "@/components/ui/Pagination";
@@ -25,6 +26,7 @@ import {
 } from "@/lib/attachments";
 import { canPreview, getFileKind } from "@/lib/project-files";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { formatDate } from "@/lib/dates";
 import { CasePicker } from "@/components/CasePicker";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
@@ -82,6 +84,11 @@ export default async function TestRunPage({
     error?: string;
     picking?: string;
     attachmentError?: string;
+    /* The run list's own two, deliberately not sharing names with the picker's
+       `search`/`lastResult` above — both sets live in the same query string,
+       and one form clearing the other's field is the bug that shape invites. */
+    result?: string;
+    caseSearch?: string;
     page?: string;
     pageSize?: string;
   }>;
@@ -96,6 +103,8 @@ export default async function TestRunPage({
     error,
     picking,
     attachmentError,
+    result,
+    caseSearch,
     page,
     pageSize,
   } = await searchParams;
@@ -113,11 +122,14 @@ export default async function TestRunPage({
   const isPicking = picking === "1";
   const hasFilters = Boolean(moduleId || requirementId || priority || lastResult || search);
 
-  const [casePage, scope, modules, requirements, candidates] = await Promise.all([
+  const [casePage, resultTotals, scope, modules, requirements, candidates] = await Promise.all([
     listCasesInRunPage(runId, {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
+      result: result as TestResult | undefined,
+      search: caseSearch,
     }),
+    summariseRunResults(runId),
     summariseRunScope(runId),
     listModulesForProject(projectId),
     listRequirementsForProject(projectId),
@@ -150,6 +162,7 @@ export default async function TestRunPage({
   const groups = new Map<
     string,
     {
+      moduleId: string;
       module: string;
       requirement: string;
       feature: string | null;
@@ -166,6 +179,7 @@ export default async function TestRunPage({
     } else {
       const { scenario } = row.testCase.testGroup;
       groups.set(key, {
+        moduleId: scenario.requirement.module.id,
         module: scenario.requirement.module.name,
         requirement: scenario.requirement.name,
         feature: scenario.requirement.feature,
@@ -344,12 +358,12 @@ export default async function TestRunPage({
               </Badge>
             )}
             <span>
-              {ran} of {casePage.total} run
+              {ran} of {casePage.totalInRun} run
             </span>
             {(run.startsOn || run.endsOn) && (
               <span className="text-muted">
-                {run.startsOn?.toISOString().slice(0, 10) ?? "—"} →{" "}
-                {run.endsOn?.toISOString().slice(0, 10) ?? "—"}
+                {run.startsOn ? formatDate(run.startsOn) : "—"} →{" "}
+                {run.endsOn ? formatDate(run.endsOn) : "—"}
               </span>
             )}
             {/* What this round reaches across. It is a fact about the whole
@@ -357,6 +371,22 @@ export default async function TestRunPage({
                 could previously only be worked out by scrolling to the end
                 and remembering. Naming the Modules matters more than counting
                 them — "3 Modules" still leaves you to go and find which. */}
+            {/* How the round is going, not just how far along. "30 of 59 run"
+                can describe a round that is nearly done and nearly all red.
+                Each count links to the filter for exactly those rows, which is
+                the question anyone reading the number asks next. Whole-round
+                figures, never the filtered view. */}
+            {resultTotals.map((entry) => (
+              <a
+                key={entry.result}
+                href={`${basePath}?result=${entry.result}`}
+                className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                <Badge tone={testResultTone(entry.result)}>
+                  {entry.result.replace(/_/g, " ")} {entry.count}
+                </Badge>
+              </a>
+            ))}
             {scope.modules.length > 0 && (
               <span className="text-muted">
                 {scope.modules.length === 1
@@ -373,16 +403,23 @@ export default async function TestRunPage({
         }
         actions={
           <>
+            {/* Three actions that all looked the same, now weighted by what
+                they do. Quietest first: taking a copy away changes nothing
+                here, so it wears no border at all. A plain <a> rather than
+                LinkButton because this is a file download from an API route,
+                not a navigation for the router to intercept. */}
             <a
               href={`/api/projects/${projectId}/runs/${runId}/export`}
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md px-3.5 text-sm font-medium text-muted transition-colors hover:bg-black/[.05] hover:text-foreground dark:hover:bg-white/[.08]"
             >
               Export results
             </a>
             {isOpen && (
+              // The one action that builds the round up - solid, the way
+              // "+ New Run" is on the list this page came from.
               <Modal
                 triggerLabel="+ Add test cases"
-                triggerVariant="secondary"
+                triggerVariant="primary"
                 title="Add test cases to this run"
                 width="lg"
                 openOnMount={isPicking}
@@ -477,6 +514,9 @@ export default async function TestRunPage({
                 action={closeRun}
                 confirmMessage="Close this run? Its results can't be changed until it is reopened."
               >
+                {/* Bordered, between the other two: it stops everyone
+                    recording results, which is worth a pause — but Reopen is
+                    right there, so it is not the red that means "gone". */}
                 <SubmitButton variant="secondary" pendingLabel="Closing…">
                   Close run
                 </SubmitButton>
@@ -511,9 +551,46 @@ export default async function TestRunPage({
         </p>
       )}
 
-      {casePage.total === 0 ? (
+      {/* The round's own filters, separate from the ones inside "Add test
+          cases" — those pick from what is not in the round yet, these narrow
+          what is. Only shown once there is a round to narrow. */}
+      {casePage.totalInRun > 0 && (
+        <FilterForm
+          action={basePath}
+          showClear={Boolean(result || caseSearch)}
+          className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_auto]"
+          ownLayout
+        >
+          {/* No visible label: the placeholder already says what it searches,
+              the way the run list's own search box does, and a label above a
+              single wide field only costs a row. `aria-label` keeps the name
+              for anyone not reading the placeholder. */}
+          <input
+            type="text"
+            name="caseSearch"
+            defaultValue={caseSearch ?? ""}
+            placeholder="Search name or code, e.g. TC-PM-044"
+            aria-label="Search cases in this run"
+            className={`${inputClass} self-end`}
+          />
+          <label className={labelClass}>
+            Result
+            <Select
+              name="result"
+              defaultValue={result ?? ""}
+              options={[{ value: "", label: "Any result" }, ...TEST_RESULT_OPTIONS]}
+            />
+          </label>
+        </FilterForm>
+      )}
+
+      {casePage.totalInRun === 0 ? (
         <p className={mutedTextClass}>
           No cases in this run yet. Use “Add test cases” to pick the ones to re-test.
+        </p>
+      ) : casePage.total === 0 ? (
+        <p className={mutedTextClass}>
+          No case in this run matches those filters.
         </p>
       ) : (
         <div className="flex flex-col gap-6">
@@ -530,13 +607,26 @@ export default async function TestRunPage({
             return (
             <section key={groupId} className={`flex flex-col gap-2 ${newModule && index > 0 ? "mt-4" : ""}`}>
               {newModule && (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <h2 className="text-sm font-semibold tracking-wide text-foreground uppercase">
                     {group.module}
                   </h2>
                   {/* Takes the rest of the row, so the band reads as a divider
                       across the page rather than a label sitting on its own. */}
-                  <span aria-hidden className="h-px flex-1 bg-border" />
+                  <span aria-hidden className="h-px min-w-8 flex-1 bg-border" />
+                  {/* How this Module is going. The round's own total is in the
+                      header, but "40% done" says nothing about which Module is
+                      the part that is failing — and these bands are where
+                      someone scanning the page already is. Counted over the
+                      whole round, so a filtered view does not quietly restate
+                      them as something smaller. */}
+                  {scope.modules
+                    .find((mod) => mod.id === group.moduleId)
+                    ?.results.map((entry) => (
+                      <Badge key={entry.result} tone={testResultTone(entry.result)}>
+                        {entry.result.replace(/_/g, " ")} {entry.count}
+                      </Badge>
+                    ))}
                 </div>
               )}
               {newRequirement && (
@@ -573,8 +663,12 @@ export default async function TestRunPage({
                       <th className={thCenterClass}>Priority</th>
                       <th className={thCenterClass}>Result in this run</th>
                       <th className={thClass}>Notes</th>
-                      <th className={thCenterClass}>Ran</th>
                       <th className={thCenterClass}>Attachments</th>
+                      {/* Last of the data columns because it doubles as the
+                          row's action: a case that has not run yet shows
+                          Remove here instead of a date, and an action belongs
+                          at the end of the row, not in the middle of it. */}
+                      <th className={thCenterClass}>Ran</th>
                       <th className={thCenterClass} />
                     </tr>
                   </thead>
@@ -626,9 +720,12 @@ export default async function TestRunPage({
                               </td>
                               <td className={`${tdClass} text-muted`}>{row.notes ?? "—"}</td>
                               <td className={`${tdCenterClass} text-xs text-muted`}>
+                                {row.attachments.length > 0 ? row.attachments.length : "—"}
+                              </td>
+                              <td className={`${tdCenterClass} text-xs text-muted`}>
                                 {row.ranAt ? (
                                   <>
-                                    {row.ranAt.toISOString().slice(0, 10)}
+                                    {formatDate(row.ranAt)}
                                     {row.ranBy && <div>{row.ranBy.name}</div>}
                                   </>
                                 ) : isOpen ? (
@@ -643,9 +740,6 @@ export default async function TestRunPage({
                                 ) : (
                                   "—"
                                 )}
-                              </td>
-                              <td className={`${tdCenterClass} text-xs text-muted`}>
-                                {row.attachments.length > 0 ? row.attachments.length : "—"}
                               </td>
                             </>
                           }
