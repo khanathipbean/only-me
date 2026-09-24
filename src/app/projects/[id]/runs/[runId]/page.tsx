@@ -13,6 +13,7 @@ import {
   removeCaseFromRun,
   setRunCaseResult,
   setRunStatus,
+  summariseRunScope,
 } from "@/lib/test-runs";
 import { Pagination } from "@/components/ui/Pagination";
 import { withToast } from "@/lib/toast";
@@ -112,11 +113,12 @@ export default async function TestRunPage({
   const isPicking = picking === "1";
   const hasFilters = Boolean(moduleId || requirementId || priority || lastResult || search);
 
-  const [casePage, modules, requirements, candidates] = await Promise.all([
+  const [casePage, scope, modules, requirements, candidates] = await Promise.all([
     listCasesInRunPage(runId, {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
     }),
+    summariseRunScope(runId),
     listModulesForProject(projectId),
     listRequirementsForProject(projectId),
     listCandidateCases(projectId, runId, {
@@ -135,10 +137,26 @@ export default async function TestRunPage({
   const basePath = `/projects/${projectId}/runs/${runId}`;
   /* Grouped by Scenario then Test Group: the chain above a case is what tells
    * two cases of the same name apart, and repeating four levels on every row
-   * would bury the case itself. */
+   * would bury the case itself.
+   *
+   * Above that heading goes where the group came from — Module, Requirement
+   * and its Feature — because a round draws on several Requirements and
+   * nothing stops it drawing on several Modules, and two groups can carry the
+   * same Scenario name under different ones. It prints only where it differs
+   * from the group before: a round confined to one Requirement would
+   * otherwise repeat the same line down the whole page. That collapsing is
+   * only honest because the query now returns cases in hierarchy order
+   * (`RUN_CASE_ORDER`), so everything sharing a Requirement is contiguous. */
   const groups = new Map<
     string,
-    { scenario: string; testGroup: string; rows: typeof cases }
+    {
+      module: string;
+      requirement: string;
+      feature: string | null;
+      scenario: string;
+      testGroup: string;
+      rows: typeof cases;
+    }
   >();
   for (const row of cases) {
     const key = row.testCase.testGroup.id;
@@ -146,8 +164,12 @@ export default async function TestRunPage({
     if (bucket) {
       bucket.rows.push(row);
     } else {
+      const { scenario } = row.testCase.testGroup;
       groups.set(key, {
-        scenario: row.testCase.testGroup.scenario.name,
+        module: scenario.requirement.module.name,
+        requirement: scenario.requirement.name,
+        feature: scenario.requirement.feature,
+        scenario: scenario.name,
         testGroup: row.testCase.testGroup.name,
         rows: [row],
       });
@@ -330,6 +352,23 @@ export default async function TestRunPage({
                 {run.endsOn?.toISOString().slice(0, 10) ?? "—"}
               </span>
             )}
+            {/* What this round reaches across. It is a fact about the whole
+                round, but the list below it is paginated and grouped, so it
+                could previously only be worked out by scrolling to the end
+                and remembering. Naming the Modules matters more than counting
+                them — "3 Modules" still leaves you to go and find which. */}
+            {scope.modules.length > 0 && (
+              <span className="text-muted">
+                {scope.modules.length === 1
+                  ? scope.modules[0].name
+                  : `${scope.modules.length} Modules: ${scope.modules
+                      .map((m) => m.name)
+                      .join(", ")}`}
+                <span className="px-1">·</span>
+                {scope.requirementCount} Requirement
+                {scope.requirementCount === 1 ? "" : "s"}
+              </span>
+            )}
           </span>
         }
         actions={
@@ -478,8 +517,41 @@ export default async function TestRunPage({
         </p>
       ) : (
         <div className="flex flex-col gap-6">
-          {Array.from(groups.entries()).map(([groupId, group]) => (
-            <section key={groupId} className="flex flex-col gap-2">
+          {Array.from(groups.entries()).map(([groupId, group], index, all) => {
+            const previous = index > 0 ? all[index - 1][1] : undefined;
+            /* Two boundaries, drawn with different weight because they carry
+               different amounts of news. Crossing into another Module is the
+               coarse one and happens two or three times in a round; changing
+               Requirement happens constantly. Ruling every Requirement would
+               put a line between nearly every table and stop reading as
+               structure at all. */
+            const newModule = previous?.module !== group.module;
+            const newRequirement = newModule || previous?.requirement !== group.requirement;
+            return (
+            <section key={groupId} className={`flex flex-col gap-2 ${newModule && index > 0 ? "mt-4" : ""}`}>
+              {newModule && (
+                <div className="flex items-center gap-3">
+                  <h2 className="text-sm font-semibold tracking-wide text-foreground uppercase">
+                    {group.module}
+                  </h2>
+                  {/* Takes the rest of the row, so the band reads as a divider
+                      across the page rather than a label sitting on its own. */}
+                  <span aria-hidden className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              {newRequirement && (
+                <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                  {/* No Module here: the band above already said it, and
+                      repeating it pushed the Requirement — the part that
+                      actually changed — off to the right. */}
+                  <span>{group.requirement}</span>
+                  {group.feature && (
+                    <Badge tone="gray" variant="outline">
+                      {group.feature}
+                    </Badge>
+                  )}
+                </p>
+              )}
               <h2 className="text-sm font-semibold text-foreground">
                 {group.scenario}
                 <span className="text-muted"> › {group.testGroup}</span>
@@ -707,7 +779,8 @@ export default async function TestRunPage({
                 </table>
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
       )}
 

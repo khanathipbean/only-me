@@ -144,41 +144,86 @@ export async function getRunCaseWithProjectId(id: string) {
   return { ...runCase, projectId: runCase.testRun.projectId };
 }
 
-/** Every case in a round, with the chain above it so the list can group by
- *  Scenario and Test Group instead of repeating four levels on every row. */
-export async function listCasesInRun(testRunId: string) {
-  return prisma.testRunCase.findMany({
-    where: { testRunId },
-    include: {
-      ranBy: { select: { id: true, name: true } },
-      attachments: { orderBy: { uploadedAt: "desc" } },
-      testCase: {
+/* Shared by the whole-round and the one-page query below. They were two
+ * copies of the same object, with a comment on the second claiming a sameness
+ * nothing enforced — and only one of them would have grown the Requirement
+ * level. */
+const RUN_CASE_INCLUDE = {
+  ranBy: { select: { id: true, name: true } },
+  attachments: { orderBy: { uploadedAt: "desc" } },
+  testCase: {
+    select: {
+      id: true,
+      name: true,
+      priority: true,
+      deletedAt: true,
+      condition: true,
+      preconditions: true,
+      testData: true,
+      expectedResult: true,
+      steps: { orderBy: { sequence: "asc" } },
+      testGroup: {
         select: {
           id: true,
           name: true,
-          priority: true,
-          deletedAt: true,
-          condition: true,
-          preconditions: true,
-          testData: true,
-          expectedResult: true,
-          steps: { orderBy: { sequence: "asc" } },
-          testGroup: {
+          sequence: true,
+          scenario: {
             select: {
               id: true,
               name: true,
-              sequence: true,
-              scenario: { select: { id: true, name: true } },
+              /* A round draws on several Requirements, and nothing stops it
+               * drawing on several Modules — so "Scenario › Test Group" alone
+               * leaves two similarly-named groups indistinguishable. Reached
+               * through a relation the query already walks: a wider row, not
+               * another query. The results export has carried these two
+               * levels all along; the page it shares a round with did not. */
+              requirement: {
+                select: {
+                  id: true,
+                  name: true,
+                  feature: true,
+                  module: { select: { id: true, name: true } },
+                },
+              },
             },
           },
         },
       },
     },
-    orderBy: [{ createdAt: "asc" }],
+  },
+} satisfies Prisma.TestRunCaseInclude;
+
+/* Hierarchy order, not the order cases were added.
+ *
+ * `createdAt` put a round in the order someone happened to pick cases in,
+ * which the page then grouped — so adding from the same Test Group twice gave
+ * it two separate headings, and a group larger than one page was split across
+ * two of them under a repeated heading. Ordering by the tree keeps every
+ * group whole and contiguous, and is what lets the page print a Module and
+ * Requirement line only where it changes.
+ *
+ * Module carries an explicit `sequence`; the levels below it have none that
+ * spans siblings, so they fall back to name. */
+const RUN_CASE_ORDER = [
+  { testCase: { testGroup: { scenario: { requirement: { module: { sequence: "asc" } } } } } },
+  { testCase: { testGroup: { scenario: { requirement: { module: { name: "asc" } } } } } },
+  { testCase: { testGroup: { scenario: { requirement: { name: "asc" } } } } },
+  { testCase: { testGroup: { scenario: { name: "asc" } } } },
+  { testCase: { testGroup: { sequence: "asc" } } },
+  { testCase: { name: "asc" } },
+] satisfies Prisma.TestRunCaseOrderByWithRelationInput[];
+
+/** Every case in a round, with the chain above it so the list can group by
+ *  Scenario and Test Group instead of repeating four levels on every row. */
+export async function listCasesInRun(testRunId: string) {
+  return prisma.testRunCase.findMany({
+    where: { testRunId },
+    include: RUN_CASE_INCLUDE,
+    orderBy: RUN_CASE_ORDER,
   });
 }
 
-/** The same shape as `listCasesInRun`, one page at a time — a round with
+/** The same query as `listCasesInRun` — literally, now — one page at a time — a round with
  *  thousands of cases rendered every one of them into the DOM at once
  *  otherwise, on a page opened routinely rather than occasionally like the
  *  export. `ranCount` is counted separately rather than derived from the
@@ -193,32 +238,8 @@ export async function listCasesInRunPage(testRunId: string, filters: PageFilters
       ({ skip, take }) =>
         prisma.testRunCase.findMany({
           where,
-          include: {
-            ranBy: { select: { id: true, name: true } },
-            attachments: { orderBy: { uploadedAt: "desc" } },
-            testCase: {
-              select: {
-                id: true,
-                name: true,
-                priority: true,
-                deletedAt: true,
-                condition: true,
-                preconditions: true,
-                testData: true,
-                expectedResult: true,
-                steps: { orderBy: { sequence: "asc" } },
-                testGroup: {
-                  select: {
-                    id: true,
-                    name: true,
-                    sequence: true,
-                    scenario: { select: { id: true, name: true } },
-                  },
-                },
-              },
-            },
-          },
-          orderBy: [{ createdAt: "asc" }],
+          include: RUN_CASE_INCLUDE,
+          orderBy: RUN_CASE_ORDER,
           skip,
           take,
         }),
@@ -226,6 +247,39 @@ export async function listCasesInRunPage(testRunId: string, filters: PageFilters
     prisma.testRunCase.count({ where: { testRunId, testResult: { not: "NOT_RUN" } } }),
   ]);
   return { ...page, ranCount };
+}
+
+/**
+ * Which Modules and how many Requirements a round actually draws on.
+ *
+ * The page below it is paginated and grouped, so the fact that a round spans
+ * three Modules is something you could previously only work out by scrolling
+ * to the end and remembering what you saw. It is a property of the whole
+ * round, so it is stated once at the top instead.
+ *
+ * Asked of the Module and Requirement tables filtered by "has a case in this
+ * round", rather than by reading every TestRunCase and folding it here: a
+ * round of several thousand cases would otherwise pull several thousand rows
+ * across to count a handful of names. The result is bounded by how many
+ * Modules the project has.
+ */
+export async function summariseRunScope(testRunId: string) {
+  const inThisRun = {
+    some: {
+      testGroups: { some: { testCases: { some: { runCases: { some: { testRunId } } } } } },
+    },
+  };
+
+  const [modules, requirementCount] = await Promise.all([
+    prisma.module.findMany({
+      where: { requirements: { some: { scenarios: inThisRun } } },
+      select: { id: true, name: true },
+      orderBy: [{ sequence: "asc" }, { name: "asc" }],
+    }),
+    prisma.requirement.count({ where: { scenarios: inThisRun } }),
+  ]);
+
+  return { modules, requirementCount };
 }
 
 /** Every case in a round with its full ancestor chain, for the results

@@ -10,9 +10,11 @@ import {
   addCasesToRun,
   createRun,
   listCandidateCases,
+  listCasesInRunPage,
   listRunsForProjectPage,
   setRunCaseResult,
   setRunStatus,
+  summariseRunScope,
 } from "@/lib/test-runs";
 
 vi.mock("@/auth", () => ({
@@ -261,5 +263,118 @@ describe("test runs", () => {
 
     expect(row?._count.cases).toBe(3);
     expect(row?.ranCount).toBe(1);
+  });
+  it("lists a round's cases by the hierarchy, whatever order they were added in, carrying the Requirement and its Feature", async () => {
+    const { owner, project } = await seed("run-owner9@example.com", "PRJ-RUN-9");
+
+    // Two Modules, so the ordering has something to sort across. "Billing"
+    // sorts after "Access" by name, and both carry sequence 0 by default.
+    const [access, billing] = await Promise.all([
+      prisma.module.create({ data: { projectId: project.id, name: "Access" } }),
+      prisma.module.create({ data: { projectId: project.id, name: "Billing" } }),
+    ]);
+
+    async function caseUnder(mod: { id: string }, requirement: string, feature: string | null) {
+      const req = await prisma.requirement.create({
+        data: { projectId: project.id, moduleId: mod.id, name: requirement, feature },
+      });
+      const scenario = await createScenario(
+        project.id,
+        {
+          name: `Scenario for ${requirement}`,
+          requirementId: req.id,
+          expectedResult: "ok",
+          priority: "MEDIUM",
+        },
+        owner.id,
+      );
+      const group = await createTestGroup(scenario.id, { name: `Group ${requirement}` }, owner.id);
+      return createTestCase(
+        group.id,
+        {
+          name: `Case ${requirement}`,
+          expectedResult: "ok",
+          priority: "MEDIUM",
+          steps: [{ step: "s", expectedResult: "r" }],
+        },
+        owner.id,
+      );
+    }
+
+    const accessCase = await caseUnder(access, "Sign in", "Sharing Dashboard");
+    const billingCase = await caseUnder(billing, "Issue invoice", null);
+
+    const run = await createRun(project.id, { name: "Ordering" }, owner.id);
+    // Added Billing first, which is where the old `createdAt` ordering put it.
+    await addCasesToRun(run.id, [billingCase.id], owner.id);
+    await addCasesToRun(run.id, [accessCase.id], owner.id);
+
+    const { items } = await listCasesInRunPage(run.id);
+    expect(items.map((row) => row.testCase.name)).toEqual([
+      "Case Sign in",
+      "Case Issue invoice",
+    ]);
+
+    // The page heads each group with these, so the query has to carry them.
+    const first = items[0].testCase.testGroup.scenario.requirement;
+    expect(first.module.name).toBe("Access");
+    expect(first.name).toBe("Sign in");
+    expect(first.feature).toBe("Sharing Dashboard");
+    expect(items[1].testCase.testGroup.scenario.requirement.feature).toBeNull();
+  });
+  it("says which Modules and how many Requirements a round reaches across", async () => {
+    const { owner, project } = await seed("run-owner10@example.com", "PRJ-RUN-10");
+
+    const [access, billing] = await Promise.all([
+      prisma.module.create({ data: { projectId: project.id, name: "Access" } }),
+      prisma.module.create({ data: { projectId: project.id, name: "Billing" } }),
+    ]);
+
+    async function caseUnder(mod: { id: string }, requirement: string) {
+      const req = await prisma.requirement.create({
+        data: { projectId: project.id, moduleId: mod.id, name: requirement },
+      });
+      const scenario = await createScenario(
+        project.id,
+        {
+          name: `Scenario ${requirement}`,
+          requirementId: req.id,
+          expectedResult: "ok",
+          priority: "MEDIUM",
+        },
+        owner.id,
+      );
+      const group = await createTestGroup(scenario.id, { name: `Group ${requirement}` }, owner.id);
+      return createTestCase(
+        group.id,
+        {
+          name: `Case ${requirement}`,
+          expectedResult: "ok",
+          priority: "MEDIUM",
+          steps: [{ step: "s", expectedResult: "r" }],
+        },
+        owner.id,
+      );
+    }
+
+    const inRun = await Promise.all([
+      caseUnder(access, "Sign in"),
+      caseUnder(access, "Sign out"),
+      caseUnder(billing, "Issue invoice"),
+    ]);
+    // A fourth Requirement that exists but is not in the round — the counts
+    // are about this round, not about the project.
+    await caseUnder(billing, "Refund");
+
+    const run = await createRun(project.id, { name: "Scope" }, owner.id);
+    await addCasesToRun(
+      run.id,
+      inRun.map((testCase) => testCase.id),
+      owner.id,
+    );
+
+    const scope = await summariseRunScope(run.id);
+    expect(scope.modules.map((mod) => mod.name)).toEqual(["Access", "Billing"]);
+    expect(scope.requirementCount).toBe(3);
   });
 });
