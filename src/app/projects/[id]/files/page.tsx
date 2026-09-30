@@ -10,6 +10,7 @@ import {
   getFileKind,
   getProjectFile,
   listProjectFilesByModule,
+  NO_MODULE_HEADING,
   saveProjectFile,
 } from "@/lib/project-files";
 import { listModulesForProject } from "@/lib/modules";
@@ -76,7 +77,7 @@ export default async function ProjectFilesPage({
     try {
       await saveProjectFile(
         projectId,
-        formData.get("module") as string,
+        (formData.get("module") as string) || null,
         file,
         session!.user.id,
       );
@@ -124,16 +125,15 @@ export default async function ProjectFilesPage({
         <form action={upload} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className={labelClass}>
-              <span>
-                Module
-                <RequiredMark />
-              </span>
+              Module
+              {/* Optional, the way it is on a Note: a terms-of-reference
+                  document or a contract belongs to the Project, not to one
+                  part of it. */}
               <Select
                 name="module"
                 defaultValue=""
-                required
                 options={[
-                  { value: "", label: "Choose a module…" },
+                  { value: "", label: "No module — about the Project" },
                   ...modules.map((module) => ({ value: module.id, label: module.name })),
                 ]}
                 ariaLabel="Module"
@@ -185,8 +185,12 @@ export default async function ProjectFilesPage({
             <Select
               name="moduleId"
               defaultValue={moduleId ?? ""}
+              /* `none` rather than an empty value: empty already means
+                 "all", and the files with no Module are otherwise reachable
+                 only by scrolling to whichever group they landed in. */
               options={[
                 { value: "", label: "All modules" },
+                { value: "none", label: NO_MODULE_HEADING },
                 ...modules.map((module) => ({ value: module.id, label: module.name })),
               ]}
               ariaLabel="Module"

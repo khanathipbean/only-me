@@ -133,19 +133,32 @@ export function previewMode(contentType: string, fileName: string): PreviewMode 
 
 export class FileValidationError extends Error {}
 
+/** The heading files with no Module are listed under, and the label the
+ *  filter offers for them. One constant so the two can't drift. */
+export const NO_MODULE_HEADING = "No module";
+
 export async function saveProjectFile(
   projectId: string,
-  moduleId: string,
+  moduleId: string | null,
   file: File,
   uploadedById: string,
 ) {
-  // Not named `module`: that identifier is reserved in a CommonJS scope and
-  // the Next lint rule rejects assigning to it.
+  /* A Module is optional, the way it is on a Note: a terms-of-reference
+   * document or a contract belongs to the Project, not to one part of it, and
+   * requiring an answer only had people file it under whichever Module was
+   * nearest — which reads as deliberate and makes the Module filter lie.
+   *
+   * What is not optional is that a Module given must be this Project's: the
+   * id comes from a form, and without the check a member of one Project could
+   * file against another's Module.
+   *
+   * Not named `module`: that identifier is reserved in a CommonJS scope and
+   * the Next lint rule rejects assigning to it. */
   const target = moduleId
     ? await prisma.module.findFirst({ where: { id: moduleId, projectId, deletedAt: null } })
     : null;
-  if (!target) {
-    throw new FileValidationError("Choose a module");
+  if (moduleId && !target) {
+    throw new FileValidationError("That Module is not part of this project");
   }
   if (file.size === 0) {
     throw new FileValidationError("That file is empty");
@@ -168,10 +181,11 @@ export async function saveProjectFile(
   const created = await prisma.projectFile.create({
     data: {
       projectId,
-      moduleId: target.id,
+      moduleId: target?.id ?? null,
       // The text column stays written until phase 2 drops it, so a rollback
-      // doesn't leave files with no heading at all.
-      module: target.name,
+      // doesn't leave files with no heading at all. It is NOT NULL, so a file
+      // with no Module gets the heading it is listed under rather than "".
+      module: target?.name ?? NO_MODULE_HEADING,
       fileName: file.name,
       storageKey,
       contentType: file.type || "application/octet-stream",
@@ -183,8 +197,10 @@ export async function saveProjectFile(
   await notifyProject({
     projectId,
     type: "FILE_UPLOADED",
-    title: `New file uploaded to ${target.name}`,
-    body: `${file.name} was uploaded to the ${target.name} module.`,
+    title: target ? `New file uploaded to ${target.name}` : "New file uploaded",
+    body: target
+      ? `${file.name} was uploaded to the ${target.name} module.`
+      : `${file.name} was uploaded to the project.`,
     link: `/projects/${projectId}/files`,
     actorId: uploadedById,
     excludeUserId: uploadedById,
@@ -204,7 +220,13 @@ export async function listProjectFilesByModule(
     where: {
       projectId,
       deletedAt: null,
-      ...(filters.moduleId ? { moduleId: filters.moduleId } : {}),
+      /* `none` is the filter for files about the Project itself. An empty
+       * value already means "don't filter", so the two need different ones. */
+      ...(filters.moduleId === "none"
+        ? { moduleId: null }
+        : filters.moduleId
+          ? { moduleId: filters.moduleId }
+          : {}),
       ...(filters.search
         ? { fileName: { contains: filters.search, mode: "insensitive" as const } }
         : {}),
@@ -212,16 +234,29 @@ export async function listProjectFilesByModule(
     orderBy: [{ module: "asc" }, { uploadedAt: "desc" }],
   });
 
-  const groups = new Map<string, typeof files>();
+  /* Keyed on the Module's id, not on the heading text: a Project is free to
+   * have a Module actually named "No module", and grouping by name would
+   * pour its files in with the ones that have none. */
+  const groups = new Map<string, { module: string; files: typeof files }>();
   for (const file of files) {
-    const group = groups.get(file.module);
+    const key = file.moduleId ?? "";
+    const group = groups.get(key);
     if (group) {
-      group.push(file);
+      group.files.push(file);
     } else {
-      groups.set(file.module, [file]);
+      groups.set(key, {
+        module: file.moduleId ? file.module : NO_MODULE_HEADING,
+        files: [file],
+      });
     }
   }
-  return [...groups.entries()].map(([module, items]) => ({ module, files: items }));
+
+  /* Real Modules first, whatever they are called. The ones belonging to no
+   * Module are the exception on the page and read better as a footnote than
+   * sorted into the middle of the list by their heading's spelling. */
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === "" ? 1 : b === "" ? -1 : 0))
+    .map(([, group]) => group);
 }
 
 export async function getProjectFile(id: string) {

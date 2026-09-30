@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canPreview, getFileKind, previewMode } from "@/lib/project-files";
+import { prisma } from "@/lib/prisma";
+import { createModule } from "@/lib/modules";
+import {
+  canPreview,
+  getFileKind,
+  listProjectFilesByModule,
+  previewMode,
+  NO_MODULE_HEADING,
+} from "@/lib/project-files";
 
 /**
  * The classifier decides both the icon on a card and how the dialog draws the
@@ -53,5 +61,79 @@ describe("project files", () => {
   it("still previews the two kinds the server sends inline", () => {
     expect(previewMode("application/pdf", "doc.pdf")).toBe("frame");
     expect(previewMode("image/png", "shot.png")).toBe("image");
+  });
+});
+
+describe("project files by module", () => {
+  async function seed(code: string) {
+    const owner = await prisma.user.create({
+      data: { email: `${code.toLowerCase()}@example.com`, passwordHash: "x", name: code },
+    });
+    const project = await prisma.project.create({
+      data: { code, name: code, status: "ACTIVE", ownerId: owner.id },
+    });
+    const policy = await createModule(project.id, "Policy", owner.id);
+    return { owner, project, policy };
+  }
+
+  async function addFile(
+    projectId: string,
+    uploadedById: string,
+    fileName: string,
+    mod: { id: string; name: string } | null,
+  ) {
+    return prisma.projectFile.create({
+      data: {
+        projectId,
+        moduleId: mod?.id ?? null,
+        module: mod?.name ?? NO_MODULE_HEADING,
+        fileName,
+        storageKey: `test/${fileName}-${Math.random()}`,
+        contentType: "text/plain",
+        size: 1,
+        uploadedById,
+      },
+    });
+  }
+
+  it("groups files with no Module under their own heading, listed last", async () => {
+    const { owner, project, policy } = await seed("PRJ-FILE-1");
+    await addFile(project.id, owner.id, "terms.pdf", null);
+    await addFile(project.id, owner.id, "policy-spec.pdf", policy);
+
+    const groups = await listProjectFilesByModule(project.id);
+    /* Real Modules first whatever they are called: files belonging to none
+     * are the exception on the page and read as a footnote, not as something
+     * sorted into the middle by its heading's spelling. */
+    expect(groups.map((group) => group.module)).toEqual(["Policy", NO_MODULE_HEADING]);
+    expect(groups[1].files.map((file) => file.fileName)).toEqual(["terms.pdf"]);
+  });
+
+  it("does not pour those files in with a Module that happens to be called the same", async () => {
+    const { owner, project } = await seed("PRJ-FILE-2");
+    // Keyed on the Module's id, not the heading text, so this is two groups.
+    const named = await createModule(project.id, NO_MODULE_HEADING, owner.id);
+    await addFile(project.id, owner.id, "really-in-a-module.pdf", named);
+    await addFile(project.id, owner.id, "about-the-project.pdf", null);
+
+    const groups = await listProjectFilesByModule(project.id);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].files.map((file) => file.fileName)).toEqual(["really-in-a-module.pdf"]);
+    expect(groups[1].files.map((file) => file.fileName)).toEqual(["about-the-project.pdf"]);
+  });
+
+  it("filters to the files with no Module, which an empty value cannot ask for", async () => {
+    const { owner, project, policy } = await seed("PRJ-FILE-3");
+    await addFile(project.id, owner.id, "terms.pdf", null);
+    await addFile(project.id, owner.id, "policy-spec.pdf", policy);
+
+    const none = await listProjectFilesByModule(project.id, { moduleId: "none" });
+    expect(none.flatMap((group) => group.files).map((file) => file.fileName)).toEqual([
+      "terms.pdf",
+    ]);
+
+    // An empty value still means "don't filter" — that is why `none` exists.
+    const all = await listProjectFilesByModule(project.id, { moduleId: "" });
+    expect(all.flatMap((group) => group.files)).toHaveLength(2);
   });
 });
