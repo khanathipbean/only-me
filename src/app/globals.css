@@ -7,7 +7,15 @@
  * The blocking script in layout.tsx always sets a concrete `data-theme`
  * value (falling back to system preference itself when nothing is stored),
  * so this is the single source of truth once JS has run. */
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+/* Both dark themes, or the 146 `dark:` utilities across the app would stop
+   applying the moment someone picked the flat one — leaving a dark ground
+   wearing the light theme's borders, hovers and surfaces. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, [data-theme=flat], [data-theme=flat] *));
+
+/* Only the themed one. The ambient backdrop in layout.tsx used to hang off
+   `dark:`, which now means both — and the flat theme is precisely the one
+   that should not have it. */
+@custom-variant ambient (&:where([data-theme=dark], [data-theme=dark] *));
 
 @theme {
   --color-background: #f8fafc;
@@ -27,7 +35,8 @@
  * custom property, since Tailwind's generated utilities (bg-brand etc.)
  * already reference var(--color-brand) and pick up whatever value :root
  * currently holds. */
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+:root[data-theme="flat"] {
   --color-background: #08090b;
   --color-surface: #131417;
   --color-foreground: #e8e8ea;
@@ -71,7 +80,8 @@ html {
   color-scheme: light;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+:root[data-theme="flat"] {
   color-scheme: dark;
 }
 
@@ -164,7 +174,8 @@ input[type="datetime-local"]:focus::-webkit-calendar-picker-indicator {
   background-size: 1rem;
 }
 
-:root[data-theme="dark"] .select-field {
+:root[data-theme="dark"] .select-field,
+:root[data-theme="flat"] .select-field {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 }
 

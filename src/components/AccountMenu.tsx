@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@/components/ui/Avatar";
-import { EditIcon, LogoutIcon, MoonIcon, SunIcon, UsersIcon } from "@/components/icons";
+import { CheckIcon, EditIcon, LogoutIcon, UsersIcon } from "@/components/icons";
 import { SubmitAction } from "@/components/SubmitButton";
-import { useTheme } from "@/lib/theme";
+import { THEMES, useTheme } from "@/lib/theme";
 
 /**
  * The avatar in the header, and the menu it opens: who you are signed in as,
@@ -39,7 +39,7 @@ export function AccountMenu({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const { isDark, toggle: toggleTheme } = useTheme();
+  const { theme, choose } = useTheme();
 
   function toggle() {
     if (open) {
@@ -137,15 +137,27 @@ export function AccountMenu({
                   Members
                 </Link>
               )}
-              <button
-                type="button"
-                role="menuitem"
-                onClick={toggleTheme}
-                className={`sm:hidden ${itemClass}`}
-              >
-                {isDark ? <SunIcon /> : <MoonIcon />}
-                {isDark ? "Switch to light mode" : "Switch to dark mode"}
-              </button>
+              {/* The same three choices as the header's own picker, which is
+                  hidden at this width — listed rather than cycled here too,
+                  so the pair never disagree about what is on offer. */}
+              {THEMES.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={theme === option.value}
+                  onClick={() => {
+                    choose(option.value);
+                    setOpen(false);
+                  }}
+                  className={`sm:hidden ${itemClass}`}
+                >
+                  <span className="flex w-4 justify-center text-brand">
+                    {theme === option.value ? <CheckIcon /> : null}
+                  </span>
+                  {option.label}
+                </button>
+              ))}
             </div>
 
             <div className="border-t border-border py-1">

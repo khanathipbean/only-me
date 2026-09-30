@@ -1,6 +1,29 @@
 import { useEffect, useState } from "react";
 
-export type Theme = "light" | "dark";
+/**
+ * Three, not two.
+ *
+ * `dark` is the one with the ambient backdrop behind it — the charcoal
+ * gradient and soft blooms in layout.tsx, which is what makes it read as
+ * "Bull Terrier" rather than simply dark. `flat` is the same palette with
+ * that backdrop off, for anyone who wants the colours without the wash.
+ *
+ * The stored values stay as they are, which is why the flat one is not called
+ * `dark`: somebody who chose the current dark theme has "dark" in their
+ * localStorage, and renaming would silently move them to a look they did not
+ * pick.
+ */
+export type Theme = "light" | "dark" | "flat";
+
+export const THEMES: { value: Theme; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Bull Terrier" },
+  { value: "flat", label: "Dark" },
+];
+
+function isTheme(value: string | null): value is Theme {
+  return value === "light" || value === "dark" || value === "flat";
+}
 
 function systemTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -8,7 +31,7 @@ function systemTheme(): Theme {
 
 function storedOrSystemTheme(): Theme {
   const stored = localStorage.getItem("theme");
-  return stored === "dark" || stored === "light" ? stored : systemTheme();
+  return isTheme(stored) ? stored : systemTheme();
 }
 
 /**
@@ -44,17 +67,20 @@ export function useTheme() {
     });
   }, []);
 
-  function toggle() {
-    const next: Theme = (theme ?? systemTheme()) === "dark" ? "light" : "dark";
+  /* Chosen from a list rather than cycled. A cycle can be labelled while
+   * there are two of them ("Switch to light mode"); with three, the button
+   * can only say where it is going next, and nobody can see the third without
+   * pressing twice. */
+  function choose(next: Theme) {
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);
     try {
       localStorage.setItem("theme", next);
     } catch {
-      // localStorage unavailable (e.g. private browsing) — the toggle still
+      // localStorage unavailable (e.g. private browsing) — the choice still
       // works for this page load, it just won't persist across visits.
     }
   }
 
-  return { theme, isDark: theme === "dark", toggle };
+  return { theme, isDark: theme !== "light", choose };
 }

@@ -27,7 +27,7 @@ import { invalidateRouteCache } from "@/lib/revalidate";
 const THEME_INIT_SCRIPT = `
   try {
     var stored = localStorage.getItem("theme");
-    var theme = stored === "dark" || stored === "light"
+    var theme = stored === "dark" || stored === "light" || stored === "flat"
       ? stored
       : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.setAttribute("data-theme", theme);
@@ -106,12 +106,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {/* Ambient backdrop: the same charcoal gradient and soft blooms the
             login page uses, so the app doesn't sit on a flat slab. Fixed and
             behind everything (`-z-10`), which works because it paints over
-            body's own background colour rather than replacing it. Dark theme
-            only — the same greys over the light palette read as dirt, not
-            depth. `pointer-events-none` so it never eats a click. */}
+            body's own background colour rather than replacing it.
+            `pointer-events-none` so it never eats a click.
+
+            `ambient:`, not `dark:` — this is the whole difference between the
+            two dark themes. The same greys over the light palette read as
+            dirt rather than depth, and the flat theme is for people who want
+            the colours without the wash. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden dark:block"
+          className="pointer-events-none fixed inset-0 -z-10 hidden overflow-hidden ambient:block"
         >
           <div className="absolute inset-0 bg-[linear-gradient(120deg,#050506_0%,#0c0d0f_28%,#181a1e_58%,#08090b_100%)]" />
           <div className="absolute -top-1/4 left-1/4 size-[52rem] rounded-full bg-zinc-300/[.07] blur-[120px]" />
