@@ -27,7 +27,7 @@ import {
   getAttachmentWithProjectId,
   saveAttachment,
 } from "@/lib/attachments";
-import { canPreview, getFileKind } from "@/lib/project-files";
+import { previewMode, getFileKind } from "@/lib/project-files";
 import { FilePreview } from "@/components/FilePreview";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -415,8 +415,7 @@ export default async function TestCaseDetailPage({
                     uploadedAt: formatDate(attachment.uploadedAt),
                     size: attachment.size,
                     href: `/api/test-cases/${testCaseId}/attachments/${attachment.id}`,
-                    previewable: canPreview(attachment.contentType),
-                    isImage: attachment.contentType.startsWith("image/"),
+                    mode: previewMode(attachment.contentType, attachment.fileName),
                     kind: getFileKind(attachment.contentType, attachment.fileName),
                   }}
                   deleteSlot={

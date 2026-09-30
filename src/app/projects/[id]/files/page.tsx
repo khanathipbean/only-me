@@ -5,7 +5,7 @@ import { getProjectById } from "@/lib/projects";
 import {
   FileValidationError,
   MAX_FILE_BYTES,
-  canPreview,
+  previewMode,
   deleteProjectFile,
   getFileKind,
   getProjectFile,
@@ -221,8 +221,7 @@ export default async function ProjectFilesPage({
                       uploadedAt: formatDate(file.uploadedAt),
                       size: file.size,
                       href: `/api/projects/${projectId}/files/${file.id}`,
-                      previewable: canPreview(file.contentType),
-                      isImage: file.contentType.startsWith("image/"),
+                      mode: previewMode(file.contentType, file.fileName),
                       kind: getFileKind(file.contentType, file.fileName),
                     }}
                     openOnMount={file.id === fileId}

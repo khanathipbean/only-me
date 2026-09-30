@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Dialog } from "@/components/ui/Modal";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { FILE_KIND_STYLE } from "@/components/fileKindStyle";
-import type { FileKind } from "@/lib/project-files";
+import type { FileKind, PreviewMode } from "@/lib/project-files";
 
 export type ProjectFileCard = {
   id: string;
@@ -12,8 +12,9 @@ export type ProjectFileCard = {
   uploadedAt: string;
   size: number;
   href: string;
-  previewable: boolean;
-  isImage: boolean;
+  /** How the dialog should draw it — see `previewMode`. Replaces the
+   *  previewable/isImage pair, which could only describe two of them. */
+  mode: PreviewMode;
   kind: FileKind;
 };
 
@@ -43,11 +44,24 @@ function formatSize(bytes: number) {
  * the browser as a page. The app has files in exactly that state: the storage
  * key layout changed twice and the old rows were never migrated.
  */
+/* 512 KB of characters is already more than anyone reads in a dialog, and the
+ * upload cap is 20 MB — putting that much text in the DOM locks the tab. What
+ * is shown says it was cut, with the download beside it. */
+const MAX_PREVIEW_CHARS = 512 * 1024;
+
 type Fetched =
   | { status: "loading" }
   /** The object is there. `url` is a blob of it, so the preview and the
-   *  original request aren't two trips down the wire. */
-  | { status: "ready"; url: string }
+   *  original request aren't two trips down the wire. `text` is filled only
+   *  for the modes that read characters rather than hand the blob to an
+   *  element, and `rows` only once a CSV has parsed. */
+  | {
+      status: "ready";
+      url: string;
+      text?: string;
+      truncated?: boolean;
+      rows?: string[][];
+    }
   /** 410 — the row is still here, the bytes are not. */
   | { status: "missing" }
   | { status: "error"; message: string };
@@ -97,7 +111,46 @@ export function FilePreview({
           return;
         }
         url = URL.createObjectURL(blob);
-        setFetched({ status: "ready", url });
+
+        if (file.mode !== "text" && file.mode !== "table") {
+          setFetched({ status: "ready", url });
+          return;
+        }
+
+        const whole = await blob.text();
+        if (cancelled) {
+          return;
+        }
+        const truncated = whole.length > MAX_PREVIEW_CHARS;
+        const text = truncated ? whole.slice(0, MAX_PREVIEW_CHARS) : whole;
+
+        if (file.mode === "text") {
+          setFetched({ status: "ready", url, text, truncated });
+          return;
+        }
+
+        /* Loaded only when a CSV is actually opened — nobody viewing a PDF
+         * should pay for a parser they will not use. And it is the real
+         * parser: these files come out of Excel, which quotes anything with a
+         * comma in it, so splitting on commas would tear cells apart. */
+        try {
+          const { parse } = await import("csv-parse/browser/esm/sync");
+          const rows = parse(text, {
+            relax_column_count: true,
+            skip_empty_lines: true,
+            bom: true,
+          }) as string[][];
+          if (!cancelled) {
+            setFetched({ status: "ready", url, text, truncated, rows });
+          }
+        } catch {
+          /* A file that will not parse is still a file someone can read.
+           * Falling back to its source beats an error over something that was
+           * only ever a convenience. */
+          if (!cancelled) {
+            setFetched({ status: "ready", url, text, truncated });
+          }
+        }
       } catch {
         if (!cancelled) {
           setFetched({ status: "error", message: "The file could not be reached." });
@@ -111,7 +164,7 @@ export function FilePreview({
         URL.revokeObjectURL(url);
       }
     };
-  }, [open, file.href]);
+  }, [open, file.href, file.mode]);
 
   return (
     <>
@@ -169,32 +222,92 @@ export function FilePreview({
             </p>
           )}
 
-          {fetched.status === "ready" &&
-            (file.previewable ? (
-            file.isImage ? (
-              /* A plain <img>, not next/image: the source is an
-                 authenticated route whose dimensions aren't known ahead of
-                 time, and routing a private document through the image
-                 optimiser would cache it outside the permission check. */
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={fetched.url}
-                alt={file.fileName}
-                className="max-h-[70vh] w-full rounded-md object-contain"
-              />
-            ) : (
-              <iframe
-                src={fetched.url}
-                title={file.fileName}
-                className="h-[70vh] w-full rounded-md border border-border bg-white"
-              />
-            )
-          ) : (
-            <p className={NOTICE_CLASS}>
-              This file type can&apos;t be shown here. Download it to open it in the right
-              application.
-            </p>
-          ))}
+          {fetched.status === "ready" && (
+            <>
+              {fetched.truncated && (
+                <p className={NOTICE_CLASS}>
+                  Showing the first {Math.round(MAX_PREVIEW_CHARS / 1024)} KB. Download the
+                  file to read the rest.
+                </p>
+              )}
+
+              {file.mode === "image" && (
+                /* A plain <img>, not next/image: the source is an
+                   authenticated route whose dimensions aren't known ahead of
+                   time, and routing a private document through the image
+                   optimiser would cache it outside the permission check. */
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={fetched.url}
+                  alt={file.fileName}
+                  className="max-h-[70vh] w-full rounded-md object-contain"
+                />
+              )}
+
+              {file.mode === "frame" && (
+                <iframe
+                  src={fetched.url}
+                  title={file.fileName}
+                  className="h-[70vh] w-full rounded-md border border-border bg-white"
+                />
+              )}
+
+              {file.mode === "video" && (
+                <video
+                  src={fetched.url}
+                  controls
+                  className="max-h-[70vh] w-full rounded-md bg-black"
+                />
+              )}
+
+              {file.mode === "audio" && <audio src={fetched.url} controls className="w-full" />}
+
+              {/* A table when it parsed, its own source when it did not — and
+                  `mode === "text"` always lands here too. Put in as
+                  characters, never as markup: a `.md` rendered to HTML would
+                  be the hole `INLINE_TYPES` keeps SVG out for. */}
+              {(file.mode === "text" || (file.mode === "table" && !fetched.rows)) && (
+                <pre className="max-h-[70vh] overflow-auto rounded-md border border-border bg-black/[.02] p-4 font-mono text-xs whitespace-pre text-foreground dark:bg-white/[.03]">
+                  {fetched.text}
+                </pre>
+              )}
+
+              {file.mode === "table" && fetched.rows && (
+                <div className="max-h-[70vh] overflow-auto rounded-md border border-border">
+                  <table className="w-full border-collapse text-xs">
+                    <tbody>
+                      {fetched.rows.map((row, rowIndex) => (
+                        <tr
+                          key={rowIndex}
+                          className={
+                            rowIndex === 0
+                              ? "sticky top-0 bg-surface font-semibold"
+                              : "odd:bg-black/[.015] dark:odd:bg-white/[.02]"
+                          }
+                        >
+                          {row.map((cell, cellIndex) => (
+                            <td
+                              key={cellIndex}
+                              className="border border-border px-2 py-1 align-top whitespace-pre-wrap text-foreground"
+                            >
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {file.mode === "none" && (
+                <p className={NOTICE_CLASS}>
+                  This file type can&apos;t be shown here. Download it to open it in the right
+                  application.
+                </p>
+              )}
+            </>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>

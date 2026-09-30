@@ -26,7 +26,7 @@ import {
   getRunCaseAttachmentWithProjectId,
   saveRunCaseAttachment,
 } from "@/lib/attachments";
-import { canPreview, getFileKind } from "@/lib/project-files";
+import { previewMode, getFileKind } from "@/lib/project-files";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { formatDate } from "@/lib/dates";
 import { CasePicker } from "@/components/CasePicker";
@@ -914,8 +914,7 @@ export default async function TestRunPage({
                                             .slice(0, 10),
                                           size: attachment.size,
                                           href: `/api/run-cases/${row.id}/attachments/${attachment.id}`,
-                                          previewable: canPreview(attachment.contentType),
-                                          isImage: attachment.contentType.startsWith("image/"),
+                                          mode: previewMode(attachment.contentType, attachment.fileName),
                                           kind: getFileKind(
                                             attachment.contentType,
                                             attachment.fileName,

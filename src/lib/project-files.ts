@@ -27,7 +27,16 @@ export function canPreview(contentType: string) {
   return INLINE_TYPES.has(contentType);
 }
 
-export type FileKind = "pdf" | "word" | "excel" | "csv" | "image" | "generic";
+export type FileKind =
+  | "pdf"
+  | "word"
+  | "excel"
+  | "csv"
+  | "image"
+  | "text"
+  | "video"
+  | "audio"
+  | "generic";
 
 const WORD_TYPES = new Set([
   "application/msword",
@@ -38,6 +47,11 @@ const EXCEL_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
+/* Extensions that hold text, whatever the browser called them on upload —
+ * `application/json` and `application/octet-stream` are both common for these
+ * and neither starts with `text/`. */
+const TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "json", "log", "yml", "yaml", "xml"]);
+
 /**
  * Which icon a file's card should show. Content type comes first, but
  * browsers are inconsistent about what they report for office documents
@@ -47,15 +61,18 @@ const EXCEL_TYPES = new Set([
 export function getFileKind(contentType: string, fileName: string): FileKind {
   if (contentType.startsWith("image/")) return "image";
   if (contentType === "application/pdf") return "pdf";
-  if (contentType === "text/csv") return "csv";
+  if (contentType === "text/csv" || contentType === "text/tab-separated-values") return "csv";
   if (EXCEL_TYPES.has(contentType)) return "excel";
   if (WORD_TYPES.has(contentType)) return "word";
+  if (contentType.startsWith("video/")) return "video";
+  if (contentType.startsWith("audio/")) return "audio";
 
   const ext = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase();
   switch (ext) {
     case "pdf":
       return "pdf";
     case "csv":
+    case "tsv":
       return "csv";
     case "xls":
     case "xlsx":
@@ -63,9 +80,55 @@ export function getFileKind(contentType: string, fileName: string): FileKind {
     case "doc":
     case "docx":
       return "word";
-    default:
-      return "generic";
+    case "mp4":
+    case "webm":
+    case "mov":
+      return "video";
+    case "mp3":
+    case "wav":
+    case "ogg":
+    case "m4a":
+      return "audio";
   }
+
+  /* Checked after the extensions above so a `.csv` the browser labelled
+   * `text/plain` still reads as a table rather than as its own source. */
+  if (contentType.startsWith("text/") || TEXT_EXTENSIONS.has(ext)) {
+    return "text";
+  }
+  return "generic";
+}
+
+/**
+ * How the preview dialog should draw a file — a different question from
+ * `canPreview`, which decides what the *server* is willing to send with an
+ * inline Content-Disposition.
+ *
+ * The two used to be the same answer because the only previews were an
+ * `<img>` and an `<iframe>`, both of which make the browser interpret bytes
+ * this app served. Text and tables don't: the dialog reads the blob it has
+ * already fetched and puts characters in the DOM. So these render without
+ * anything being added to `INLINE_TYPES`, and the files still download rather
+ * than open in a tab — which is the safer half of the arrangement, not a
+ * limitation to work around.
+ *
+ * Markdown is `text`, never rendered HTML. Turning it into markup would be
+ * the same hole `INLINE_TYPES` keeps SVG out for, reached from a different
+ * direction.
+ */
+export type PreviewMode = "image" | "frame" | "text" | "table" | "video" | "audio" | "none";
+
+export function previewMode(contentType: string, fileName: string): PreviewMode {
+  const kind = getFileKind(contentType, fileName);
+  if (kind === "csv") return "table";
+  if (kind === "text") return "text";
+  if (kind === "video") return "video";
+  if (kind === "audio") return "audio";
+  /* Image and PDF still go through the server's own list: these two are drawn
+   * by the browser from bytes we serve, so what it is willing to serve inline
+   * is exactly the right gate. */
+  if (!canPreview(contentType)) return "none";
+  return kind === "image" ? "image" : "frame";
 }
 
 export class FileValidationError extends Error {}
