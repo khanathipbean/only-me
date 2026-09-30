@@ -282,4 +282,65 @@ describe("notes", () => {
 
     expect((await prisma.note.findUniqueOrThrow({ where: { id: note.id } })).body).toBe("second");
   });
+  it("takes a note about the Project with no Module, and still refuses another Project's", async () => {
+    const { owner, project, testModule } = await setup("note-owner13@example.com", "PRJ-NOTE-13");
+
+    /* The case the Module used to be required for: a note about the Project
+     * rather than one part of it. Requiring one only had people file these
+     * under whichever Module was nearest. */
+    const projectWide = await createNote(
+      project.id,
+      {
+        moduleId: "",
+        title: "Kickoff: we test the happy path first",
+        body: "Agreed with the whole team.",
+      },
+      owner.id,
+    );
+    expect(projectWide.moduleId).toBeNull();
+
+    /* A Feature names a sub-area of a Module, so with no Module there is
+     * nothing for it to be a sub-area of — it is dropped, not kept as loose
+     * text that no filter or suggestion list would ever surface. */
+    const withFeature = await createNote(
+      project.id,
+      { moduleId: null, feature: "Policy Dashboard", title: "No module, stray feature", body: "" },
+      owner.id,
+    );
+    expect(withFeature.feature).toBeNull();
+
+    /* The check that must not have been relaxed with it: a Module id posted
+     * from a form still has to belong to this Project, or a member of one
+     * Project could file a note where members of another would read it. */
+    const other = await setup("note-owner14@example.com", "PRJ-NOTE-14");
+    await expect(
+      createNote(
+        project.id,
+        { moduleId: other.testModule.id, title: "Filed elsewhere", body: "" },
+        owner.id,
+      ),
+    ).rejects.toBeInstanceOf(NoteValidationError);
+
+    // Still required, and still checked the same way.
+    await expect(
+      createNote(project.id, { moduleId: "", title: "   ", body: "" }, owner.id),
+    ).rejects.toBeInstanceOf(NoteValidationError);
+
+    await createNote(
+      project.id,
+      { moduleId: testModule.id, title: "Filed under Policy", body: "" },
+      owner.id,
+    );
+
+    // "No module" is its own filter: an empty value already means "all", so
+    // without it these notes are reachable only by scrolling past the rest.
+    const none = await listNotesForProjectPage(project.id, { moduleId: "none" });
+    expect(none.items.map((note) => note.title).sort()).toEqual([
+      "Kickoff: we test the happy path first",
+      "No module, stray feature",
+    ]);
+
+    const all = await listNotesForProjectPage(project.id, {});
+    expect(all.total).toBe(3);
+  });
 });

@@ -94,7 +94,7 @@ export async function getProjectOverviewSummary(projectId: string) {
     recentNotes: recentNotes.map((note) => ({
       id: note.id,
       title: note.title,
-      module: note.module.name,
+      module: note.module?.name ?? null,
       feature: note.feature,
       /* The date it is about, falling back to when it was written — the same
        * pair the Notes list orders by, so the two agree. */

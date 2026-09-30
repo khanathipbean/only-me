@@ -221,8 +221,10 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
       projectId: note.project.id,
       projectName: note.project.name,
       /* The Module it is filed under, the same way a Requirement shows its
-       * Module — a note's place is one level, not a chain. */
-      position: note.module.name,
+       * Module — a note's place is one level, not a chain. A note about the
+       * Project as a whole has none, and says so rather than showing a blank
+       * where every other row has a place. */
+      position: note.module?.name ?? "No module",
       href: notesListHref(note.project.id),
     })),
   ];

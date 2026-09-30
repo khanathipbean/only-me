@@ -205,7 +205,7 @@ export default async function NotesPage({
 
   /** The create and edit dialogs ask for the same four things. */
   function fields(defaults?: {
-    moduleId: string;
+    moduleId: string | null;
     feature: string | null;
     title: string;
     body: string;
@@ -214,15 +214,16 @@ export default async function NotesPage({
     return (
       <>
         <label className={labelClass}>
-          <span>
-            Module
-            <RequiredMark />
-          </span>
+          Module
+          {/* Optional. Most notes belong to one and are far easier to find
+              again for it, but a note about the Project — what a kickoff
+              decided, a convention the team agreed — has no honest answer
+              here, and requiring one only had people file it under whichever
+              Module was nearest. */}
           <Select
             name="moduleId"
-            required
             defaultValue={defaults?.moduleId ?? ""}
-            options={[{ value: "", label: "Choose a module…" }, ...moduleOptions]}
+            options={[{ value: "", label: "No module — about the Project" }, ...moduleOptions]}
             ariaLabel="Module"
           />
         </label>
@@ -335,7 +336,14 @@ export default async function NotesPage({
             <Select
               name="moduleId"
               defaultValue={moduleId ?? ""}
-              options={[{ value: "", label: "All modules" }, ...moduleOptions]}
+              /* `none` rather than an empty value: empty already means "all",
+                 and the notes with no Module are otherwise reachable only by
+                 scrolling past every other one. */
+              options={[
+                { value: "", label: "All modules" },
+                { value: "none", label: "No module" },
+                ...moduleOptions,
+              ]}
               ariaLabel="Module"
               autoWidth
               className="max-w-52"
@@ -439,7 +447,13 @@ export default async function NotesPage({
                           </div>
                         </td>
                         <td className={tdClass}>
-                          <Badge tone="indigo">{note.module.name}</Badge>
+                          {note.module ? (
+                            <Badge tone="indigo">{note.module.name}</Badge>
+                          ) : (
+                            /* Not a badge: a badge here would read as a
+                               Module named "None". */
+                            <span className="text-muted">—</span>
+                          )}
                         </td>
                         <td className={`${tdClass} text-muted`}>
                           {note.occurredOn ? formatDate(note.occurredOn) : "—"}

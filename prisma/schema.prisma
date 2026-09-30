@@ -420,10 +420,13 @@ model ProjectFile {
 model Note {
   id        String @id @default(cuid())
   projectId String
-  /// Required. A note with no Module is a note nobody finds again, and the
-  /// Module is the only level above Requirement that a note reliably maps to
-  /// — `Requirement.feature` is a free-text label, not a table to point at.
-  moduleId  String
+  /// Optional. Most notes belong to a Module and are far easier to find
+  /// again for it, but some are about the Project — what a kickoff decided,
+  /// a convention the team agreed. Requiring one only made people file those
+  /// under whichever Module was nearest, which is worse than leaving it
+  /// empty: the Module filter then returns things that have nothing to do
+  /// with it, and the value looks deliberate.
+  moduleId  String?
   /// Sub-area of the Module, the same label a Requirement carries — see
   /// `Requirement.feature`. Free text against a suggestion list, not a table:
   /// a Feature is a name people use, not a thing with a life of its own.
@@ -444,7 +447,7 @@ model Note {
   deletedAt   DateTime?
 
   project   Project @relation(fields: [projectId], references: [id])
-  module    Module  @relation(fields: [moduleId], references: [id])
+  module    Module? @relation(fields: [moduleId], references: [id])
   createdBy User    @relation(fields: [createdById], references: [id])
 
   /// The list is always one Project's, usually narrowed to one Module.

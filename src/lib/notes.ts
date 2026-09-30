@@ -7,7 +7,8 @@ import { normalizeFeature } from "@/lib/requirements";
 export class NoteValidationError extends Error {}
 
 export type NoteInput = {
-  moduleId: string;
+  /** Empty for a note about the Project rather than one part of it. */
+  moduleId?: string | null;
   /** Sub-area of the Module, shared with Requirement. Free text, re-spelled
    *  server-side to whatever spelling the Module already uses. */
   feature?: string | null;
@@ -29,22 +30,30 @@ export type NoteFilters = {
  * The one place a Note's fields are checked, and the one place the Module is
  * confirmed to be this Project's.
  *
- * That last check is not a nicety: `moduleId` arrives from a form, and
- * without it a member of Project A could file a note under Project B's
- * Module by posting its id — the note would then be listed to people who are
- * not members of A at all.
+ * That last check is not a nicety and did not become one when the Module
+ * stopped being required: `moduleId` arrives from a form, and without it a
+ * member of Project A could file a note under Project B's Module by posting
+ * its id — the note would then be listed to people who are not members of A
+ * at all. What changed is only that no Module is now an answer; a Module
+ * that is not this Project's still is not.
  */
 async function validate(projectId: string, input: NoteInput) {
   const title = input.title?.trim() ?? "";
   if (!title) {
     throw new NoteValidationError("Title is required");
   }
-  if (!input.moduleId) {
-    throw new NoteValidationError("Module is required");
+
+  const moduleId = input.moduleId || null;
+  if (!moduleId) {
+    /* A Feature names a sub-area of a Module, so without one there is nothing
+     * for it to be a sub-area of. Dropped rather than kept as loose text: a
+     * label that belongs to no Module would never appear in the suggestions
+     * or the filter, which both read features one Module at a time. */
+    return { title, body: input.body ?? "", moduleId: null, feature: null };
   }
 
   const parent = await prisma.module.findUnique({
-    where: { id: input.moduleId },
+    where: { id: moduleId },
     select: { projectId: true, deletedAt: true },
   });
   if (!parent || parent.projectId !== projectId) {
@@ -57,7 +66,8 @@ async function validate(projectId: string, input: NoteInput) {
   return {
     title,
     body: input.body ?? "",
-    feature: await normalizeFeature(input.moduleId, input.feature),
+    moduleId,
+    feature: await normalizeFeature(moduleId, input.feature),
   };
 }
 
@@ -67,7 +77,15 @@ function noteWhere(projectId: string, filters: NoteFilters) {
   return {
     projectId,
     deletedAt: filters.archived ? { not: null } : null,
-    ...(filters.moduleId ? { moduleId: filters.moduleId } : {}),
+    /* `none` is the filter for notes about the Project itself. An empty
+     * `moduleId` already means "don't filter", so the two need different
+     * values — and without one, those notes are reachable only by scrolling
+     * past every other one. */
+    ...(filters.moduleId === "none"
+      ? { moduleId: null }
+      : filters.moduleId
+        ? { moduleId: filters.moduleId }
+        : {}),
     ...(filters.feature ? { feature: filters.feature } : {}),
     /* Title *and* body, unlike every other list in the app, which searches a
      * name. A note's worth is mostly in its body: "clone ข้ามโปรเจกต์" should
@@ -117,12 +135,12 @@ export async function getNoteById(id: string) {
 }
 
 export async function createNote(projectId: string, input: NoteInput, actorId: string) {
-  const { title, body, feature } = await validate(projectId, input);
+  const { title, body, feature, moduleId } = await validate(projectId, input);
 
   const note = await prisma.note.create({
     data: {
       projectId,
-      moduleId: input.moduleId,
+      moduleId,
       feature,
       title,
       body,
@@ -145,12 +163,12 @@ export async function createNote(projectId: string, input: NoteInput, actorId: s
 
 export async function updateNote(id: string, input: NoteInput, actorId: string) {
   const before = await prisma.note.findUniqueOrThrow({ where: { id } });
-  const { title, body, feature } = await validate(before.projectId, input);
+  const { title, body, feature, moduleId } = await validate(before.projectId, input);
 
   const note = await prisma.note.update({
     where: { id },
     data: {
-      moduleId: input.moduleId,
+      moduleId,
       feature,
       title,
       body,
