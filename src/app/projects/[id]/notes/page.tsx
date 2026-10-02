@@ -296,27 +296,31 @@ export default async function NotesPage({
       />
       <PageHeader
         title="Notes"
-        subtitle="What a meeting decided, why a Requirement reads the way it does — filed under a Module, visible to everyone on the Project."
+        subtitle="What a meeting decided, why a Requirement reads the way it does — filed under a Module or against the Project, visible to everyone on it."
         actions={
-          modules.length === 0 ? null : (
-            <Modal triggerLabel="+ New Note" title="New Note" openOnMount={!!error && !editId}>
-              {error && !editId && (
-                <p
-                  role="alert"
-                  className="mb-4 rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                >
-                  {error}
-                </p>
-              )}
-              <form action={create} className="flex flex-col gap-4">
-                {fields()}
-                <div className="mt-2 flex flex-wrap justify-end gap-2">
-                  <DialogCloseButton />
-                  <SubmitButton>Add note</SubmitButton>
-                </div>
-              </form>
-            </Modal>
-          )
+          /* No longer hidden while the Project has no Modules. That guard was
+             right when a note had to be filed under one — the button would
+             have opened a form nobody could submit — and it became a way of
+             refusing something possible the moment the Module turned
+             optional. A Project with no Modules yet is exactly where the
+             first note tends to be written. */
+          <Modal triggerLabel="+ New Note" title="New Note" openOnMount={!!error && !editId}>
+            {error && !editId && (
+              <p
+                role="alert"
+                className="mb-4 rounded-md bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-300"
+              >
+                {error}
+              </p>
+            )}
+            <form action={create} className="flex flex-col gap-4">
+              {fields()}
+              <div className="mt-2 flex flex-wrap justify-end gap-2">
+                <DialogCloseButton />
+                <SubmitButton>Add note</SubmitButton>
+              </div>
+            </form>
+          </Modal>
         }
       />
 
@@ -386,13 +390,11 @@ export default async function NotesPage({
 
       {notes.length === 0 ? (
         <p className={mutedTextClass}>
-          {modules.length === 0
-            ? "Create a Module first — every note is filed under one."
-            : showArchived
-              ? "No archived notes."
-              : hasFilters
-                ? "No notes match your search."
-                : "No notes yet. Write down what a meeting decided, or why a Requirement reads the way it does."}
+          {showArchived
+            ? "No archived notes."
+            : hasFilters
+              ? "No notes match your search."
+              : "No notes yet. Write down what a meeting decided, or why a Requirement reads the way it does."}
         </p>
       ) : (
         <div className={tableWrapClass}>
