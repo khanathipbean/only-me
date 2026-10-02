@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
-import { normalizeFeature } from "@/lib/requirements";
+import { normalizeFeature, normalizeProjectNoteFeature } from "@/lib/requirements";
 
 export class NoteValidationError extends Error {}
 
@@ -45,11 +45,21 @@ async function validate(projectId: string, input: NoteInput) {
 
   const moduleId = input.moduleId || null;
   if (!moduleId) {
-    /* A Feature names a sub-area of a Module, so without one there is nothing
-     * for it to be a sub-area of. Dropped rather than kept as loose text: a
-     * label that belongs to no Module would never appear in the suggestions
-     * or the filter, which both read features one Module at a time. */
-    return { title, body: input.body ?? "", moduleId: null, feature: null };
+    /* A note against the Project keeps its Feature, pooled with the other
+     * notes that have no Module rather than with a Module's.
+     *
+     * It used to be dropped here, on the grounds that a Feature names a
+     * sub-area of a Module. That reasoning was tidy and the behaviour was
+     * not: the form still offered the field, took what was typed, and
+     * reported success — so the label vanished with nothing said. Silently
+     * discarding what someone typed is worse than either keeping it or
+     * refusing it. */
+    return {
+      title,
+      body: input.body ?? "",
+      moduleId: null,
+      feature: await normalizeProjectNoteFeature(projectId, input.feature),
+    };
   }
 
   const parent = await prisma.module.findUnique({

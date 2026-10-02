@@ -87,18 +87,55 @@ export async function listFeaturesForModule(moduleId: string) {
 }
 
 /**
+ * The same list for notes filed against the Project rather than a Module.
+ *
+ * Those notes have no Module to pool with, so they pool with each other —
+ * one list per Project, which is the only other boundary there is. Without
+ * this they would have no pool at all, and the normaliser below would have
+ * nothing to compare a new spelling against.
+ */
+export async function listFeaturesForProjectNotes(projectId: string) {
+  const rows = await prisma.note.findMany({
+    where: { projectId, moduleId: null, deletedAt: null, feature: { not: null } },
+    select: { feature: true },
+    distinct: ["feature"],
+  });
+  return [...new Set(rows.map((row) => row.feature as string))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
+/** The comparison both normalisers do, over whichever pool they were given. */
+function matchKnownSpelling(known: string[], raw: string | null | undefined) {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return known.find((value) => value.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
+}
+
+/** `normalizeFeature`, for a note that belongs to no Module. */
+export async function normalizeProjectNoteFeature(
+  projectId: string,
+  raw: string | null | undefined,
+) {
+  if (!raw?.trim()) {
+    return null;
+  }
+  return matchKnownSpelling(await listFeaturesForProjectNotes(projectId), raw);
+}
+
+/**
  * Keeps "Policy Center" and "policy center" from becoming two groups: if the
  * Module already knows a Feature that differs only in case or padding, the
  * existing spelling wins. Free text drifts otherwise — the same reason this
  * project stopped storing a file's Module as free text.
  */
 export async function normalizeFeature(moduleId: string, raw: string | null | undefined) {
-  const trimmed = raw?.trim();
-  if (!trimmed) {
+  if (!raw?.trim()) {
     return null;
   }
-  const known = await listFeaturesForModule(moduleId);
-  return known.find((value) => value.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
+  return matchKnownSpelling(await listFeaturesForModule(moduleId), raw);
 }
 
 function validate(input: RequirementInput) {

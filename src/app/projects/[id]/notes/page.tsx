@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { getProjectById } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
-import { listFeaturesForModule } from "@/lib/requirements";
+import { listFeaturesForModule, listFeaturesForProjectNotes } from "@/lib/requirements";
 import {
   NoteValidationError,
   archiveNote,
@@ -107,10 +107,18 @@ export default async function NotesPage({
   const notes = result.items;
 
   /* Features belong to a Module, so the suggestions and the filter only mean
-   * anything once one is chosen. With "All modules" selected there is no
-   * single set to offer, and a list pooled across Modules would suggest a
-   * label that does not belong to the one being written against. */
-  const features = moduleId ? await listFeaturesForModule(moduleId) : [];
+   * anything once one scope is chosen. With "All modules" selected there is
+   * no single set to offer, and a list pooled across Modules would suggest a
+   * label that does not belong to the one being written against.
+   *
+   * "No module" is a scope too: those notes pool with each other, which is
+   * the only other boundary there is. */
+  const features =
+    moduleId === "none"
+      ? await listFeaturesForProjectNotes(projectId)
+      : moduleId
+        ? await listFeaturesForModule(moduleId)
+        : [];
 
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all,

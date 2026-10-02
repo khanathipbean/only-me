@@ -9,7 +9,11 @@ vi.mock("@/auth", () => ({
 import { auth } from "@/auth";
 import { POST as createProjectRoute } from "@/app/api/projects/route";
 import { ModuleValidationError, archiveModule, createModule } from "@/lib/modules";
-import { createRequirement, listFeaturesForModule } from "@/lib/requirements";
+import {
+  createRequirement,
+  listFeaturesForModule,
+  listFeaturesForProjectNotes,
+} from "@/lib/requirements";
 import {
   NoteValidationError,
   archiveNote,
@@ -299,15 +303,35 @@ describe("notes", () => {
     );
     expect(projectWide.moduleId).toBeNull();
 
-    /* A Feature names a sub-area of a Module, so with no Module there is
-     * nothing for it to be a sub-area of — it is dropped, not kept as loose
-     * text that no filter or suggestion list would ever surface. */
+    /* The Feature is kept, pooled with the other notes that have no Module.
+     * It used to be dropped here on the grounds that a Feature names a
+     * sub-area of a Module — tidy reasoning, bad behaviour: the form offered
+     * the field, took what was typed, and said "saved". */
     const withFeature = await createNote(
       project.id,
-      { moduleId: null, feature: "Policy Dashboard", title: "No module, stray feature", body: "" },
+      { moduleId: null, feature: "Policy Dashboard", title: "No module, has a feature", body: "" },
       owner.id,
     );
-    expect(withFeature.feature).toBeNull();
+    expect(withFeature.feature).toBe("Policy Dashboard");
+
+    /* And pooled means normalised, the same as a Module's: the second person
+     * to type it in a different case does not start a second group. */
+    const respelled = await createNote(
+      project.id,
+      { moduleId: null, feature: "  policy dashboard ", title: "Typed differently", body: "" },
+      owner.id,
+    );
+    expect(respelled.feature).toBe("Policy Dashboard");
+    expect(await listFeaturesForProjectNotes(project.id)).toEqual(["Policy Dashboard"]);
+
+    /* Pooled per scope, not across them: a Module's features and the
+     * Project's are separate lists, so neither suggests the other's. */
+    await createNote(
+      project.id,
+      { moduleId: testModule.id, feature: "Only In Policy", title: "Filed in Policy", body: "" },
+      owner.id,
+    );
+    expect(await listFeaturesForProjectNotes(project.id)).toEqual(["Policy Dashboard"]);
 
     /* The check that must not have been relaxed with it: a Module id posted
      * from a form still has to belong to this Project, or a member of one
@@ -337,10 +361,11 @@ describe("notes", () => {
     const none = await listNotesForProjectPage(project.id, { moduleId: "none" });
     expect(none.items.map((note) => note.title).sort()).toEqual([
       "Kickoff: we test the happy path first",
-      "No module, stray feature",
+      "No module, has a feature",
+      "Typed differently",
     ]);
 
     const all = await listNotesForProjectPage(project.id, {});
-    expect(all.total).toBe(3);
+    expect(all.total).toBe(5);
   });
 });
