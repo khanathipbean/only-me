@@ -306,6 +306,7 @@ export default async function TestCaseDetailPage({
               triggerVariant="secondary"
               triggerIcon={<EditIcon />}
               title="Edit Test Case"
+              width="lg"
               openOnMount={!!error}
             >
               <TestCaseForm

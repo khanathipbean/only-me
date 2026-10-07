@@ -306,9 +306,13 @@ export default async function TestCasesPage({
         actions={
           <>
           {testCases.length > 0 && <BulkSelectToggle />}
+          {/* Wider than the default: the form is three columns of fields
+              with a Status explanation beside them, and at the standard width
+              every one of them was a column of wrapped fragments. */}
           <Modal
             triggerLabel="+ New Test Case"
             title="New Test Case"
+            width="lg"
             openOnMount={!!error && !editId}
           >
             <TestCaseForm
@@ -502,6 +506,7 @@ export default async function TestCasesPage({
                       key={`${testCase.id}-${editId === testCase.id}`}
                       label={testCase.name}
                       title="Edit Test Case"
+                      width="lg"
                       openOnMount={!!error && editId === testCase.id}
                     >
                       <TestCaseForm

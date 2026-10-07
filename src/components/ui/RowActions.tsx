@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { IconButton } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Modal";
@@ -25,6 +32,7 @@ import { ArrowUpRightIcon, EditIcon, MoreVerticalIcon } from "@/components/icons
 export function RowActions({
   label,
   title,
+  width,
   openHref,
   openOnMount = false,
   children,
@@ -33,6 +41,8 @@ export function RowActions({
   label: string;
   /** Heading for the edit dialog. */
   title: string;
+  /** Passed straight to the dialog, for a form too wide for the default. */
+  width?: ComponentProps<typeof Dialog>["width"];
   /** The entity's own page. Omit when the entity has no page of its own: the
    * trigger then edits directly, because a menu holding a single item costs
    * two clicks to do what one button already does. */
@@ -123,7 +133,7 @@ export function RowActions({
         >
           <EditIcon />
         </IconButton>
-        <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={title}>
+        <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={title} width={width}>
           {children}
         </Dialog>
       </div>
@@ -179,7 +189,7 @@ export function RowActions({
           document.body,
         )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={title}>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={title} width={width}>
         {children}
       </Dialog>
     </div>

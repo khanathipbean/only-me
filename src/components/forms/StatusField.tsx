@@ -47,7 +47,10 @@ export function StatusField({
   return (
     <div className={labelClass}>
       Status
-      <span className="flex flex-wrap items-center gap-2">
+      {/* The reason on its own line rather than beside the badge: in a form
+          column it is a sentence, and a sentence set next to a badge wraps
+          into fragments that read as broken rather than as prose. */}
+      <span className="flex flex-col items-start gap-1.5">
         <Badge tone={workflowStatusTone(value ?? "DRAFT")}>
           {(value ?? "DRAFT").replace(/_/g, " ")}
         </Badge>
