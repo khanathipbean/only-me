@@ -139,6 +139,57 @@ export async function listRunHistoryForCases(
   return byCase;
 }
 
+/**
+ * One mark per answer that was recorded, oldest first — the strip's unit.
+ *
+ * Not one per round. A round holds as many answers as the tester gave it,
+ * and collapsing them to the round's last one hides the failure that caused
+ * the work, which is the thing the strip exists to show. Which round a mark
+ * belongs to is not lost: it is on the mark, and the tooltip says it.
+ *
+ * A round with no recorded answers still gets exactly one mark, from the
+ * round's own result. Two cases need this and neither is an edge case:
+ * a case sitting in a round nobody has reached yet, and every round recorded
+ * before results were kept individually — drawing those from attempts alone
+ * would empty the strip of all the history there was.
+ */
+export type ResultMark = {
+  testRunId: string;
+  runName: string;
+  testResult: TestResult;
+  at: Date | null;
+  by: string | null;
+  notes: string | null;
+  /** First mark of its round, so the rounds stay visible as groups. */
+  startsRound: boolean;
+};
+
+export function toResultMarks(entries: RunHistoryEntry[]): ResultMark[] {
+  return entries.flatMap<ResultMark>((entry) => {
+    const round = { testRunId: entry.testRunId, runName: entry.runName };
+    if (entry.attempts.length === 0) {
+      return [
+        {
+          ...round,
+          testResult: entry.testResult,
+          at: entry.ranAt,
+          by: entry.ranBy,
+          notes: entry.notes,
+          startsRound: true,
+        },
+      ];
+    }
+    return entry.attempts.map((attempt, index) => ({
+      ...round,
+      testResult: attempt.testResult,
+      at: attempt.recordedAt,
+      by: attempt.recordedBy,
+      notes: attempt.notes,
+      startsRound: index === 0,
+    }));
+  });
+}
+
 /** The counts the summary line above a history is built from. */
 export function summariseHistory(entries: RunHistoryEntry[]) {
   const rounds = entries.length;

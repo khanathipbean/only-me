@@ -16,6 +16,7 @@ import {
   listProblemCases,
   listRunHistoryForCases,
   summariseHistory,
+  toResultMarks,
   type RunHistoryEntry,
 } from "@/lib/run-history";
 import type { TestResult } from "@/generated/prisma/client";
@@ -306,6 +307,67 @@ describe("the shape a case's results make", () => {
     // One round ended broken; two reported a failure at some point.
     expect(failed).toBe(1);
     expect(hadFailure).toBe(2);
+  });
+
+  it("draws one mark per answer recorded, not one per round", () => {
+    /* The strip is the only place a failure that was fixed before the round
+     * ended is visible, so its unit is the answer, not the round. */
+    const marks = toResultMarks(of(["FAILED", "PASSED"], "PASSED", ["FAILED", "FAILED", "PASSED"]));
+    expect(marks.map((mark) => mark.testResult)).toEqual([
+      "FAILED",
+      "PASSED",
+      "PASSED",
+      "FAILED",
+      "FAILED",
+      "PASSED",
+    ]);
+
+    // Which round each mark belongs to is not lost, and the rounds stay
+    // visible as groups rather than running together.
+    expect(marks.map((mark) => mark.startsRound)).toEqual([true, false, true, true, false, false]);
+    expect(marks.map((mark) => mark.runName)).toEqual([
+      "Sprint 1",
+      "Sprint 1",
+      "Sprint 2",
+      "Sprint 3",
+      "Sprint 3",
+      "Sprint 3",
+    ]);
+
+    // The note stays with the answer it was written beside.
+    expect(marks[0].notes).toBe("broke on try 1");
+    expect(marks[1].notes).toBeNull();
+  });
+
+  it("still draws a round that recorded nothing individually", () => {
+    /* Every round recorded before answers were kept one by one has no
+     * attempts at all. Drawing from those alone would empty the strip of all
+     * the history there was, so the round's own result stands in for one
+     * mark — which is exactly what the strip used to show. */
+    const legacy: RunHistoryEntry[] = [
+      {
+        testRunId: "r0",
+        runName: "Sprint 1",
+        phase: null,
+        testResult: "FAILED",
+        notes: "from before",
+        ranAt: new Date(2026, 0, 1),
+        ranBy: "Super Admin",
+        attempts: [],
+        everFailed: false,
+      },
+    ];
+    const marks = toResultMarks(legacy);
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toMatchObject({
+      testResult: "FAILED",
+      notes: "from before",
+      by: "Super Admin",
+      startsRound: true,
+    });
+
+    // And a case sitting in a round nobody has reached still gets its square.
+    expect(toResultMarks(of("NOT_RUN"))).toHaveLength(1);
   });
 
   it("separates what broke from what is unreliable, which a count cannot", () => {

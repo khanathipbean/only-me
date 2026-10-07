@@ -7,6 +7,7 @@ import { listPhasesForProject } from "@/lib/test-runs";
 import {
   listProblemCases,
   summariseHistory,
+  toResultMarks,
   PROBLEM_PATTERN_ORDER,
   type CasePattern,
   type ProblemCase,
@@ -19,7 +20,7 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { nameOr, problemCasesBreadcrumb } from "@/lib/breadcrumb";
 import { formatDate } from "@/lib/dates";
-import { formRowClass, labelClass, mutedTextClass, pageClass } from "@/lib/ui";
+import { formRowClass, labelClass, mutedTextClass, pageClass, thClass } from "@/lib/ui";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -63,9 +64,17 @@ const SECTIONS: Record<
   },
 };
 
-/** One square per round, oldest on the left, so the shape reads left to
- *  right. Colour alone would be the only carrier, so each square names its
- *  round and result in a tooltip. */
+/**
+ * One square per answer recorded, oldest on the left, so the shape reads
+ * left to right — including the answers inside a round. A case that was
+ * reported broken and passed after a fix shows red then green, which is the
+ * only place that round trip is visible at a glance.
+ *
+ * Squares of the same round sit together and the next round starts after a
+ * gap, so the grouping survives without a label. Colour alone would be the
+ * only carrier otherwise, so each square names its round, its answer and
+ * when it was given.
+ */
 function ResultStrip({
   entries,
   projectId,
@@ -73,39 +82,34 @@ function ResultStrip({
   entries: ProblemCase["history"];
   projectId: string;
 }) {
+  const marks = toResultMarks(entries);
   return (
     <span className="flex flex-wrap items-center gap-1">
-      {entries.map((entry, index) => {
+      {marks.map((mark, index) => {
         const colour =
-          entry.testResult === "PASSED"
+          mark.testResult === "PASSED"
             ? "bg-emerald-500"
-            : entry.testResult === "FAILED"
+            : mark.testResult === "FAILED"
               ? "bg-red-500"
-              : entry.testResult === "BLOCKED"
+              : mark.testResult === "BLOCKED"
                 ? "bg-amber-500"
                 : "bg-slate-400 dark:bg-slate-600";
-        const latest = index === entries.length - 1;
-        /* A round that went red before it went green is drawn split, red half
-         * first, so the strip shows the work and not only the verdict. Without
-         * this every round a developer fixed looks identical to one that was
-         * right the first time, which is the whole reason this page was quiet
-         * when it should not have been. */
-        const reworked = entry.everFailed && entry.testResult !== "FAILED";
-        const fill = reworked
-          ? `bg-linear-to-r from-red-500 from-50% ${colour.replace(/bg-/g, "to-")} to-50%`
-          : colour;
-        const said = `${entry.testResult.replace(/_/g, " ")}${
-          reworked ? ", after a failure in the same round" : ""
-        }`;
+        const latest = index === marks.length - 1;
+        const said =
+          `${mark.runName} — ${mark.testResult.replace(/_/g, " ")}` +
+          (mark.at ? ` · ${formatDate(mark.at)}` : "") +
+          (mark.by ? ` · ${mark.by}` : "");
         return (
           <Link
-            key={entry.testRunId}
-            href={`/projects/${projectId}/runs/${entry.testRunId}`}
-            title={`${entry.runName} — ${said}`}
-            aria-label={`${entry.runName}: ${said}`}
-            className={`size-4 rounded ${fill} ${
-              latest ? "ring-2 ring-brand ring-offset-1 ring-offset-background" : ""
-            }`}
+            key={`${mark.testRunId}-${index}`}
+            href={`/projects/${projectId}/runs/${mark.testRunId}`}
+            title={said}
+            aria-label={said}
+            className={`size-4 rounded ${colour} ${
+              /* The first square of a round after the first: a gap, so two
+                 answers in one round do not read as two rounds. */
+              mark.startsRound && index > 0 ? "ml-2" : ""
+            } ${latest ? "ring-2 ring-brand ring-offset-1 ring-offset-background" : ""}`}
           />
         );
       })}
@@ -232,6 +236,16 @@ export default async function ProblemCasesPage({
                     <col className="w-[22%]" />
                     <col className="w-[32%]" />
                   </colgroup>
+                  <thead>
+                    <tr>
+                      <th className={thClass}>Test case</th>
+                      {/* Named for its unit, because the unit is not obvious:
+                          one square is one result recorded, and a round can
+                          hold several. */}
+                      <th className={thClass}>Every result recorded</th>
+                      <th className={thClass}>What was written when it failed</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {rows.map((row) => {
                       const { hadFailure } = summariseHistory(row.history);
@@ -258,7 +272,12 @@ export default async function ProblemCasesPage({
                                   {" · "}
                                 </>
                               )}
-                              failed in {hadFailure} of {row.history.length}
+                              {/* "rounds" said out loud: the squares are one
+                                  per answer recorded, so a bare "1 of 2"
+                                  beside six squares would be read as
+                                  counting them. */}
+                              failed in {hadFailure} of {row.history.length} round
+                              {row.history.length === 1 ? "" : "s"}
                             </p>
                           </td>
                           <td className="px-3 py-3 align-top text-muted">
