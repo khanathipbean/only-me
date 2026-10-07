@@ -1,7 +1,6 @@
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
-import { WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
-import { Select } from "@/components/ui/Select";
+import { StatusField } from "@/components/forms/StatusField";
 import { SubmitButton } from "@/components/SubmitButton";
 import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { WorkflowStatus } from "@/generated/prisma/client";
@@ -20,6 +19,7 @@ export function TestGroupForm({
   error,
   formId,
   hideActions = false,
+  statusFromChildren = false,
 }: {
   action: (formData: FormData) => void;
   defaults?: TestGroupFormDefaults;
@@ -31,6 +31,9 @@ export function TestGroupForm({
   formId?: string;
   /** Drops the built-in Cancel/Save row — the caller renders it instead. */
   hideActions?: boolean;
+  /** This row has live children, so its status is its Test Cases' and the
+   *  field becomes a value rather than a choice. See `StatusField`. */
+  statusFromChildren?: boolean;
 }) {
   return (
     <>
@@ -60,15 +63,13 @@ export function TestGroupForm({
             className={textareaClass}
           />
         </label>
-        <label className={`${labelClass} sm:col-span-2`}>
-          Status
-          <Select
-            name="status"
-            defaultValue={defaults?.status ?? "DRAFT"}
-            options={WORKFLOW_STATUS_OPTIONS}
-            ariaLabel="Status"
+        <div className="sm:col-span-2">
+          <StatusField
+            value={defaults?.status}
+            fromChildren={statusFromChildren}
+            childNoun="Test Cases"
           />
-        </label>
+        </div>
         {!hideActions && (
           <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
             <DialogCloseButton />

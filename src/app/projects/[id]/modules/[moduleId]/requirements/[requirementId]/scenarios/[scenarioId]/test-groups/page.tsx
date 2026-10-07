@@ -498,6 +498,9 @@ export default async function TestGroupsPage({
                         submitLabel="Save"
                         formId={`edit-test-group-${testGroup.id}`}
                         hideActions
+                        statusFromChildren={
+                          (descendantCounts.get(testGroup.id)?.testCases ?? 0) > 0
+                        }
                         error={editId === testGroup.id ? error : undefined}
                         defaults={{
                           name: testGroup.name,

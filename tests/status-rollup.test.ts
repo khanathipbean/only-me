@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { createModule } from "@/lib/modules";
-import { createRequirement } from "@/lib/requirements";
-import { createScenario } from "@/lib/scenarios";
-import { archiveTestGroup, createTestGroup } from "@/lib/test-groups";
+import { createRequirement, updateRequirement } from "@/lib/requirements";
+import { createScenario, updateScenario } from "@/lib/scenarios";
+import { archiveTestGroup, createTestGroup, updateTestGroup } from "@/lib/test-groups";
 import {
   archiveTestCase,
   createTestCase,
@@ -308,5 +308,64 @@ describe("the write paths that have to recompute", () => {
 
     await archiveTestGroup(second.id, owner.id);
     expect(await statusOfRequirement(requirement.id)).toBe("COMPLETED");
+  });
+});
+
+/**
+ * A derived field is only locked if the form leaving it out keeps it. These
+ * guard the fallback each update function takes when no status is sent —
+ * `updateRequirement` had `?? "DRAFT"`, which would have reset the status on
+ * every edit to a name once the field stopped being rendered.
+ */
+describe("an update that sends no status", () => {
+  it("keeps what the row already had, at all three levels", async () => {
+    const owner = await prisma.user.create({
+      data: { email: "prj-keep@example.com", passwordHash: "x", name: "keep" },
+    });
+    const project = await prisma.project.create({
+      data: { code: "PRJ-KEEP", name: "PRJ-KEEP", status: "ACTIVE", ownerId: owner.id },
+    });
+    const mod = await createModule(project.id, "Policy", owner.id);
+    const requirement = await createRequirement(
+      project.id,
+      { moduleId: mod.id, name: "Req", priority: "MEDIUM", status: "COMPLETED" },
+      owner.id,
+    );
+    const scenario = await createScenario(
+      project.id,
+      {
+        requirementId: requirement.id,
+        name: "Sc",
+        expectedResult: "ok",
+        priority: "MEDIUM",
+        status: "COMPLETED",
+      },
+      owner.id,
+    );
+    const group = await createTestGroup(
+      scenario.id,
+      { name: "Grp", status: "COMPLETED" },
+      owner.id,
+    );
+
+    // No `status` in any of these, which is what the forms now send.
+    await updateRequirement(
+      requirement.id,
+      { moduleId: mod.id, name: "Req renamed", priority: "MEDIUM" },
+      owner.id,
+    );
+    await updateScenario(
+      scenario.id,
+      { name: "Sc renamed", expectedResult: "ok", priority: "MEDIUM" },
+      owner.id,
+    );
+    await updateTestGroup(group.id, { name: "Grp renamed" }, owner.id);
+
+    expect((await prisma.requirement.findUniqueOrThrow({ where: { id: requirement.id } })).status)
+      .toBe("COMPLETED");
+    expect((await prisma.scenario.findUniqueOrThrow({ where: { id: scenario.id } })).status)
+      .toBe("COMPLETED");
+    expect((await prisma.testGroup.findUniqueOrThrow({ where: { id: group.id } })).status)
+      .toBe("COMPLETED");
   });
 });

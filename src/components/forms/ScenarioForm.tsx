@@ -1,7 +1,8 @@
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
-import { PRIORITY_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import { PRIORITY_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
+import { StatusField } from "@/components/forms/StatusField";
 import { SubmitButton } from "@/components/SubmitButton";
 import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
@@ -26,6 +27,7 @@ export function ScenarioForm({
   error,
   formId,
   hideActions = false,
+  statusFromChildren = false,
   requirements,
 }: {
   action: (formData: FormData) => void;
@@ -38,6 +40,9 @@ export function ScenarioForm({
   formId?: string;
   /** Drops the built-in Cancel/Save row — the caller renders it instead. */
   hideActions?: boolean;
+  /** This row has live children, so its status is its Test Groups' and the
+   *  field becomes a value rather than a choice. See `StatusField`. */
+  statusFromChildren?: boolean;
   /** The project's requirements, for the parent picker. Optional through
    * phase 1: a Scenario can still exist without one. */
   requirements?: { id: string; name: string; code: string | null }[];
@@ -104,15 +109,11 @@ export function ScenarioForm({
             ariaLabel="Priority"
           />
         </label>
-        <label className={labelClass}>
-          Status
-          <Select
-            name="status"
-            defaultValue={defaults?.status ?? "DRAFT"}
-            options={WORKFLOW_STATUS_OPTIONS}
-            ariaLabel="Status"
-          />
-        </label>
+        <StatusField
+          value={defaults?.status}
+          fromChildren={statusFromChildren}
+          childNoun="Test Groups"
+        />
         {requirements && (
           /* The full row, not half of one: these labels carry a code and a
              sentence-long name, and the dropdown is only ever as wide as the

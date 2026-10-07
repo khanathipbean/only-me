@@ -284,7 +284,11 @@ export async function updateRequirement(
       // Against the Module it is moving to, not the one it came from.
       feature: await normalizeFeature(input.moduleId, input.feature),
       priority: input.priority,
-      status: input.status ?? "DRAFT",
+      /* `before.status`, not "DRAFT". A Requirement that has Scenarios no
+       * longer sends a status — its own is derived from them — and falling
+       * back to the default would have every edit to a name or a description
+       * quietly reset it. */
+      status: input.status ?? before.status,
     },
   });
 

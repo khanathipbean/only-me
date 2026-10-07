@@ -576,6 +576,9 @@ export default async function ScenariosPage({
                         submitLabel="Save"
                         formId={`edit-scenario-${scenario.id}`}
                         hideActions
+                        statusFromChildren={
+                          (descendantCounts.get(scenario.id)?.testGroups ?? 0) > 0
+                        }
                         error={editId === scenario.id ? error : undefined}
                         requirements={requirementOptions}
                         defaults={{

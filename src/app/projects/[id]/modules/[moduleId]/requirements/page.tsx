@@ -444,6 +444,7 @@ export default async function RequirementsPage({
                           modules={modules}
                           formId={`edit-requirement-${requirement.id}`}
                           hideActions
+                          statusFromChildren={requirement._count.scenarios > 0}
                           defaults={{
                             name: requirement.name,
                             feature: requirement.feature,

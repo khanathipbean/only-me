@@ -1,7 +1,8 @@
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
-import { PRIORITY_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import { PRIORITY_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
+import { StatusField } from "@/components/forms/StatusField";
 import { SubmitButton } from "@/components/SubmitButton";
 import { inputClass, labelClass, textareaClass } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
@@ -25,6 +26,7 @@ export function RequirementForm({
   features = [],
   formId,
   hideActions = false,
+  statusFromChildren = false,
 }: {
   action: (formData: FormData) => void;
   defaults?: RequirementFormDefaults;
@@ -36,6 +38,9 @@ export function RequirementForm({
   features?: string[];
   formId?: string;
   hideActions?: boolean;
+  /** This row has live children, so its status is its Scenarios' and the
+   *  field becomes a value rather than a choice. See `StatusField`. */
+  statusFromChildren?: boolean;
 }) {
   return (
     <>
@@ -122,15 +127,11 @@ export function RequirementForm({
             ariaLabel="Priority"
           />
         </label>
-        <label className={labelClass}>
-          Status
-          <Select
-            name="status"
-            defaultValue={defaults?.status ?? "DRAFT"}
-            options={WORKFLOW_STATUS_OPTIONS}
-            ariaLabel="Status"
-          />
-        </label>
+        <StatusField
+          value={defaults?.status}
+          fromChildren={statusFromChildren}
+          childNoun="Scenarios"
+        />
         {!hideActions && (
           <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">
             <DialogCloseButton />
