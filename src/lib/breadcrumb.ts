@@ -66,6 +66,13 @@ export function dashboardBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [...projectBreadcrumb(project), { label: "Dashboard", href: `/projects/${project.id}/dashboard` }];
 }
 
+export function problemCasesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [
+    ...projectBreadcrumb(project),
+    { label: "Problem cases", href: `/projects/${project.id}/problem-cases` },
+  ];
+}
+
 export function auditLogBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [...projectBreadcrumb(project), { label: "Audit Trail", href: `/projects/${project.id}/audit-log` }];
 }
