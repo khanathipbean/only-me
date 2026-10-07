@@ -4,16 +4,19 @@ import { WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
 import { labelClass } from "@/lib/ui";
 
 /**
- * The Status field for a level that has levels beneath it.
+ * The Status field, shown as a value instead of a choice wherever the status
+ * is worked out rather than typed.
  *
- * While the row has live children its status is not something anyone types:
- * it is every live child's status when they agree, and IN_PROGRESS when they
- * do not. Offering a field would be offering a choice the next edit anywhere
- * below would overrule, which reads as the app losing what someone entered.
+ * Two different things derive it and the field does not care which: a parent
+ * takes it from the live rows beneath it, and a Test Case takes it from the
+ * result a round gave it. Either way, offering a field would be offering a
+ * choice the next edit would overrule, which reads as the app losing what
+ * someone entered. The caller passes the sentence saying which, because only
+ * the caller knows.
  *
- * A row with no live children keeps the field. There is nothing to derive
- * from, and locking it would leave no way to say anything about the row at
- * all — a Scenario written this morning with no Test Groups yet.
+ * Nothing derived keeps the field. A Scenario written this morning with no
+ * Test Groups, or a case no round has reached, has nothing to derive from,
+ * and locking it would leave no way to say anything about the row at all.
  *
  * No hidden input in the derived case. The update functions fall back to the
  * row's current status when the form sends none, so leaving it out is the
@@ -21,16 +24,13 @@ import { labelClass } from "@/lib/ui";
  */
 export function StatusField({
   value,
-  fromChildren,
-  childNoun,
+  derivedFrom,
 }: {
   value: string | undefined;
-  /** The row has live children, so its status is theirs. */
-  fromChildren: boolean;
-  /** What those children are called, for the sentence under the value. */
-  childNoun: string;
+  /** Why the status is not editable, as a sentence. Absent means it is. */
+  derivedFrom?: string;
 }) {
-  if (!fromChildren) {
+  if (!derivedFrom) {
     return (
       <label className={labelClass}>
         Status
@@ -51,9 +51,7 @@ export function StatusField({
         <Badge tone={workflowStatusTone(value ?? "DRAFT")}>
           {(value ?? "DRAFT").replace(/_/g, " ")}
         </Badge>
-        <span className="text-xs font-normal text-muted">
-          Follows the {childNoun} below — all the same, or In Progress.
-        </span>
+        <span className="text-xs font-normal text-muted">{derivedFrom}</span>
       </span>
     </div>
   );

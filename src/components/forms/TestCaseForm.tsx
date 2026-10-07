@@ -1,11 +1,12 @@
 import { RequiredMark } from "@/components/forms/RequiredMark";
+import { StatusField } from "@/components/forms/StatusField";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
-import { PRIORITY_OPTIONS, TEST_TYPE_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import { PRIORITY_OPTIONS, TEST_TYPE_OPTIONS } from "@/lib/enums";
 import { Select } from "@/components/ui/Select";
 import { TestStepEditor, type StepDraft } from "@/components/TestStepEditor";
 import { SubmitButton } from "@/components/SubmitButton";
 import { inputClass, labelClass, textareaClass } from "@/lib/ui";
-import type { Priority, TestType, WorkflowStatus } from "@/generated/prisma/client";
+import type { Priority, TestResult, TestType, WorkflowStatus } from "@/generated/prisma/client";
 
 export type TestCaseFormDefaults = {
   name?: string;
@@ -16,6 +17,9 @@ export type TestCaseFormDefaults = {
   priority?: Priority;
   testType?: TestType | null;
   status?: WorkflowStatus;
+  /** The case's latest result. Once a round has given it one, the status
+   *  follows it and the field stops being a choice. */
+  testResult?: TestResult;
   steps?: StepDraft[];
 };
 
@@ -101,15 +105,14 @@ export function TestCaseForm({
             ariaLabel="Test Type"
           />
         </label>
-        <label className={labelClass}>
-          Status
-          <Select
-            name="status"
-            defaultValue={defaults?.status ?? "DRAFT"}
-            options={WORKFLOW_STATUS_OPTIONS}
-            ariaLabel="Status"
-          />
-        </label>
+        <StatusField
+          value={defaults?.status}
+          derivedFrom={
+            defaults?.testResult && defaults.testResult !== "NOT_RUN"
+              ? "Follows the Test Result — Completed when it passes, In Progress otherwise."
+              : undefined
+          }
+        />
         <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-3">
           <DialogCloseButton />
           <SubmitButton>{submitLabel}</SubmitButton>

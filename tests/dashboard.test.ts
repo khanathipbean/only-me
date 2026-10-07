@@ -215,8 +215,15 @@ describe("project dashboard", () => {
     const byPriority = await dashboard(project.id, "?priority=HIGH");
     expect(byPriority.counts.testCases).toBe(2);
 
+    /* One, not two. TC2 was created DRAFT and then recorded as FAILED, and a
+     * result now settles the status — a case somebody has tested is not a
+     * draft whatever it was created as. TC3 is the only one left: created
+     * DRAFT and never run. */
     const byStatus = await dashboard(project.id, "?status=DRAFT");
-    expect(byStatus.counts.testCases).toBe(2);
+    expect(byStatus.counts.testCases).toBe(1);
+
+    const byInProgress = await dashboard(project.id, "?status=IN_PROGRESS");
+    expect(byInProgress.counts.testCases).toBe(1);
 
     const byAssignee = await dashboard(project.id, `?assigneeId=${user1.id}`);
     expect(byAssignee.counts.testCases).toBe(1);

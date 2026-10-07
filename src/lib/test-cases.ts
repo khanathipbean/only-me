@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { purgeTestCase } from "@/lib/hard-delete";
-import { rollUpAfter, rollUpFrom } from "@/lib/status-rollup";
+import { rollUpAfter, rollUpFrom, statusFromResult } from "@/lib/status-rollup";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -313,16 +313,63 @@ export async function updateTestResultAndNotes(
     throw new Error("Test Case not found");
   }
 
-  const after = await prisma.testCase.update({
-    where: { id },
-    data: {
-      ...(input.testResult !== undefined ? { testResult: input.testResult } : {}),
-      ...(input.notes !== undefined ? { notes: input.notes } : {}),
-      updatedById: actorId,
-    },
+  /* A result settles the status too, and the status then settles the three
+   * levels above. Null for NOT_RUN, which leaves a case nobody has reached
+   * with whatever status it was given. */
+  const status = input.testResult !== undefined ? statusFromResult(input.testResult) : null;
+
+  const after = await prisma.$transaction(async (tx) => {
+    const updated = await tx.testCase.update({
+      where: { id },
+      data: {
+        ...(input.testResult !== undefined ? { testResult: input.testResult } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(status ? { status } : {}),
+        updatedById: actorId,
+      },
+    });
+    if (status) {
+      await rollUpFrom(tx, "testGroup", updated.testGroupId);
+    }
+    return updated;
   });
 
   await logTestCaseEvent("update-result", after, before.projectId, actorId, {
+    oldValue: before,
+    newValue: after,
+  });
+
+  return after;
+}
+
+/**
+ * Status alone, for the list's inline control.
+ *
+ * Separate from `updateTestCase` because that one validates and rewrites the
+ * whole case, steps included: changing a status through it would mean
+ * sending back every field the row does not have, and a field that arrived
+ * empty would be written as empty.
+ *
+ * The roll-up runs, so the Test Group, Scenario and Requirement above settle
+ * the same way they do after the full edit — that is the whole point of
+ * the status being here rather than typed on the parent.
+ */
+export async function updateTestCaseStatus(id: string, status: WorkflowStatus, actorId: string) {
+  const before = await getTestCaseWithProjectId(id);
+  if (!before) {
+    throw new Error("Test Case not found");
+  }
+
+  const after = await prisma.$transaction(async (tx) => {
+    const updated = await tx.testCase.update({
+      where: { id },
+      data: { status, updatedById: actorId },
+    });
+    await rollUpFrom(tx, "testGroup", before.testGroupId);
+    return updated;
+  });
+
+  await logTestCaseEvent("update", after, before.projectId, actorId, {
     oldValue: before,
     newValue: after,
   });

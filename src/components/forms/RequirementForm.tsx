@@ -129,8 +129,11 @@ export function RequirementForm({
         </label>
         <StatusField
           value={defaults?.status}
-          fromChildren={statusFromChildren}
-          childNoun="Scenarios"
+          derivedFrom={
+            statusFromChildren
+              ? "Follows the Scenarios below — all the same, or In Progress."
+              : undefined
+          }
         />
         {!hideActions && (
           <div className="mt-2 flex flex-wrap justify-end gap-2 sm:col-span-2">

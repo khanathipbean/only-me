@@ -3,6 +3,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { notifyProject } from "@/lib/notifications";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { deleteFile } from "@/lib/storage";
+import { rollUpAfter, statusFromResult } from "@/lib/status-rollup";
 import type { Prisma, TestResult } from "@/generated/prisma/client";
 
 export class TestRunValidationError extends Error {}
@@ -741,6 +742,7 @@ export async function setRunCaseResult(
   });
 
   const ran = input.testResult !== "NOT_RUN";
+  const derivedStatus = statusFromResult(input.testResult);
 
   const [, runCase] = await prisma.$transaction([
     /* The row below holds only the latest answer, so every answer is also
@@ -776,11 +778,29 @@ export async function setRunCaseResult(
             data: {
               testResult: input.testResult,
               ...(input.notes !== undefined ? { notes: input.notes } : {}),
+              /* The result settles the case's status as well, by the same
+               * rule the Test Case page uses. Null for NOT_RUN, which leaves
+               * a case nobody has reached with the status it was given. */
+              ...(derivedStatus ? { status: derivedStatus } : {}),
               updatedById: actorId,
             },
           }),
         ]),
   ]);
+
+  /* After the transaction, not inside it: the array form takes prepared
+   * queries, and the walk up has to read each level before it can write the
+   * next. A newer round having spoken means this round changed no status, so
+   * there is nothing above to settle either. */
+  if (derivedStatus && !newerRound) {
+    const testCase = await prisma.testCase.findUnique({
+      where: { id: testCaseId },
+      select: { testGroupId: true },
+    });
+    if (testCase) {
+      await rollUpAfter("testGroup", testCase.testGroupId);
+    }
+  }
 
   await writeAuditLog({
     entityType: "TestCase",

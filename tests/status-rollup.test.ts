@@ -9,9 +9,30 @@ import {
   createTestCase,
   moveTestCase,
   updateTestCase,
+  updateTestCaseStatus,
+  updateTestResultAndNotes,
 } from "@/lib/test-cases";
-import { rollUpFrom, rollUpStatus } from "@/lib/status-rollup";
+import { addCasesToRun, createRun, setRunCaseResult } from "@/lib/test-runs";
+import { rollUpFrom, rollUpStatus, statusFromResult } from "@/lib/status-rollup";
 import type { WorkflowStatus } from "@/generated/prisma/client";
+
+describe("the status a result implies", () => {
+  it("reads a pass as finished and anything else as still going", () => {
+    expect(statusFromResult("PASSED")).toBe("COMPLETED");
+    expect(statusFromResult("FAILED")).toBe("IN_PROGRESS");
+    /* Something was meant to happen and did not, which is not finished. */
+    expect(statusFromResult("BLOCKED")).toBe("IN_PROGRESS");
+    expect(statusFromResult("SKIPPED")).toBe("IN_PROGRESS");
+  });
+
+  it("says nothing at all about a case no round has reached", () => {
+    /* Every case is NOT_RUN from the moment it is created. Folding it in
+     * would make DRAFT and READY unreachable and leave no way to say
+     * "written, not yet run" — the one thing a status says that a result
+     * cannot. */
+    expect(statusFromResult("NOT_RUN")).toBeNull();
+  });
+});
 
 /**
  * The rule on its own, with no database in the way. Four values give sixteen
@@ -83,6 +104,95 @@ describe("rolling a status up the tree", () => {
     ]);
     return { requirement: requirement.status, scenario: scenario.status, group: group.status };
   }
+
+  it("carries a result up the chain as a status", async () => {
+    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-8");
+    const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
+    const only = await addCase(group.id, "The only case", owner.id);
+
+    // Never run: nobody has said anything, so nothing above moves.
+    expect(await statuses(ids)).toEqual({
+      group: "DRAFT",
+      scenario: "DRAFT",
+      requirement: "DRAFT",
+    });
+
+    await updateTestResultAndNotes(only.id, { testResult: "FAILED" }, owner.id);
+    expect(await statuses(ids)).toEqual({
+      group: "IN_PROGRESS",
+      scenario: "IN_PROGRESS",
+      requirement: "IN_PROGRESS",
+    });
+
+    // And a pass finishes all three without anyone typing a status.
+    await updateTestResultAndNotes(only.id, { testResult: "PASSED" }, owner.id);
+    expect(await statuses(ids)).toEqual({
+      group: "COMPLETED",
+      scenario: "COMPLETED",
+      requirement: "COMPLETED",
+    });
+  });
+
+  it("carries a result recorded in a round up the chain too", async () => {
+    /* The round is where results are actually recorded, so a rule that only
+     * worked on the Test Case page would be a rule that never ran. */
+    const { owner, project, requirement, scenario, group } = await seed("PRJ-ROLL-10");
+    const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
+    const only = await addCase(group.id, "The only case", owner.id);
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [only.id], owner.id);
+
+    // Scheduled but not reached: nothing has been said, so nothing moves.
+    expect(await statuses(ids)).toEqual({
+      group: "DRAFT",
+      scenario: "DRAFT",
+      requirement: "DRAFT",
+    });
+
+    await setRunCaseResult(run.id, only.id, { testResult: "PASSED" }, owner.id);
+    expect(await statuses(ids)).toEqual({
+      group: "COMPLETED",
+      scenario: "COMPLETED",
+      requirement: "COMPLETED",
+    });
+  });
+
+  it("leaves a hand-set status alone while no round has reached the case", async () => {
+    const { owner, group } = await seed("PRJ-ROLL-9");
+    const only = await addCase(group.id, "Written, not run", owner.id);
+    await updateTestCaseStatus(only.id, "READY", owner.id);
+
+    /* A note recorded against a case that was never run must not knock it
+     * off READY — there is no result to derive anything from. */
+    await updateTestResultAndNotes(only.id, { notes: "a thought" }, owner.id);
+    expect((await prisma.testCase.findUniqueOrThrow({ where: { id: only.id } })).status)
+      .toBe("READY");
+  });
+
+  it("settles the parents when the status is changed from the list, not the form", async () => {
+    /* The list's inline control writes the status on its own rather than
+     * through the full edit, so it would be the one path that quietly left
+     * the three levels above it stale — the exact symptom the roll-up was
+     * built to end. */
+    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-7");
+    const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
+
+    const only = await addCase(group.id, "The only case", owner.id);
+    await updateTestCaseStatus(only.id, "COMPLETED", owner.id);
+
+    expect(await statuses(ids)).toEqual({
+      group: "COMPLETED",
+      scenario: "COMPLETED",
+      requirement: "COMPLETED",
+    });
+
+    // And it changes nothing else about the case.
+    const after = await prisma.testCase.findUniqueOrThrow({ where: { id: only.id } });
+    expect(after.name).toBe("The only case");
+    expect(after.expectedResult).toBe("ok");
+    expect(await prisma.testStep.count({ where: { testCaseId: only.id } })).toBe(1);
+  });
 
   it("carries one Test Case's status all the way to the Requirement", async () => {
     const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-1");

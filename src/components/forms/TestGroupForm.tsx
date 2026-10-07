@@ -66,8 +66,11 @@ export function TestGroupForm({
         <div className="sm:col-span-2">
           <StatusField
             value={defaults?.status}
-            fromChildren={statusFromChildren}
-            childNoun="Test Cases"
+            derivedFrom={
+              statusFromChildren
+                ? "Follows the Test Cases below — all the same, or In Progress."
+                : undefined
+            }
           />
         </div>
         {!hideActions && (

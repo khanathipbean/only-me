@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma, WorkflowStatus } from "@/generated/prisma/client";
+import type { Prisma, TestResult, WorkflowStatus } from "@/generated/prisma/client";
 
 /**
  * A parent's status, worked out from the children under it.
@@ -43,6 +43,31 @@ export function rollUpStatus(childStatuses: WorkflowStatus[]): WorkflowStatus | 
   }
   const first = childStatuses[0];
   return childStatuses.every((status) => status === first) ? first : "IN_PROGRESS";
+}
+
+/**
+ * A Test Case's status, from the result a round gave it.
+ *
+ * Status used to be typed by hand at every level, which meant it was typed at
+ * none: a Requirement read DRAFT long after everything beneath it was
+ * finished. The roll-up fixed the three parent levels by taking their status
+ * from their children. This fixes the bottom one by taking it from the thing
+ * someone does record — the result.
+ *
+ * `NOT_RUN` returns null, deliberately. Every case is NOT_RUN from the moment
+ * it is created, so folding it in would make DRAFT and READY unreachable and
+ * leave no way to say "written, not yet run" — which is the one thing status
+ * says that a result cannot. A case no round has reached keeps whatever
+ * status it was given.
+ *
+ * SKIPPED and BLOCKED come out IN_PROGRESS rather than keeping their status:
+ * something was meant to happen and did not, which is not finished.
+ */
+export function statusFromResult(result: TestResult): WorkflowStatus | null {
+  if (result === "NOT_RUN") {
+    return null;
+  }
+  return result === "PASSED" ? "COMPLETED" : "IN_PROGRESS";
 }
 
 /* Archived children are not counted. Both because a Test Group whose cases

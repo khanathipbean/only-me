@@ -8,6 +8,8 @@ import {
   createTestCase,
   listTestCasesWithStepsForTestGroupPage,
   updateTestCase,
+  updateTestCaseStatus,
+  updateTestResultAndNotes,
 } from "@/lib/test-cases";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { BulkSelectToggle, BulkSelectionProvider } from "@/components/BulkSelectionProvider";
@@ -28,11 +30,12 @@ import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FilterForm } from "@/components/FilterForm";
 import { Select } from "@/components/ui/Select";
+import { InlineSelect } from "@/components/InlineSelect";
 import { Pagination } from "@/components/ui/Pagination";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
-import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
+import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
 import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
@@ -182,6 +185,40 @@ export default async function TestCasesPage({
       }
 
       redirect(listHref);
+    };
+  }
+
+  /* The two fields the list changes most often, each saved on its own.
+   *
+   * No redirect: `invalidateRouteCache` re-renders the page that is already
+   * on screen, so the filters, the page number and the reader's place in a
+   * long list all survive — a redirect to the bare list would throw away all
+   * three on every result recorded. */
+  function setResultAction(testCaseId: string) {
+    return async function setResult(formData: FormData) {
+      "use server";
+      invalidateRouteCache();
+      const session = await auth();
+      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await updateTestResultAndNotes(
+        testCaseId,
+        { testResult: formData.get("testResult") as TestResult },
+        session!.user.id,
+      );
+    };
+  }
+
+  function setStatusAction(testCaseId: string) {
+    return async function setStatus(formData: FormData) {
+      "use server";
+      invalidateRouteCache();
+      const session = await auth();
+      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await updateTestCaseStatus(
+        testCaseId,
+        formData.get("status") as WorkflowStatus,
+        session!.user.id,
+      );
     };
   }
 
@@ -398,9 +435,14 @@ export default async function TestCasesPage({
                         <Badge tone={priorityTone(testCase.priority)}>{testCase.priority}</Badge>
                       </td>
                       <td className={tdCenterClass}>
-                        <Badge tone={testResultTone(testCase.testResult)}>
-                          {testCase.testResult.replace(/_/g, " ")}
-                        </Badge>
+                        <InlineSelect
+                          action={setResultAction(testCase.id)}
+                          name="testResult"
+                          defaultValue={testCase.testResult}
+                          options={TEST_RESULT_OPTIONS}
+                          ariaLabel={`Test Result for ${testCase.name}`}
+                          className="mx-auto"
+                        />
                       </td>
                       {/* The dash is the point. NOT RUN beside a dash is a
                           case nothing has ever looked at; NOT RUN beside a
@@ -415,7 +457,26 @@ export default async function TestCasesPage({
                         )}
                       </td>
                       <td className={tdCenterClass}>
-                        <Badge tone={workflowStatusTone(testCase.status)}>{testCase.status}</Badge>
+                        {/* Once a round has given the case a result, the
+                            status follows it. A control here would be a
+                            choice the next result overrules, which reads as
+                            the app throwing away what someone entered. */}
+                        {testCase.testResult === "NOT_RUN" ? (
+                          <InlineSelect
+                            action={setStatusAction(testCase.id)}
+                            name="status"
+                            defaultValue={testCase.status}
+                            options={WORKFLOW_STATUS_OPTIONS}
+                            ariaLabel={`Status for ${testCase.name}`}
+                            className="mx-auto"
+                          />
+                        ) : (
+                          <span title="Follows the Test Result">
+                            <Badge tone={workflowStatusTone(testCase.status)}>
+                              {testCase.status.replace(/_/g, " ")}
+                            </Badge>
+                          </span>
+                        )}
                       </td>
                     </>
                   }
@@ -442,6 +503,7 @@ export default async function TestCasesPage({
                           priority: testCase.priority,
                           testType: testCase.testType,
                           status: testCase.status,
+                          testResult: testCase.testResult,
                           steps: testCase.steps.map((step) => ({
                             step: step.step,
                             expectedResult: step.expectedResult,

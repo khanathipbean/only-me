@@ -111,8 +111,11 @@ export function ScenarioForm({
         </label>
         <StatusField
           value={defaults?.status}
-          fromChildren={statusFromChildren}
-          childNoun="Test Groups"
+          derivedFrom={
+            statusFromChildren
+              ? "Follows the Test Groups below — all the same, or In Progress."
+              : undefined
+          }
         />
         {requirements && (
           /* The full row, not half of one: these labels carry a code and a
