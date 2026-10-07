@@ -207,7 +207,21 @@ export async function listTestCasesWithStepsForTestGroupPage(
       prisma.testCase.findMany({
         where,
         orderBy: { createdAt: "desc" },
-        include: { steps: { orderBy: { sequence: "asc" } } },
+        include: {
+          steps: { orderBy: { sequence: "asc" } },
+          /* How many rounds have held this case — not how many ran it. The
+           * Test Result column already says NOT RUN for both "never in a
+           * round" and "in rounds, skipped every time", and counting rounds
+           * that recorded something would collapse them again. Counted here
+           * so the two read side by side: NOT RUN with no rounds is a case
+           * nothing has ever looked at; NOT RUN with two is one that was
+           * scheduled twice and passed over.
+           *
+           * Live rounds only. An archived round keeps its TestRunCase rows,
+           * and counting them would credit a case with coverage nobody can
+           * open — the mistake the Dashboard made once. */
+          _count: { select: { runCases: { where: { testRun: { deletedAt: null } } } } },
+        },
         skip,
         take,
       }),

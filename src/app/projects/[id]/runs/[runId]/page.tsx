@@ -39,6 +39,8 @@ import {
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { FilePreview } from "@/components/FilePreview";
+import { RunHistoryList } from "@/components/RunHistoryList";
+import { listRunHistoryForCases } from "@/lib/run-history";
 import { FilterForm } from "@/components/FilterForm";
 import { nameOr, testRunBreadcrumb } from "@/lib/breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -151,6 +153,11 @@ export default async function TestRunPage({
     }),
   ]);
   const cases = casePage.items;
+
+  /* One query for every case on this page, not one per row: a round shows
+   * dozens at a time, and a round trip per row is how a page gets slow
+   * without anyone being able to say which change did it. */
+  const runHistory = await listRunHistoryForCases(cases.map((row) => row.testCase.id));
 
   const isOpen = run.status === "OPEN";
   const ran = casePage.ranCount;
@@ -741,11 +748,15 @@ export default async function TestRunPage({
                         select mode is off, so turning it on doesn't reflow
                         every other column. */}
                     <col className="w-[3%]" />
-                    <col className="w-[33%]" />
-                    <col className="w-[10%]" />
+                    {/* The case name gives up what the note needs: a column
+                        that was only ever showing "—" can hold a sentence
+                        now, and a name that wraps costs less than a note
+                        nobody can finish typing. */}
+                    <col className="w-[27%]" />
+                    <col className="w-[9%]" />
                     <col className="w-[16%]" />
-                    <col className="w-[14%]" />
-                    <col className="w-[8%]" />
+                    <col className="w-[22%]" />
+                    <col className="w-[7%]" />
                     <col className="w-[8%]" />
                     <col className="w-[8%]" />
                   </colgroup>
@@ -797,19 +808,17 @@ export default async function TestRunPage({
                               </td>
                               <td className={tdCenterClass}>
                                 {isOpen ? (
-                                  <form action={actions.record} className="flex items-center gap-2">
+                                  <form
+                                    id={`record-${row.id}`}
+                                    action={actions.record}
+                                    className="flex items-center gap-2"
+                                  >
                                     <Select
                                       name="testResult"
                                       defaultValue={row.testResult}
                                       options={TEST_RESULT_OPTIONS}
                                       ariaLabel={`Result for ${row.testCase.name}`}
                                       className="max-w-36"
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="notes"
-                                      value={row.notes ?? ""}
-                                      readOnly
                                     />
                                     <SubmitButton variant="secondary">Save</SubmitButton>
                                   </form>
@@ -819,7 +828,30 @@ export default async function TestRunPage({
                                   </Badge>
                                 )}
                               </td>
-                              <td className={`${tdClass} text-muted`}>{row.notes ?? "—"}</td>
+                              <td className={tdClass}>
+                                {isOpen ? (
+                                  /* The note belongs to the result and saves
+                                     with it, so it is a field of the form in
+                                     the cell beside this one — reached by
+                                     `form=`, the way the footer buttons on the
+                                     edit dialogs are. It was a hidden input
+                                     carrying the old value back unchanged,
+                                     which left the column it feeds, and the
+                                     Problem cases report that reads it, empty
+                                     for ever. */
+                                  <input
+                                    type="text"
+                                    name="notes"
+                                    form={`record-${row.id}`}
+                                    defaultValue={row.notes ?? ""}
+                                    placeholder="What happened?"
+                                    aria-label={`Note for ${row.testCase.name}`}
+                                    className={inputClass}
+                                  />
+                                ) : (
+                                  <span className="text-muted">{row.notes || "—"}</span>
+                                )}
+                              </td>
                               <td className={`${tdCenterClass} text-xs text-muted`}>
                                 {row.attachments.length > 0 ? row.attachments.length : "—"}
                               </td>
@@ -897,7 +929,23 @@ export default async function TestRunPage({
                                 </DetailFields>
                               </section>
 
-                              <section className="flex flex-col gap-3 border-t border-border pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
+                              <section className="flex flex-col gap-5 border-t border-border pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
+                                {/* Above the attachments, because this is the
+                                    thing someone wants a second before they
+                                    type a note: has this failed before, and
+                                    what did we say last time. */}
+                                <div className="flex flex-col gap-2">
+                                  <h3 className="text-sm font-semibold tracking-wide text-foreground uppercase">
+                                    Run history
+                                  </h3>
+                                  <RunHistoryList
+                                    entries={runHistory.get(row.testCase.id) ?? []}
+                                    projectId={projectId}
+                                    currentRunId={runId}
+                                    emptyMessage="First round to include this case."
+                                  />
+                                </div>
+
                                 <h3 className="text-sm font-semibold tracking-wide text-foreground uppercase">
                                   Attachments
                                 </h3>

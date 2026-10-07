@@ -345,11 +345,14 @@ export default async function TestCasesPage({
             <table className={tableClass}>
               <colgroup>
                 <col className="w-[6%]" />
-                <col className="w-[31%]" />
-                <col className="w-[17%]" />
-                <col className="w-[16%]" />
-                <col className="w-[16%]" />
-                <col className="w-[14%]" />
+                <col className="w-[29%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                {/* Narrow, and next to Test Result: the two are read as a
+                    pair, and putting Status between them would break it. */}
+                <col className="w-[8%]" />
+                <col className="w-[15%]" />
+                <col className="w-[12%]" />
               </colgroup>
               <thead>
                 <tr>
@@ -359,6 +362,7 @@ export default async function TestCasesPage({
                   <th className={thClass}>Name</th>
                   <th className={thCenterClass}>Priority</th>
                   <th className={thCenterClass}>Test Result</th>
+                  <th className={thCenterClass}>Runs</th>
                   <th className={thCenterClass}>Status</th>
                   <th className={thCenterClass}>Actions</th>
                 </tr>
@@ -367,7 +371,7 @@ export default async function TestCasesPage({
                 {testCases.map((testCase) => (
                   <ExpandableRow
                     key={testCase.id}
-                    colSpan={6}
+                    colSpan={7}
                     detailLabel={testCase.name}
                     cells={
                       <>
@@ -397,6 +401,18 @@ export default async function TestCasesPage({
                         <Badge tone={testResultTone(testCase.testResult)}>
                           {testCase.testResult.replace(/_/g, " ")}
                         </Badge>
+                      </td>
+                      {/* The dash is the point. NOT RUN beside a dash is a
+                          case nothing has ever looked at; NOT RUN beside a
+                          number is one that was scheduled and passed over,
+                          and the Test Result column alone cannot tell them
+                          apart. */}
+                      <td className={`${tdCenterClass} tabular-nums`}>
+                        {testCase._count.runCases > 0 ? (
+                          testCase._count.runCases
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
                       </td>
                       <td className={tdCenterClass}>
                         <Badge tone={workflowStatusTone(testCase.status)}>{testCase.status}</Badge>
