@@ -200,9 +200,16 @@ export default async function TestCasesPage({
       invalidateRouteCache();
       const session = await auth();
       await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      /* The note only when one was asked for. Sending an empty string on
+       * every pass would wipe the note explaining the failure before it, and
+       * `undefined` is how this function is told to leave it alone. */
+      const notes = formData.get("notes");
       await updateTestResultAndNotes(
         testCaseId,
-        { testResult: formData.get("testResult") as TestResult },
+        {
+          testResult: formData.get("testResult") as TestResult,
+          ...(notes === null ? {} : { notes: String(notes) }),
+        },
         session!.user.id,
       );
     };
@@ -441,7 +448,13 @@ export default async function TestCasesPage({
                           defaultValue={testCase.testResult}
                           options={TEST_RESULT_OPTIONS}
                           ariaLabel={`Test Result for ${testCase.name}`}
+                          /* A result that says something went wrong is not
+                             worth recording without saying what: the report
+                             that collects them is read for the notes. */
+                          needsNote={["FAILED", "BLOCKED"]}
+                          noteTitle={testCase.name}
                           className="mx-auto"
+                          compact
                         />
                       </td>
                       {/* The dash is the point. NOT RUN beside a dash is a
@@ -469,6 +482,7 @@ export default async function TestCasesPage({
                             options={WORKFLOW_STATUS_OPTIONS}
                             ariaLabel={`Status for ${testCase.name}`}
                             className="mx-auto"
+                            compact
                           />
                         ) : (
                           <span title="Follows the Test Result">

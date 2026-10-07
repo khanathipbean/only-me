@@ -42,13 +42,15 @@ import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
+import { RunHistoryList } from "@/components/RunHistoryList";
+import { listRunHistoryForCases } from "@/lib/run-history";
 import { IconButton } from "@/components/ui/Button";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
 import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
 import { EditIcon, TrashIcon } from "@/components/icons";
-import { labelClass, pageClass, textareaClass } from "@/lib/ui";
+import { labelClass, mutedTextClass, pageClass, textareaClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
 
 export async function generateMetadata({
@@ -88,12 +90,14 @@ export default async function TestCaseDetailPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
   const membership = await getProjectMembership(session!.user.id, projectId);
   const canEditFully = !!membership && EDITOR_ROLES.includes(membership.role);
-  const [project, scenario, requirement, allTestGroups] = await Promise.all([
+  const [project, scenario, requirement, allTestGroups, historyByCase] = await Promise.all([
     getProjectById(projectId),
     getScenarioById(scenarioId),
     getRequirementById(requirementId),
     listTestGroupsForProject(projectId),
+    listRunHistoryForCases([testCaseId]),
   ]);
+  const history = historyByCase.get(testCaseId) ?? [];
 
   // The ancestors in the URL must be this Test Case's actual ancestors.
   if (
@@ -378,14 +382,27 @@ export default async function TestCaseDetailPage({
             {testCase.testResult.replace(/_/g, " ")}
           </Badge>
         </div>
-        <form action={updateResult} className="mt-3 flex flex-col gap-4">
+        {/* Keyed on what the server last said, so the whole form is built
+            again when either field changes. React resets a form once its
+            action resolves, which hands every uncontrolled field in it back
+            the value it was built with — the control then showed the old
+            answer over a case that had already been changed, and only a
+            reload put it right. */}
+        <form
+          key={`${testCase.testResult}-${testCase.notes ?? ""}`}
+          action={updateResult}
+          className="mt-3 flex flex-col gap-4"
+        >
           <label className={labelClass}>
             Test Result
+            {/* Sized to the field, not the card: a dropdown of five short
+                words does not need the width of a paragraph. */}
             <Select
               name="testResult"
               defaultValue={testCase.testResult}
               options={TEST_RESULT_OPTIONS}
               ariaLabel="Test Result"
+              className="max-w-52"
             />
           </label>
           <label className={labelClass}>
@@ -396,6 +413,25 @@ export default async function TestCaseDetailPage({
             Update Result
           </SubmitButton>
         </form>
+      </Card>
+
+      <Card>
+        <h2 className="text-sm font-semibold text-foreground">Result history</h2>
+        {/* The field above holds the latest answer and nothing else, so
+            "why does this case keep failing" could not be asked here at all:
+            the rounds before it, and the note somebody typed when it broke,
+            were reachable only by opening each round and finding the row.
+            This is where that question gets answered. */}
+        <p className={`mt-1 ${mutedTextClass}`}>
+          Every answer anyone has recorded, newest first.
+        </p>
+        <div className="mt-3">
+          <RunHistoryList
+            entries={history}
+            projectId={projectId}
+            emptyMessage="No result has been recorded for this case yet."
+          />
+        </div>
       </Card>
 
       <Card>

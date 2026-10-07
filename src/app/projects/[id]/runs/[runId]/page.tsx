@@ -53,6 +53,7 @@ import { TrashIcon } from "@/components/icons";
 import { isTestRunOverdue } from "@/lib/deadlines";
 
 import { SubmitButton } from "@/components/SubmitButton";
+import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { Select } from "@/components/ui/Select";
 import { TEST_RESULT_OPTIONS, PRIORITY_OPTIONS } from "@/lib/enums";
 import {
@@ -820,7 +821,6 @@ export default async function TestRunPage({
                                       ariaLabel={`Result for ${row.testCase.name}`}
                                       className="max-w-36"
                                     />
-                                    <SubmitButton variant="secondary">Save</SubmitButton>
                                   </form>
                                 ) : (
                                   <Badge tone={testResultTone(row.testResult)}>
@@ -839,15 +839,30 @@ export default async function TestRunPage({
                                      which left the column it feeds, and the
                                      Problem cases report that reads it, empty
                                      for ever. */
-                                  <input
-                                    type="text"
-                                    name="notes"
-                                    form={`record-${row.id}`}
-                                    defaultValue={row.notes ?? ""}
-                                    placeholder="What happened?"
-                                    aria-label={`Note for ${row.testCase.name}`}
-                                    className={inputClass}
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      name="notes"
+                                      form={`record-${row.id}`}
+                                      defaultValue={row.notes ?? ""}
+                                      placeholder="What happened?"
+                                      aria-label={`Note for ${row.testCase.name}`}
+                                      className={inputClass}
+                                    />
+                                    {/* After the last field it saves, not
+                                        between the two. One Save for both,
+                                        because recording a result and writing
+                                        down what happened is one act — but a
+                                        button sitting ahead of a field it
+                                        submits reads as belonging to the
+                                        field before it. */}
+                                    <FormSubmitButton
+                                      formId={`record-${row.id}`}
+                                      variant="secondary"
+                                    >
+                                      Save
+                                    </FormSubmitButton>
+                                  </div>
                                 ) : (
                                   <span className="text-muted">{row.notes || "—"}</span>
                                 )}

@@ -49,6 +49,7 @@ export function Select({
   ariaLabel,
   leadingIcon,
   autoWidth = false,
+  compact = false,
   className = "",
 }: {
   options: SelectOption[];
@@ -74,6 +75,12 @@ export function Select({
    * on every choice and shove whatever sits beside it sideways.
    */
   autoWidth?: boolean;
+  /**
+   * A tighter trigger, for a control that sits in a table row rather than in
+   * a form. The form-sized one next to a badge in the next column made the
+   * row look like it had grown a toolbar.
+   */
+  compact?: boolean;
   className?: string;
 }) {
   const isControlled = value !== undefined;
@@ -99,6 +106,12 @@ export function Select({
   const searchRef = useRef<HTMLInputElement>(null);
   const nativeRef = useRef<HTMLSelectElement>(null);
   const listboxId = useId();
+
+  /* Shared by the trigger and by the hidden copy `autoWidth` measures: if the
+   * two ever differ the measured width is the wrong one. */
+  const BOX = compact
+    ? "py-1 pr-2 pl-2.5 text-xs"
+    : "py-2 pr-2.5 pl-3 text-sm";
 
   const selectedIndex = Math.max(
     options.findIndex((option) => option.value === selected),
@@ -337,7 +350,12 @@ export function Select({
   }
 
   return (
-    <div ref={wrapperRef} className={`relative ${className}`}>
+    /* `w-fit` with autoWidth, or the measuring box below sets an intrinsic
+       width that nothing uses: a block wrapper fills its container whatever
+       its contents want, which in a table cell is the whole column. It worked
+       in a flex row — where an item is already content-sized — and so looked
+       right everywhere it had been used before. */
+    <div ref={wrapperRef} className={`relative ${autoWidth ? "w-fit" : ""} ${className}`}>
       {name && (
         <select
           ref={nativeRef}
@@ -365,14 +383,14 @@ export function Select({
            zero height: it contributes width to this box and nothing else. A
            width class from the caller still wins — this only decides the
            intrinsic width. */
-        <div aria-hidden="true" className="h-0 overflow-hidden text-sm">
+        <div aria-hidden="true" className="h-0 overflow-hidden">
           {options.map((option) => (
             <div
               key={option.value}
               /* Same horizontal chrome as the trigger, border included: two
                  pixels of it, left off, let the control still shift by two
                  when the chosen label was the widest one. */
-              className="flex items-center gap-2 rounded-md border border-transparent py-2 pr-2.5 pl-3"
+              className={`flex items-center gap-2 rounded-md border border-transparent ${BOX}`}
             >
               {leadingIcon && <span className="shrink-0">{leadingIcon}</span>}
               <span className="whitespace-nowrap">{option.label}</span>
@@ -393,7 +411,7 @@ export function Select({
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onTriggerKeyDown}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-surface py-2 pr-2.5 pl-3 text-left text-sm text-foreground shadow-sm transition-colors outline-none hover:bg-black/[.02] focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/[.04]"
+        className={`flex w-full items-center justify-between gap-2 rounded-md border border-border bg-surface ${BOX} text-left text-foreground shadow-sm transition-colors outline-none hover:bg-black/[.02] focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/[.04]`}
       >
         <span className="flex min-w-0 items-center gap-2">
           {leadingIcon && <span className="shrink-0 text-muted">{leadingIcon}</span>}
