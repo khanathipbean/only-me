@@ -40,6 +40,7 @@ model User {
   createdNotes        Note[]
   createdTestRuns     TestRun[]     @relation("TestRunCreatedBy")
   ranTestRunCases     TestRunCase[] @relation("TestRunCaseRanBy")
+  recordedRunResults  TestRunCaseEvent[] @relation("TestRunCaseEventRecordedBy")
   notifications          Notification[] @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
 }
@@ -334,9 +335,40 @@ model TestRunCase {
   ranBy    User?    @relation("TestRunCaseRanBy", fields: [ranById], references: [id])
 
   attachments Attachment[]
+  events      TestRunCaseEvent[]
 
   @@unique([testRunId, testCaseId])
   @@index([testCaseId])
+}
+
+/// Every result ever recorded against a case in a round, in order.
+///
+/// `TestRunCase` holds one result per case per round, so a case that failed,
+/// was fixed and passed in the same round ends it reading PASSED with no
+/// sign of the rest. That is the normal shape of a round — the tester
+/// records a failure, somebody fixes it, the tester comes back — and the
+/// thing worth knowing, how often a case has to go round that loop, was
+/// being written over each time.
+///
+/// Append-only. Nothing updates a row here; the latest one and the
+/// `TestRunCase` it belongs to agree by construction.
+model TestRunCaseEvent {
+  id            String     @id @default(cuid())
+  testRunCaseId String
+  testResult    TestResult
+  /// What was written down at that attempt. Kept per attempt rather than per
+  /// round for the same reason the result is: the note explaining the first
+  /// failure is not the note explaining the third.
+  notes         String?
+  recordedById  String
+  recordedAt    DateTime   @default(now())
+
+  testRunCase TestRunCase @relation(fields: [testRunCaseId], references: [id])
+  recordedBy  User        @relation("TestRunCaseEventRecordedBy", fields: [recordedById], references: [id])
+
+  /// Read as "this case's attempts, oldest first", which is the only way
+  /// anything reads them.
+  @@index([testRunCaseId, recordedAt])
 }
 
 model TestStep {

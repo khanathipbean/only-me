@@ -682,6 +682,10 @@ export async function removeCaseFromRun(testRunId: string, testCaseId: string, a
   });
   await prisma.$transaction([
     prisma.attachment.deleteMany({ where: { runCaseId: runCase.id } }),
+    /* Same reasoning as the attachments above: no `onDelete` is declared
+     * anywhere in this schema, so the database refuses to delete a row while
+     * anything still points at it. */
+    prisma.testRunCaseEvent.deleteMany({ where: { testRunCaseId: runCase.id } }),
     prisma.testRunCase.delete({ where: { id: runCase.id } }),
   ]);
   await Promise.all(attachments.map((attachment) => deleteFile(attachment.storageKey)));
@@ -738,7 +742,21 @@ export async function setRunCaseResult(
 
   const ran = input.testResult !== "NOT_RUN";
 
-  const [runCase] = await prisma.$transaction([
+  const [, runCase] = await prisma.$transaction([
+    /* The row below holds only the latest answer, so every answer is also
+     * appended beside it. A case that failed, was fixed and passed inside one
+     * round used to end it reading PASSED with no sign of the rest — which is
+     * the normal shape of a round, and the part worth knowing. */
+    prisma.testRunCaseEvent.create({
+      data: {
+        testRunCase: {
+          connect: { testRunId_testCaseId: { testRunId, testCaseId } },
+        },
+        testResult: input.testResult,
+        notes: input.notes ?? null,
+        recordedBy: { connect: { id: actorId } },
+      },
+    }),
     prisma.testRunCase.update({
       where: { testRunId_testCaseId: { testRunId, testCaseId } },
       data: {
