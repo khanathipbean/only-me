@@ -686,7 +686,10 @@ export async function removeCaseFromRun(testRunId: string, testCaseId: string, a
     /* Same reasoning as the attachments above: no `onDelete` is declared
      * anywhere in this schema, so the database refuses to delete a row while
      * anything still points at it. */
-    prisma.testRunCaseEvent.deleteMany({ where: { testRunCaseId: runCase.id } }),
+    /* The round's own answers only. An answer recorded outside a round
+     * belongs to the case, not to this row, and taking the case out of the
+     * round must not take it. */
+    prisma.testResultEvent.deleteMany({ where: { testRunCaseId: runCase.id } }),
     prisma.testRunCase.delete({ where: { id: runCase.id } }),
   ]);
   await Promise.all(attachments.map((attachment) => deleteFile(attachment.storageKey)));
@@ -749,8 +752,11 @@ export async function setRunCaseResult(
      * appended beside it. A case that failed, was fixed and passed inside one
      * round used to end it reading PASSED with no sign of the rest — which is
      * the normal shape of a round, and the part worth knowing. */
-    prisma.testRunCaseEvent.create({
+    prisma.testResultEvent.create({
       data: {
+        /* Both: the case is what the history is read by, the round is what
+         * says where this answer was given. */
+        testCase: { connect: { id: testCaseId } },
         testRunCase: {
           connect: { testRunId_testCaseId: { testRunId, testCaseId } },
         },

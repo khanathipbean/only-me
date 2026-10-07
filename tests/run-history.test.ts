@@ -7,13 +7,14 @@ import { createTestGroup } from "@/lib/test-groups";
 import {
   createTestCase,
   listTestCasesWithStepsForTestGroupPage,
+  updateTestResultAndNotes,
 } from "@/lib/test-cases";
 import { addCasesToRun, createRun, setRunCaseResult } from "@/lib/test-runs";
 import {
   brokeAt,
   classifyPattern,
-  lastFailure,
   listProblemCases,
+  failureCount,
   listRunHistoryForCases,
   summariseHistory,
   toResultMarks,
@@ -31,7 +32,7 @@ async function seed(code: string) {
   const mod = await createModule(project.id, "Policy", owner.id);
   const requirement = await createRequirement(
     project.id,
-    { moduleId: mod.id, name: `Req ${code}`, priority: "MEDIUM" },
+    { moduleId: mod.id, name: `Req ${code}`, priority: "MEDIUM", feature: "Usage Document" },
     owner.id,
   );
   const scenario = await createScenario(
@@ -50,7 +51,7 @@ async function seed(code: string) {
     },
     owner.id,
   );
-  return { owner, project, testCase };
+  return { owner, project, group, testCase };
 }
 
 describe("a Test Case's run history", () => {
@@ -160,6 +161,64 @@ describe("a Test Case's run history", () => {
     expect(round.attempts[1].notes).toBeNull();
 
     expect(classifyPattern(history)).toBe("reworked");
+  });
+
+  it("keeps a result recorded outside any round, and dates the group by the day", async () => {
+    const { owner, testCase } = await seed("PRJ-HIST-8");
+
+    /* Recorded straight on the case, with no round open and none ever
+     * created. This used to leave nothing behind at all: the case's own
+     * column was overwritten and no history could reach it. */
+    await updateTestResultAndNotes(
+      testCase.id,
+      { testResult: "FAILED", notes: "ลองก่อน sprint เปิด" },
+      owner.id,
+    );
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const history = (await listRunHistoryForCases([testCase.id])).get(testCase.id) ?? [];
+
+    /* One group, not two: both were recorded the same day, and the strip
+     * reads a day as one sitting the way it reads a round as one round. */
+    expect(history).toHaveLength(1);
+    expect(history[0].testRunId).toBeNull();
+    expect(history[0].attempts.map((a) => a.testResult)).toEqual(["FAILED", "PASSED"]);
+    expect(history[0].attempts[0].notes).toBe("ลองก่อน sprint เปิด");
+    expect(history[0].everFailed).toBe(true);
+    expect(history[0].testResult).toBe("PASSED");
+
+    // And the marks say there is no round to open.
+    expect(toResultMarks(history).map((mark) => mark.testRunId)).toEqual([null, null]);
+  });
+
+  it("does not record an answer when only the note was edited", async () => {
+    const { owner, testCase } = await seed("PRJ-HIST-9");
+
+    await updateTestResultAndNotes(testCase.id, { notes: "a thought" }, owner.id);
+
+    /* Writing a note is not answering the question, and counting it as one
+     * would put a square in the strip for something nobody tested. */
+    expect((await listRunHistoryForCases([testCase.id])).get(testCase.id)).toBeUndefined();
+  });
+
+  it("puts a round and a loose group in one timeline", async () => {
+    const { owner, project, testCase } = await seed("PRJ-HIST-10");
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [testCase.id], owner.id);
+    await setRunCaseResult(run.id, testCase.id, { testResult: "FAILED" }, owner.id);
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const history = (await listRunHistoryForCases([testCase.id])).get(testCase.id) ?? [];
+
+    expect(history).toHaveLength(2);
+    // The round first — it was created first — then what was recorded after it.
+    expect(history[0].testRunId).toBe(run.id);
+    expect(history[1].testRunId).toBeNull();
+
+    /* And the two kinds are told apart on every mark, which is what the
+     * report draws a border from. */
+    expect(toResultMarks(history).map((mark) => mark.testRunId !== null)).toEqual([true, false]);
   });
 
   it("asks nothing of the database when asked about nothing", async () => {
@@ -287,21 +346,6 @@ describe("the shape a case's results make", () => {
     expect(classifyPattern(of(["PASSED", "FAILED"], ["PASSED", "FAILED"]))).toBe("never-passed");
   });
 
-  it("keeps the note from a failure the round later fixed", () => {
-    /* The note explaining the failure sits on the attempt. Reading only the
-     * round would show "No note was left" for exactly the rows someone came
-     * to this page to read. */
-    const history = of("PASSED", ["FAILED", "PASSED"]);
-    const failure = lastFailure(history);
-    expect(failure?.notes).toBe("broke on try 1");
-    expect(failure?.runName).toBe("Sprint 2");
-    // And says so, or a red note under a green strip reads as a contradiction.
-    expect(failure?.fixedInRound).toBe(true);
-
-    // A round left broken is still reported as such.
-    expect(lastFailure(of("PASSED", "FAILED"))?.fixedInRound).toBe(false);
-  });
-
   it("counts rounds that cost a round trip apart from rounds left broken", () => {
     const { failed, hadFailure } = summariseHistory(of("PASSED", ["FAILED", "PASSED"], "FAILED"));
     // One round ended broken; two reported a failure at some point.
@@ -401,13 +445,6 @@ describe("the shape a case's results make", () => {
     expect(brokeAt(of("FAILED", "FAILED"))).toBeNull();
   });
 
-  it("finds the newest failure, which is where the note worth reading is", () => {
-    const entries = of("FAILED", "PASSED", "FAILED");
-    entries[0].notes = "the old one";
-    entries[2].notes = "what we said last time";
-    expect(lastFailure(entries)?.notes).toBe("what we said last time");
-    expect(lastFailure(of("PASSED"))).toBeNull();
-  });
 });
 
 describe("the Problem cases report", () => {
@@ -455,19 +492,125 @@ describe("the Problem cases report", () => {
     expect(byId.get(regressed.id)?.pattern).toBe("regression");
     expect(byId.get(alwaysBad.id)?.pattern).toBe("never-passed");
 
-    /* A case that has only ever passed is not a problem, and one nothing has
-     * recorded has no shape — padding the page with either would bury the
-     * rows that need doing something about. */
-    expect(byId.has(good.id)).toBe(false);
+    /* A case that has only ever passed is here now, under its own section —
+     * the page is read to judge a case as well as to fix one. A case nothing
+     * has recorded still is not: with no pass and no fail there is no shape
+     * to show it under. */
+    expect(byId.get(good.id)?.pattern).toBe("stable");
     expect(byId.has(scheduledOnly.id)).toBe(false);
 
     const row = byId.get(regressed.id)!;
     expect(row.brokeAt?.runName).toBe("Sprint 2");
-    expect(row.lastFailure?.notes).toBe("stopped working");
     // The place, so a row can be acted on without working out where it lives.
     expect(row.path).toContain("Policy");
+    /* And the feature tag beside the name: it is how the team names the work,
+     * and reading it off the path means reading the whole path. */
+    expect(row.feature).toBe("Usage Document");
     expect(row.href).toContain(`/projects/${project.id}/modules/`);
     expect(row.href).toContain(`/test-cases/${regressed.id}`);
+  });
+
+  it("names a case that only ever failed outside a round", async () => {
+    /* The whole point of the work. Before this the report queried rounds and
+     * nothing else, so a case marked FAILED on its own page showed as failing
+     * on the Dashboard, dragged its Requirement to In Progress, and was
+     * absent from the one page whose job is saying what is going wrong. */
+    const { owner, project, testCase } = await seed("PRJ-PROB-3");
+
+    await updateTestResultAndNotes(
+      testCase.id,
+      { testResult: "FAILED", notes: "พังตั้งแต่ยังไม่เปิด sprint" },
+      owner.id,
+    );
+
+    const rows = await listProblemCases(project.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(testCase.id);
+    expect(rows[0].pattern).toBe("never-passed");
+    expect(rows[0].history[0].testRunId).toBeNull();
+  });
+
+  it("leaves loose results out when asked about one phase only", async () => {
+    /* A phase belongs to a round, so an answer given outside one has no phase
+     * to match. Letting it in would file it under a phase it was never part
+     * of; the filter means "what happened in this phase". */
+    const { owner, project, testCase } = await seed("PRJ-PROB-4");
+
+    const run = await createRun(project.id, { name: "Sprint 1", phase: "P1" }, owner.id);
+    await addCasesToRun(run.id, [testCase.id], owner.id);
+    await setRunCaseResult(run.id, testCase.id, { testResult: "PASSED" }, owner.id);
+    await updateTestResultAndNotes(testCase.id, { testResult: "FAILED" }, owner.id);
+
+    // Across everything: passed in the round, then broke outside it.
+    const all = await listProblemCases(project.id);
+    expect(all[0]?.pattern).toBe("regression");
+    expect(all[0]?.history).toHaveLength(2);
+
+    /* Inside the phase there is only the round, and the round was fine — the
+     * failure recorded outside it belongs to no phase and is not borrowed
+     * into this one. */
+    const thisPhase = await listProblemCases(project.id, { phase: "P1" });
+    expect(thisPhase.map((row) => row.pattern)).toEqual(["stable"]);
+    expect(thisPhase[0].history).toHaveLength(1);
+  });
+
+  it("keeps the cases that have only ever passed, so a case can be judged too", async () => {
+    const { owner, project, testCase } = await seed("PRJ-PROB-5");
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [testCase.id], owner.id);
+    await setRunCaseResult(run.id, testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const rows = await listProblemCases(project.id);
+    expect(rows.map((row) => row.pattern)).toEqual(["stable"]);
+  });
+
+  it("still leaves out a case nobody has answered for", async () => {
+    /* Scheduled into a round and never reached. With no pass and no fail
+     * there is no shape, and the Runs column is where those are found. */
+    const { owner, project, testCase } = await seed("PRJ-PROB-6");
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [testCase.id], owner.id);
+
+    expect(await listProblemCases(project.id)).toHaveLength(0);
+  });
+
+  it("puts the case that fails most at the top of its pattern", async () => {
+    const { owner, project, group } = await seed("PRJ-PROB-7");
+    const once = await createTestCase(
+      group.id,
+      {
+        name: "Slipped once",
+        expectedResult: "ok",
+        priority: "MEDIUM",
+        steps: [{ step: "s", expectedResult: "r" }],
+      },
+      owner.id,
+    );
+    const often = await createTestCase(
+      group.id,
+      {
+        name: "Fails constantly",
+        expectedResult: "ok",
+        priority: "MEDIUM",
+        steps: [{ step: "s", expectedResult: "r" }],
+      },
+      owner.id,
+    );
+
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [once.id, often.id], owner.id);
+    await setRunCaseResult(run.id, once.id, { testResult: "FAILED" }, owner.id);
+    for (let i = 0; i < 4; i++) {
+      await setRunCaseResult(run.id, often.id, { testResult: "FAILED" }, owner.id);
+    }
+
+    /* Both never passed. What separates them is how much trouble they have
+     * been, and the order used to be whatever the database handed back. */
+    const rows = await listProblemCases(project.id);
+    expect(rows.map((row) => row.name)).toEqual(["Fails constantly", "Slipped once"]);
+    expect(failureCount(rows[0].history)).toBe(4);
+    expect(failureCount(rows[1].history)).toBe(1);
   });
 
   it("narrows to one phase, which can change what shape a case has", async () => {

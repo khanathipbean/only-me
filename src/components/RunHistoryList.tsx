@@ -62,11 +62,14 @@ export function RunHistoryList({
       </p>
 
       <ul className="flex flex-col gap-1.5">
-        {newestFirst.map((entry) => {
-          const isCurrent = entry.testRunId === currentRunId;
+        {newestFirst.map((entry, index) => {
+          /* `currentRunId` can be undefined and `testRunId` null, and those
+             must not match: a group recorded outside a round is never the
+             round being worked on. */
+          const isCurrent = entry.testRunId !== null && entry.testRunId === currentRunId;
           return (
             <li
-              key={entry.testRunId}
+              key={`${entry.testRunId ?? "loose"}-${index}`}
               className={
                 isCurrent
                   ? "flex flex-wrap items-center gap-2 rounded-md border border-brand/40 bg-brand/[.06] px-2.5 py-1.5"
@@ -77,7 +80,7 @@ export function RunHistoryList({
                 {entry.testResult.replace(/_/g, " ")}
               </Badge>
 
-              {isCurrent ? (
+              {isCurrent || entry.testRunId === null ? (
                 <span className="text-sm font-medium text-foreground">{entry.runName}</span>
               ) : (
                 <Link
@@ -90,6 +93,12 @@ export function RunHistoryList({
 
               {isCurrent ? (
                 <span className="text-xs text-brand">this round</span>
+              ) : entry.testRunId === null ? (
+                /* The name is already the date, so saying when would repeat
+                   it. What is worth saying is that it was not in a round. */
+                <span className="text-xs text-muted">
+                  outside a round{entry.ranBy && ` · ${entry.ranBy}`}
+                </span>
               ) : entry.ranAt ? (
                 <span className="text-xs text-muted">
                   {formatDate(entry.ranAt)}

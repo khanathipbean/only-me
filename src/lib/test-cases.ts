@@ -328,6 +328,27 @@ export async function updateTestResultAndNotes(
         updatedById: actorId,
       },
     });
+
+    /* The answer, kept. Without this the case's own column was simply
+     * overwritten and the recording left no trace: the Dashboard showed the
+     * failure, the Requirement went to In Progress because of it, and the
+     * report that exists to name what is going wrong could not see it at
+     * all. No round, because there is none — that is what the report draws
+     * differently, not something it has to guess at.
+     *
+     * Only when a result was given. Editing a note on its own is not an
+     * answer and should not add a round trip to the case's history. */
+    if (input.testResult !== undefined) {
+      await tx.testResultEvent.create({
+        data: {
+          testCase: { connect: { id } },
+          testResult: input.testResult,
+          notes: input.notes ?? null,
+          recordedBy: { connect: { id: actorId } },
+        },
+      });
+    }
+
     if (status) {
       await rollUpFrom(tx, "testGroup", updated.testGroupId);
     }

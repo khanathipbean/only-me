@@ -66,11 +66,13 @@ async function purgeTestCases(tx: Tx, testCaseIds: string[]): Promise<Purged> {
   });
   // A Test Case's result in every round it was ever part of. Nothing else
   // holds that, so deleting the case really does discard its history.
-  /* Its attempts first: nothing in this schema declares `onDelete`, so the
-   * database refuses to drop a TestRunCase while an event still points at
-   * it. Deepest first, the same order as everything else here. */
-  await tx.testRunCaseEvent.deleteMany({
-    where: { testRunCase: { testCaseId: { in: testCaseIds } } },
+  /* Every answer recorded about the case, in a round or outside one. By the
+   * case rather than through the round: an answer recorded outside a round
+   * has no round to reach it through, and would be left pointing at a Test
+   * Case that no longer exists. Nothing in this schema declares `onDelete`,
+   * so the database refuses the next two deletes while any of them stand. */
+  await tx.testResultEvent.deleteMany({
+    where: { testCaseId: { in: testCaseIds } },
   });
   await tx.testRunCase.deleteMany({ where: { testCaseId: { in: testCaseIds } } });
   await tx.testCase.deleteMany({ where: { id: { in: testCaseIds } } });

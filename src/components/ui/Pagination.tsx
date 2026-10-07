@@ -72,11 +72,20 @@ export function Pagination({
   pageSize,
   onPageChange,
   onPageSizeChange,
+  pageParam = "page",
+  pageSizeParam = "pageSize",
 }: {
   page: number;
   totalPages: number;
   total: number;
   pageSize: number;
+  /**
+   * Which query parameters this control owns. A page with one table leaves
+   * them alone; a page with several lists side by side gives each its own, so
+   * paging one does not reset the others.
+   */
+  pageParam?: string;
+  pageSizeParam?: string;
   /**
    * Given together, the control reports changes instead of navigating, and
    * the caller holds the page. A list that carries state across pages — the
@@ -103,9 +112,9 @@ export function Pagination({
       // Page 1 is the default — keep it out of the URL so the first page has
       // one canonical address instead of both `?page=1` and no param at all.
       if (target <= 1) {
-        params.delete("page");
+        params.delete(pageParam);
       } else {
-        params.set("page", String(target));
+        params.set(pageParam, String(target));
       }
     });
   }
@@ -117,10 +126,10 @@ export function Pagination({
     }
     router.push(
       withParams((params) => {
-        params.set("pageSize", next);
+        params.set(pageSizeParam, next);
         // Back to the first page: keeping the current page could land past the
         // end (page 4 of 4 at 10 rows becomes page 1 of 1 at 100 rows).
-        params.delete("page");
+        params.delete(pageParam);
       }),
       { scroll: false },
     );

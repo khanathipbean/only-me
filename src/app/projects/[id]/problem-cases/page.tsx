@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
@@ -16,6 +17,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ResultCount } from "@/components/ui/ResultCount";
+import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { nameOr, problemCasesBreadcrumb } from "@/lib/breadcrumb";
@@ -25,7 +27,7 @@ import { formRowClass, labelClass, mutedTextClass, pageClass, thClass } from "@/
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Problem cases · ${project.name}` : "Problem cases" };
+  return { title: project ? `Problem Cases · ${project.name}` : "Problem Cases" };
 }
 
 /**
@@ -62,7 +64,37 @@ const SECTIONS: Record<
     blurb: "Failed before, passing now — here so a fix can be seen, not chased",
     tone: "green",
   },
+  stable: {
+    title: "Clean",
+    blurb: "Passed every time, first time — here so a case can be trusted, not only fixed",
+    tone: "green",
+  },
 };
+
+/** How many rows a section shows before it pages. Ten, the same as every
+ *  other list in the app, so one screen holds several sections at once. */
+const SECTION_SIZE = 10;
+
+/** One section's slice of its rows, from the query string.
+ *
+ * Each section owns its own two parameters. Sharing one `page` across all of
+ * them would mean opening page 3 of Regression also opened page 3 of Clean,
+ * and the two have nothing to do with each other. */
+function sliceSection(rows: ProblemCase[], key: string, params: Record<string, string | undefined>) {
+  const size = Math.min(Math.max(Number(params[`size_${key}`]) || SECTION_SIZE, 1), 100);
+  const totalPages = Math.max(Math.ceil(rows.length / size), 1);
+  /* Clamped, not trusted: a filter can shrink a section while `page_x=5` is
+   * still in the URL, and an out-of-range page would render nothing while
+   * claiming to be somewhere. */
+  const page = Math.min(Math.max(Number(params[`page_${key}`]) || 1, 1), totalPages);
+  return {
+    items: rows.slice((page - 1) * size, page * size),
+    page,
+    size,
+    totalPages,
+    total: rows.length,
+  };
+}
 
 /**
  * One square per answer recorded, oldest on the left, so the shape reads
@@ -70,10 +102,18 @@ const SECTIONS: Record<
  * reported broken and passed after a fix shows red then green, which is the
  * only place that round trip is visible at a glance.
  *
- * Squares of the same round sit together and the next round starts after a
- * gap, so the grouping survives without a label. Colour alone would be the
- * only carrier otherwise, so each square names its round, its answer and
- * when it was given.
+ * Squares of the same round sit together and a rule separates one group from
+ * the next, so the grouping survives without a label. A rule rather than a
+ * wider gap: a gap has to be measured against the gap between squares to be
+ * read at all, and at this size that comparison was too fine. Colour alone would be the
+ * only carrier otherwise, so each square names its round, its answer, when it
+ * was given and what was written down with it.
+ *
+ * The note lives here rather than in a column of its own. A column could only
+ * ever show one note — the last failure's — while every answer has one, and
+ * it cost a third of the table's width to say less than the squares already
+ * do. The cost is that a hover is now the only way to read it, which is a
+ * real loss for anyone on a touch screen or a keyboard.
  */
 function ResultStrip({
   entries,
@@ -95,22 +135,46 @@ function ResultStrip({
                 ? "bg-amber-500"
                 : "bg-slate-400 dark:bg-slate-600";
         const latest = index === marks.length - 1;
+        /* A group recorded outside a round is named by its day, so repeating
+           the date after the result said it twice. */
+        const when = mark.at && mark.testRunId ? ` · ${formatDate(mark.at)}` : "";
         const said =
           `${mark.runName} — ${mark.testResult.replace(/_/g, " ")}` +
-          (mark.at ? ` · ${formatDate(mark.at)}` : "") +
+          when +
           (mark.by ? ` · ${mark.by}` : "");
-        return (
+        /* On its own line, so a long note does not run the first line off the
+           side of the tooltip and take the round's name with it. */
+        const title = mark.notes ? `${said}
+${mark.notes}` : said;
+        const className =
+          `size-4 rounded-[3px] ${colour}` +
+          /* Recorded outside any round. A border rather than a different
+             colour, because colour already says what the answer was, and a
+             border reads in both themes from one token. */
+          (mark.testRunId ? "" : " border-2 border-foreground") +
+          (latest ? " ring-2 ring-brand ring-offset-1 ring-offset-background" : "");
+
+        /* Nothing to open when there is no round, so it is not a link. */
+        const square = mark.testRunId ? (
           <Link
-            key={`${mark.testRunId}-${index}`}
             href={`/projects/${projectId}/runs/${mark.testRunId}`}
-            title={said}
-            aria-label={said}
-            className={`size-4 rounded ${colour} ${
-              /* The first square of a round after the first: a gap, so two
-                 answers in one round do not read as two rounds. */
-              mark.startsRound && index > 0 ? "ml-2" : ""
-            } ${latest ? "ring-2 ring-brand ring-offset-1 ring-offset-background" : ""}`}
+            title={title}
+            aria-label={title}
+            className={className}
           />
+        ) : (
+          <span title={title} aria-label={title} className={className} />
+        );
+
+        return (
+          <Fragment key={index}>
+            {/* Drawn rather than typed: a literal "|" sits on a text baseline
+                and comes out a different height from the squares beside it. */}
+            {mark.startsRound && index > 0 && (
+              <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-muted" />
+            )}
+            {square}
+          </Fragment>
         );
       })}
     </span>
@@ -122,10 +186,14 @@ export default async function ProblemCasesPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ phase?: string; moduleId?: string; pattern?: string }>;
+  /* Open-ended: each section carries its own `page_x` and `size_x`, and
+     listing them here would mean editing this type every time a pattern is
+     added. */
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { id: projectId } = await params;
-  const { phase, moduleId, pattern } = await searchParams;
+  const query = await searchParams;
+  const { phase, moduleId, pattern } = query;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
@@ -156,8 +224,8 @@ export default async function ProblemCasesPage({
         segments={problemCasesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
       <PageHeader
-        title="Problem cases"
-        subtitle="Which cases keep failing, and whether they have always failed, just broke, or cannot make up their mind."
+        title="Problem Cases"
+        subtitle="Every case anyone has answered for, grouped by the shape its results make — what broke, what cannot be trusted, and what has never given anyone trouble."
       />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -212,19 +280,19 @@ export default async function ProblemCasesPage({
         <p className={mutedTextClass}>
           {hasFilters
             ? "No case matches those filters."
-            : "Nothing is going wrong — no case in this project has failed in a round yet."}
+            : "Nothing to show yet — no case in this project has been answered pass or fail."}
         </p>
       ) : (
         PROBLEM_PATTERN_ORDER.filter((key) => byPattern.has(key)).map((key) => {
           const section = SECTIONS[key];
-          const rows = byPattern.get(key) ?? [];
+          const slice = sliceSection(byPattern.get(key) ?? [], key, query);
           return (
             <section key={key} className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-sm font-semibold tracking-wide text-foreground uppercase">
                   {section.title}
                 </h2>
-                <Badge tone={section.tone}>{rows.length}</Badge>
+                <Badge tone={section.tone}>{slice.total}</Badge>
                 <span aria-hidden className="h-px min-w-8 flex-1 bg-border" />
                 <span className="text-xs text-muted">{section.blurb}</span>
               </div>
@@ -232,9 +300,8 @@ export default async function ProblemCasesPage({
               <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full border-collapse text-sm">
                   <colgroup>
-                    <col className="w-[46%]" />
-                    <col className="w-[22%]" />
-                    <col className="w-[32%]" />
+                    <col className="w-[44%]" />
+                    <col className="w-[56%]" />
                   </colgroup>
                   <thead>
                     <tr>
@@ -243,28 +310,38 @@ export default async function ProblemCasesPage({
                           one square is one result recorded, and a round can
                           hold several. */}
                       <th className={thClass}>Every result recorded</th>
-                      <th className={thClass}>What was written when it failed</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => {
+                    {slice.items.map((row) => {
                       const { hadFailure } = summariseHistory(row.history);
                       return (
                         <tr key={row.id} className="border-b border-border last:border-b-0">
                           <td className="px-3 py-3 align-top">
-                            <Link
-                              href={row.href}
-                              className="font-medium text-foreground hover:text-brand hover:underline"
-                            >
-                              {row.name}
-                            </Link>
+                            <span className="flex flex-wrap items-center gap-2">
+                              <Link
+                                href={row.href}
+                                className="font-medium text-foreground hover:text-brand hover:underline"
+                              >
+                                {row.name}
+                              </Link>
+                              {/* Beside the name rather than in the path
+                                  below: the feature is how the team talks
+                                  about a case, and the path is where it
+                                  happens to live. */}
+                              {row.feature && (
+                                <Badge tone="gray" variant="outline">
+                                  {row.feature}
+                                </Badge>
+                              )}
+                            </span>
                             {/* Where it lives, so a row can be acted on without
                                 first working out which Module it came from. */}
                             <p className="mt-0.5 text-xs text-muted">{row.path}</p>
                           </td>
                           <td className="px-3 py-3 align-top">
                             <ResultStrip entries={row.history} projectId={projectId} />
-                            <p className="mt-1 text-xs text-muted">
+                            <p className="mt-1.5 text-xs text-muted">
                               {row.brokeAt && (
                                 <>
                                   Broke at{" "}
@@ -276,24 +353,25 @@ export default async function ProblemCasesPage({
                                   per answer recorded, so a bare "1 of 2"
                                   beside six squares would be read as
                                   counting them. */}
-                              failed in {hadFailure} of {row.history.length} round
-                              {row.history.length === 1 ? "" : "s"}
+                              {(() => {
+                                /* "rounds" only while every group is one. A
+                                   group recorded outside a round is not a
+                                   round, and calling it one would make the
+                                   number disagree with the squares. */
+                                const outside = row.history.filter(
+                                  (entry) => entry.testRunId === null,
+                                ).length;
+                                return outside === 0
+                                  ? `failed in ${hadFailure} of ${row.history.length} round${
+                                      row.history.length === 1 ? "" : "s"
+                                    }`
+                                  : `failed in ${hadFailure} of ${row.history.length} — ${outside} outside a round`;
+                              })()}
+                              {/* The notes moved into the squares, so say so
+                                  once rather than leave someone to find it. */}
+                              {" · "}
+                              <span>hover a square for the note</span>
                             </p>
-                          </td>
-                          <td className="px-3 py-3 align-top text-muted">
-                            {row.lastFailure?.notes ?? (
-                              <span className="text-muted">No note was left.</span>
-                            )}
-                            {row.lastFailure && (
-                              <p className="mt-0.5 text-xs">
-                                {row.lastFailure.runName}
-                                {row.lastFailure.at && ` · ${formatDate(row.lastFailure.at)}`}
-                                {row.lastFailure.by && ` · ${row.lastFailure.by}`}
-                                {/* Otherwise a red note under a green strip
-                                    reads as a contradiction. */}
-                                {row.lastFailure.fixedInRound && " · passed later the same round"}
-                              </p>
-                            )}
                           </td>
                         </tr>
                       );
@@ -301,14 +379,28 @@ export default async function ProblemCasesPage({
                   </tbody>
                 </table>
               </div>
+
+              {/* Only once a section has more than fits. A control saying
+                  "1 of 1" under every section would be five of them on a
+                  page where nothing can be paged. */}
+              {slice.totalPages > 1 && (
+                <Pagination
+                  page={slice.page}
+                  totalPages={slice.totalPages}
+                  total={slice.total}
+                  pageSize={slice.size}
+                  pageParam={`page_${key}`}
+                  pageSizeParam={`size_${key}`}
+                />
+              )}
             </section>
           );
         })
       )}
 
       <p className="text-xs text-muted">
-        A case no round has ever reached is not here — with no result there is no shape to
-        show. The Runs column on a Test Group&apos;s list is where those are found.
+        A case nobody has answered for is not here — with no pass and no fail there is no
+        shape to show. The Runs column on a Test Group&apos;s list is where those are found.
       </p>
     </main>
   );

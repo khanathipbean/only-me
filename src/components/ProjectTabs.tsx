@@ -27,7 +27,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     /* With Dashboard rather than with the work: both are places you go to
        look at what the numbers say and change nothing. Dashboard answers how
        far along a round is; this one answers which cases keep going wrong. */
-    { label: "Problem cases", href: `${overviewHref}/problem-cases` },
+    { label: "Problem Cases", href: `${overviewHref}/problem-cases` },
     { label: "Modules", href: `${overviewHref}/modules` },
     { label: "Test Runs", href: `${overviewHref}/runs` },
     { label: "Notes", href: `${overviewHref}/notes` },

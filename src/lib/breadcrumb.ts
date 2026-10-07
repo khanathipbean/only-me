@@ -69,7 +69,7 @@ export function dashboardBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
 export function problemCasesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [
     ...projectBreadcrumb(project),
-    { label: "Problem cases", href: `/projects/${project.id}/problem-cases` },
+    { label: "Problem Cases", href: `/projects/${project.id}/problem-cases` },
   ];
 }
 

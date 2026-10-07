@@ -25,24 +25,24 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  ownedProjects   Project[]       @relation("ProjectOwner")
-  updatedProjects Project[]       @relation("ProjectUpdatedBy")
-  memberships     ProjectMember[]
-  auditLogs       AuditLog[]
-  ownedScenarios      Scenario[]
-  ownedTestGroups     TestGroup[]
-  assignedTestCases   TestCase[]   @relation("TestCaseAssignee")
-  createdTestCases    TestCase[]   @relation("TestCaseCreatedBy")
-  updatedTestCases    TestCase[]   @relation("TestCaseUpdatedBy")
-  uploadedAttachments Attachment[]
-  performedImports    ImportLog[]
-  uploadedFiles       ProjectFile[]
-  createdNotes        Note[]
-  createdTestRuns     TestRun[]     @relation("TestRunCreatedBy")
-  ranTestRunCases     TestRunCase[] @relation("TestRunCaseRanBy")
-  recordedRunResults  TestRunCaseEvent[] @relation("TestRunCaseEventRecordedBy")
-  notifications          Notification[] @relation("NotificationRecipient")
-  triggeredNotifications Notification[] @relation("NotificationActor")
+  ownedProjects          Project[]         @relation("ProjectOwner")
+  updatedProjects        Project[]         @relation("ProjectUpdatedBy")
+  memberships            ProjectMember[]
+  auditLogs              AuditLog[]
+  ownedScenarios         Scenario[]
+  ownedTestGroups        TestGroup[]
+  assignedTestCases      TestCase[]        @relation("TestCaseAssignee")
+  createdTestCases       TestCase[]        @relation("TestCaseCreatedBy")
+  updatedTestCases       TestCase[]        @relation("TestCaseUpdatedBy")
+  uploadedAttachments    Attachment[]
+  performedImports       ImportLog[]
+  uploadedFiles          ProjectFile[]
+  createdNotes           Note[]
+  createdTestRuns        TestRun[]         @relation("TestRunCreatedBy")
+  ranTestRunCases        TestRunCase[]     @relation("TestRunCaseRanBy")
+  recordedRunResults     TestResultEvent[] @relation("TestResultEventRecordedBy")
+  notifications          Notification[]    @relation("NotificationRecipient")
+  triggeredNotifications Notification[]    @relation("NotificationActor")
 }
 
 enum ProjectStatus {
@@ -59,18 +59,18 @@ enum ProjectRole {
 }
 
 model Project {
-  id            String        @id @default(cuid())
-  code          String        @unique
-  name          String
-  description   String?
-  status        ProjectStatus @default(DRAFT)
-  startDate     DateTime?
-  endDate       DateTime?
-  ownerId       String
-  updatedById   String?
-  deletedAt     DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id          String        @id @default(cuid())
+  code        String        @unique
+  name        String
+  description String?
+  status      ProjectStatus @default(DRAFT)
+  startDate   DateTime?
+  endDate     DateTime?
+  ownerId     String
+  updatedById String?
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id])
   updatedBy     User?           @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
@@ -93,8 +93,8 @@ model ProjectMember {
   role      ProjectRole
   createdAt DateTime    @default(now())
 
-  project   Project @relation(fields: [projectId], references: [id])
-  user      User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@unique([projectId, userId])
   @@index([userId])
@@ -165,7 +165,9 @@ model Notification {
   @@index([projectId, occurredAt])
 }
 
-/** Shared priority for Scenario and Test Case. */
+/**
+ * Shared priority for Scenario and Test Case.
+ */
 enum Priority {
   CRITICAL
   HIGH
@@ -187,7 +189,9 @@ enum TestResult {
   SKIPPED
 }
 
-/** Shared workflow status for Scenario, Test Group, and Test Case. */
+/**
+ * Shared workflow status for Scenario, Test Group, and Test Case.
+ */
 enum WorkflowStatus {
   DRAFT
   READY
@@ -196,7 +200,7 @@ enum WorkflowStatus {
 }
 
 model Scenario {
-  id             String           @id @default(cuid())
+  id             String         @id @default(cuid())
   projectId      String
   /// Mandatory: a Scenario is reached through its Requirement, which is
   /// reached through its Module, so one without a Requirement would have no
@@ -210,16 +214,16 @@ model Scenario {
   steps          String?
   expectedResult String
   priority       Priority
-  status         WorkflowStatus   @default(DRAFT)
-  tags           String[]         @default([])
+  status         WorkflowStatus @default(DRAFT)
+  tags           String[]       @default([])
   ownerId        String?
   deletedAt      DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  project     Project      @relation(fields: [projectId], references: [id])
-  requirement Requirement  @relation(fields: [requirementId], references: [id])
-  owner       User?        @relation(fields: [ownerId], references: [id])
+  project     Project     @relation(fields: [projectId], references: [id])
+  requirement Requirement @relation(fields: [requirementId], references: [id])
+  owner       User?       @relation(fields: [ownerId], references: [id])
   testGroups  TestGroup[]
 
   // Every list query filters on one of these plus `deletedAt`, and neither
@@ -250,7 +254,7 @@ model TestGroup {
 }
 
 model TestCase {
-  id             String      @id @default(cuid())
+  id             String         @id @default(cuid())
   testGroupId    String
   name           String
   condition      String?
@@ -260,22 +264,24 @@ model TestCase {
   priority       Priority
   testType       TestType?
   status         WorkflowStatus @default(DRAFT)
-  testResult     TestResult  @default(NOT_RUN)
+  testResult     TestResult     @default(NOT_RUN)
   assigneeId     String?
   notes          String?
   deletedAt      DateTime?
   createdById    String
   updatedById    String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  testGroup   TestGroup    @relation(fields: [testGroupId], references: [id])
-  assignee    User?        @relation("TestCaseAssignee", fields: [assigneeId], references: [id])
-  createdBy   User         @relation("TestCaseCreatedBy", fields: [createdById], references: [id])
-  updatedBy   User?        @relation("TestCaseUpdatedBy", fields: [updatedById], references: [id])
-  steps       TestStep[]
-  attachments Attachment[]
-  runCases    TestRunCase[]
+  testGroup    TestGroup         @relation(fields: [testGroupId], references: [id])
+  assignee     User?             @relation("TestCaseAssignee", fields: [assigneeId], references: [id])
+  createdBy    User              @relation("TestCaseCreatedBy", fields: [createdById], references: [id])
+  updatedBy    User?             @relation("TestCaseUpdatedBy", fields: [updatedById], references: [id])
+  steps        TestStep[]
+  attachments  Attachment[]
+  runCases     TestRunCase[]
+  /// Every answer anyone has recorded about this case, in a round or not.
+  resultEvents TestResultEvent[]
 
   @@index([testGroupId, deletedAt])
 }
@@ -335,7 +341,7 @@ model TestRunCase {
   ranBy    User?    @relation("TestRunCaseRanBy", fields: [ranById], references: [id])
 
   attachments Attachment[]
-  events      TestRunCaseEvent[]
+  events      TestResultEvent[]
 
   @@unique([testRunId, testCaseId])
   @@index([testCaseId])
@@ -352,9 +358,17 @@ model TestRunCase {
 ///
 /// Append-only. Nothing updates a row here; the latest one and the
 /// `TestRunCase` it belongs to agree by construction.
-model TestRunCaseEvent {
+/// One answer somebody recorded about a Test Case, kept for ever.
+///
+/// Always belongs to a Test Case. Belongs to a round only when it was recorded
+/// in one — results are also recorded straight on the case, before a sprint
+/// opens or by whoever prefers working there, and those used to leave no trace
+/// at all: the case's own column was overwritten and no report could see it.
+model TestResultEvent {
   id            String     @id @default(cuid())
-  testRunCaseId String
+  testCaseId    String
+  /// Null when this was recorded outside any round.
+  testRunCaseId String?
   testResult    TestResult
   /// What was written down at that attempt. Kept per attempt rather than per
   /// round for the same reason the result is: the note explaining the first
@@ -363,11 +377,15 @@ model TestRunCaseEvent {
   recordedById  String
   recordedAt    DateTime   @default(now())
 
-  testRunCase TestRunCase @relation(fields: [testRunCaseId], references: [id])
-  recordedBy  User        @relation("TestRunCaseEventRecordedBy", fields: [recordedById], references: [id])
+  testCase    TestCase     @relation(fields: [testCaseId], references: [id])
+  testRunCase TestRunCase? @relation(fields: [testRunCaseId], references: [id])
+  recordedBy  User         @relation("TestResultEventRecordedBy", fields: [recordedById], references: [id])
 
-  /// Read as "this case's attempts, oldest first", which is the only way
-  /// anything reads them.
+  /// Read as "this case's answers, oldest first" — the whole history of a
+  /// case, rounds and everything else together.
+  @@index([testCaseId, recordedAt])
+  /// And as "what happened inside this round", which is how a round's own
+  /// page reads them.
   @@index([testRunCaseId, recordedAt])
 }
 
@@ -439,9 +457,9 @@ model ProjectFile {
   uploadedAt   DateTime  @default(now())
   deletedAt    DateTime?
 
-  project      Project @relation(fields: [projectId], references: [id])
-  moduleRef    Module? @relation(fields: [moduleId], references: [id])
-  uploadedBy   User    @relation(fields: [uploadedById], references: [id])
+  project    Project @relation(fields: [projectId], references: [id])
+  moduleRef  Module? @relation(fields: [moduleId], references: [id])
+  uploadedBy User    @relation(fields: [uploadedById], references: [id])
 
   @@index([projectId, module])
 }
@@ -450,25 +468,25 @@ model ProjectFile {
 /// reads the way it does — the things that belong to the testing without
 /// belonging to any one Test Case.
 model Note {
-  id        String @id @default(cuid())
-  projectId String
+  id          String    @id @default(cuid())
+  projectId   String
   /// Optional. Most notes belong to a Module and are far easier to find
   /// again for it, but some are about the Project — what a kickoff decided,
   /// a convention the team agreed. Requiring one only made people file those
   /// under whichever Module was nearest, which is worse than leaving it
   /// empty: the Module filter then returns things that have nothing to do
   /// with it, and the value looks deliberate.
-  moduleId  String?
+  moduleId    String?
   /// Sub-area of the Module, the same label a Requirement carries — see
   /// `Requirement.feature`. Free text against a suggestion list, not a table:
   /// a Feature is a name people use, not a thing with a life of its own.
-  feature   String?
-  title     String
+  feature     String?
+  title       String
   /// Stored exactly as typed and rendered the same way. Never parsed as
   /// Markdown: that would let a `<script>` someone typed here run on this
   /// app's own origin, which is the reason SVG is kept out of the inline
   /// file types too (see `INLINE_TYPES` in src/lib/project-files.ts).
-  body      String
+  body        String
   /// When the thing being written about happened, which is not when the row
   /// was created — a Monday meeting written up on Wednesday is ordinary, and
   /// ordering by `createdAt` would put the list in a misleading order.

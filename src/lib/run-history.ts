@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { formatDate } from "@/lib/dates";
 import type { TestResult } from "@/generated/prisma/client";
 
 /**
@@ -14,7 +15,9 @@ import type { TestResult } from "@/generated/prisma/client";
  */
 
 export type RunHistoryEntry = {
-  testRunId: string;
+  /** Null when these answers were recorded outside any round. */
+  testRunId: string | null;
+  /** The round's name, or — outside a round — the day they were recorded. */
   runName: string;
   phase: string | null;
   /** Where the round ended up — the latest answer recorded in it. */
@@ -70,6 +73,153 @@ function toAttempts(events: EventRow[]): RunAttempt[] {
   }));
 }
 
+type RoundRow = {
+  testCaseId: string;
+  testResult: TestResult;
+  notes: string | null;
+  ranAt: Date | null;
+  ranBy: { name: string } | null;
+  events: EventRow[];
+  testRun: { id: string; name: string; phase: string | null; createdAt: Date };
+};
+
+type LooseRow = EventRow & { testCaseId: string };
+
+/** An entry with the moment it is sorted by, which is not part of the entry. */
+type Placed = { entry: RunHistoryEntry; at: Date };
+
+/**
+ * When a round goes in the strip: when the round was made.
+ *
+ * Not when its first answer was given, which was tried and is wrong — a round
+ * that has been scheduled and not yet reached has no answer to go by, so it
+ * fell back to its own creation and jumped ahead of rounds that were created
+ * earlier and run later. A round's place in the sequence is the sequence
+ * itself, and rounds keep the order they have always had.
+ *
+ * A group of answers recorded outside a round is placed by when they were
+ * recorded instead, which is the only thing it has. The two keys differ, and
+ * in the normal shape — a sprint is made, then run — they agree. A sprint made
+ * long before it is run will sit ahead of anything recorded in between.
+ */
+function placeRound(row: RoundRow): Placed {
+  return {
+    at: row.testRun.createdAt,
+    entry: {
+      testRunId: row.testRun.id,
+      runName: row.testRun.name,
+      phase: row.testRun.phase,
+      testResult: row.testResult,
+      notes: row.notes,
+      ranAt: row.ranAt,
+      ranBy: row.ranBy?.name ?? null,
+      attempts: toAttempts(row.events),
+      /* Whatever the round ended on. A round that went red before it went
+       * green is the one worth seeing, and the row's own result cannot say
+       * so — it only ever holds the last answer. */
+      everFailed: row.events.some((event) => event.testResult === "FAILED"),
+    },
+  };
+}
+
+/** The local day an answer was given, which is what groups the loose ones. */
+function dayKey(at: Date) {
+  return `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`;
+}
+
+/**
+ * Answers recorded outside any round, gathered into one group per day.
+ *
+ * A day rather than each answer on its own, so the strip reads the same way
+ * for both kinds: a group is a sitting, and the squares inside it are what was
+ * tried during it. Without this, somebody who records five results on a
+ * Tuesday afternoon would read as five separate occasions.
+ */
+function placeLoose(events: LooseRow[]): Placed[] {
+  const byDay = new Map<string, LooseRow[]>();
+  for (const event of events) {
+    const key = dayKey(event.recordedAt);
+    const bucket = byDay.get(key);
+    if (bucket) {
+      bucket.push(event);
+    } else {
+      byDay.set(key, [event]);
+    }
+  }
+
+  return [...byDay.values()].map((group) => {
+    const last = group[group.length - 1];
+    return {
+      at: group[0].recordedAt,
+      entry: {
+        testRunId: null,
+        runName: formatDate(group[0].recordedAt),
+        phase: null,
+        testResult: last.testResult,
+        notes: last.notes,
+        ranAt: last.recordedAt,
+        ranBy: last.recordedBy?.name ?? null,
+        attempts: toAttempts(group),
+        everFailed: group.some((event) => event.testResult === "FAILED"),
+      },
+    };
+  });
+}
+
+/**
+ * Both kinds of group, per case, oldest first.
+ *
+ * Rounds keep coming from `TestRunCase`, not from the events, because the 152
+ * rows recorded before answers were kept one by one have no events at all and
+ * would vanish from every strip in the app.
+ */
+function buildHistories(rounds: RoundRow[], loose: LooseRow[]) {
+  const placed = new Map<string, Placed[]>();
+  const add = (testCaseId: string, item: Placed) => {
+    const bucket = placed.get(testCaseId);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      placed.set(testCaseId, [item]);
+    }
+  };
+
+  for (const row of rounds) {
+    add(row.testCaseId, placeRound(row));
+  }
+  const looseByCase = new Map<string, LooseRow[]>();
+  for (const event of loose) {
+    const bucket = looseByCase.get(event.testCaseId);
+    if (bucket) {
+      bucket.push(event);
+    } else {
+      looseByCase.set(event.testCaseId, [event]);
+    }
+  }
+  for (const [testCaseId, events] of looseByCase) {
+    for (const item of placeLoose(events)) {
+      add(testCaseId, item);
+    }
+  }
+
+  const byCase = new Map<string, RunHistoryEntry[]>();
+  for (const [testCaseId, items] of placed) {
+    byCase.set(
+      testCaseId,
+      items.sort((a, b) => a.at.getTime() - b.at.getTime()).map((item) => item.entry),
+    );
+  }
+  return byCase;
+}
+
+const LOOSE_EVENT_SELECT = {
+  testCaseId: true,
+  testResult: true,
+  notes: true,
+  recordedAt: true,
+  recordedBy: { select: { name: true } },
+} as const;
+
 /**
  * Oldest round first, which is what makes a pattern legible: read left to
  * right and "passed, passed, failed" is a different story from "failed,
@@ -86,57 +236,39 @@ function toAttempts(events: EventRow[]): RunAttempt[] {
 export async function listRunHistoryForCases(
   testCaseIds: string[],
 ): Promise<Map<string, RunHistoryEntry[]>> {
-  const byCase = new Map<string, RunHistoryEntry[]>();
   if (testCaseIds.length === 0) {
-    return byCase;
+    return new Map();
   }
 
-  const rows = await prisma.testRunCase.findMany({
-    where: {
-      testCaseId: { in: testCaseIds },
-      /* An archived round still owns its TestRunCase rows. The Dashboard was
-       * bitten by exactly this once — 142 cases read as "scheduled" while the
-       * rounds on screen covered 21, the difference being one archived round.
-       * A history that counts rounds nobody can open would mislead the same
-       * way. */
-      testRun: { deletedAt: null },
-    },
-    select: {
-      testCaseId: true,
-      testResult: true,
-      notes: true,
-      ranAt: true,
-      ranBy: { select: { name: true } },
-      events: EVENT_SELECT,
-      testRun: { select: { id: true, name: true, phase: true, createdAt: true } },
-    },
-    orderBy: { testRun: { createdAt: "asc" } },
-  });
+  const [rounds, loose] = await Promise.all([
+    prisma.testRunCase.findMany({
+      where: {
+        testCaseId: { in: testCaseIds },
+        /* An archived round still owns its TestRunCase rows. The Dashboard was
+         * bitten by exactly this once — 142 cases read as "scheduled" while the
+         * rounds on screen covered 21, the difference being one archived round.
+         * A history that counts rounds nobody can open would mislead the same
+         * way. */
+        testRun: { deletedAt: null },
+      },
+      select: {
+        testCaseId: true,
+        testResult: true,
+        notes: true,
+        ranAt: true,
+        ranBy: { select: { name: true } },
+        events: EVENT_SELECT,
+        testRun: { select: { id: true, name: true, phase: true, createdAt: true } },
+      },
+    }),
+    prisma.testResultEvent.findMany({
+      where: { testCaseId: { in: testCaseIds }, testRunCaseId: null },
+      select: LOOSE_EVENT_SELECT,
+      orderBy: { recordedAt: "asc" },
+    }),
+  ]);
 
-  for (const row of rows) {
-    const entry: RunHistoryEntry = {
-      testRunId: row.testRun.id,
-      runName: row.testRun.name,
-      phase: row.testRun.phase,
-      testResult: row.testResult,
-      notes: row.notes,
-      ranAt: row.ranAt,
-      ranBy: row.ranBy?.name ?? null,
-      attempts: toAttempts(row.events),
-      /* Whatever the round ended on. A round that went red before it went
-       * green is the one worth seeing, and the row's own result cannot say
-       * so — it only ever holds the last answer. */
-      everFailed: row.events.some((event) => event.testResult === "FAILED"),
-    };
-    const existing = byCase.get(row.testCaseId);
-    if (existing) {
-      existing.push(entry);
-    } else {
-      byCase.set(row.testCaseId, [entry]);
-    }
-  }
-
-  return byCase;
+  return buildHistories(rounds, loose);
 }
 
 /**
@@ -144,33 +276,35 @@ export async function listRunHistoryForCases(
  *
  * Not one per round. A round holds as many answers as the tester gave it,
  * and collapsing them to the round's last one hides the failure that caused
- * the work, which is the thing the strip exists to show. Which round a mark
+ * the work, which is the thing the strip exists to show. Which group a mark
  * belongs to is not lost: it is on the mark, and the tooltip says it.
  *
- * A round with no recorded answers still gets exactly one mark, from the
+ * A group with no recorded answers still gets exactly one mark, from the
  * round's own result. Two cases need this and neither is an edge case:
  * a case sitting in a round nobody has reached yet, and every round recorded
  * before results were kept individually — drawing those from attempts alone
  * would empty the strip of all the history there was.
  */
 export type ResultMark = {
-  testRunId: string;
+  /** Null when this was recorded outside any round — there is nowhere to link
+   *  to, and the strip draws it with an edge to say so. */
+  testRunId: string | null;
   runName: string;
   testResult: TestResult;
   at: Date | null;
   by: string | null;
   notes: string | null;
-  /** First mark of its round, so the rounds stay visible as groups. */
+  /** First mark of its group, so the groups stay visible as groups. */
   startsRound: boolean;
 };
 
 export function toResultMarks(entries: RunHistoryEntry[]): ResultMark[] {
   return entries.flatMap<ResultMark>((entry) => {
-    const round = { testRunId: entry.testRunId, runName: entry.runName };
+    const group = { testRunId: entry.testRunId, runName: entry.runName };
     if (entry.attempts.length === 0) {
       return [
         {
-          ...round,
+          ...group,
           testResult: entry.testResult,
           at: entry.ranAt,
           by: entry.ranBy,
@@ -180,7 +314,7 @@ export function toResultMarks(entries: RunHistoryEntry[]): ResultMark[] {
       ];
     }
     return entry.attempts.map((attempt, index) => ({
-      ...round,
+      ...group,
       testResult: attempt.testResult,
       at: attempt.recordedAt,
       by: attempt.recordedBy,
@@ -188,6 +322,24 @@ export function toResultMarks(entries: RunHistoryEntry[]): ResultMark[] {
       startsRound: index === 0,
     }));
   });
+}
+
+/**
+ * How many times anyone has recorded a failure for this case.
+ *
+ * Every failure, not every round that ended in one: a round where the tester
+ * reported it broken three times before it was fixed cost three round trips,
+ * and that is what "fails often" means to the person asking. A group recorded
+ * before answers were kept one by one has no attempts, so its own result
+ * stands in for the single answer it represents.
+ */
+export function failureCount(entries: RunHistoryEntry[]) {
+  return entries.reduce((total, entry) => {
+    if (entry.attempts.length === 0) {
+      return total + (entry.testResult === "FAILED" ? 1 : 0);
+    }
+    return total + entry.attempts.filter((attempt) => attempt.testResult === "FAILED").length;
+  }, 0);
 }
 
 /** The counts the summary line above a history is built from. */
@@ -303,52 +455,18 @@ export function brokeAt(entries: RunHistoryEntry[]): RunHistoryEntry | null {
   return withVerdicts.find((entry) => entry.testResult === "FAILED") ?? null;
 }
 
-/**
- * The last time this case was reported broken, and what was written about it.
- *
- * Deliberately not "the last round whose result is FAILED". A round where the
- * tester reported a failure, the developer fixed it and the tester came back
- * ends PASSED, and the note describing the failure is on the attempt, not on
- * the round. Reading only the round's own result would show "No note was
- * left" for precisely the cases someone came here to read about.
- */
-export type FailureMoment = {
-  testRunId: string;
-  runName: string;
-  notes: string | null;
-  at: Date | null;
-  by: string | null;
-  /** True when the round this failure sits in went on to pass. */
-  fixedInRound: boolean;
-};
-
-export function lastFailure(entries: RunHistoryEntry[]): FailureMoment | null {
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const entry = entries[i];
-    if (entry.testResult === "FAILED") {
-      return {
-        testRunId: entry.testRunId,
-        runName: entry.runName,
-        notes: entry.notes,
-        at: entry.ranAt,
-        by: entry.ranBy,
-        fixedInRound: false,
-      };
+/** When this case was last answered for, as a number, for ordering. */
+function lastAnsweredAt(entries: RunHistoryEntry[]) {
+  let latest = 0;
+  for (const entry of entries) {
+    for (const attempt of entry.attempts) {
+      latest = Math.max(latest, attempt.recordedAt.getTime());
     }
-    /* The round ended on something else, but went red along the way. */
-    const failed = [...entry.attempts].reverse().find((a) => a.testResult === "FAILED");
-    if (failed) {
-      return {
-        testRunId: entry.testRunId,
-        runName: entry.runName,
-        notes: failed.notes,
-        at: failed.recordedAt,
-        by: failed.recordedBy,
-        fixedInRound: entry.testResult === "PASSED",
-      };
+    if (entry.ranAt) {
+      latest = Math.max(latest, entry.ranAt.getTime());
     }
   }
-  return null;
+  return latest;
 }
 
 export type ProblemCase = {
@@ -357,11 +475,13 @@ export type ProblemCase = {
   /** Module › Requirement › Scenario › Test Group, so a row can be acted on
    *  without first working out where it lives. */
   path: string;
+  /** The Requirement's feature tag, if it carries one — the label the team
+   *  groups work by, so a row can be placed without reading the whole path. */
+  feature: string | null;
   href: string;
   pattern: CasePattern;
   history: RunHistoryEntry[];
   brokeAt: RunHistoryEntry | null;
-  lastFailure: FailureMoment | null;
 };
 
 export type ProblemCaseFilters = {
@@ -387,63 +507,74 @@ export async function listProblemCases(
   projectId: string,
   filters: ProblemCaseFilters = {},
 ): Promise<ProblemCase[]> {
-  const rows = await prisma.testRunCase.findMany({
-    where: {
-      testRun: {
-        projectId,
-        deletedAt: null,
-        ...(filters.phase ? { phase: filters.phase } : {}),
-      },
-      testCase: {
-        deletedAt: null,
-        ...(filters.moduleId
-          ? { testGroup: { scenario: { requirement: { moduleId: filters.moduleId } } } }
-          : {}),
-      },
-    },
-    select: {
-      testCaseId: true,
-      testResult: true,
-      notes: true,
-      ranAt: true,
-      ranBy: { select: { name: true } },
-      events: EVENT_SELECT,
-      testRun: { select: { id: true, name: true, phase: true } },
-    },
-    orderBy: { testRun: { createdAt: "asc" } },
-  });
+  /* Phase is a property of a round, so an answer recorded outside one has no
+   * phase to match. Narrowing to a phase is asking "what happened in this
+   * phase", and the honest answer leaves them out rather than letting them in
+   * under a phase they were never part of. */
+  const wantsLoose = !filters.phase;
 
-  const byCase = new Map<string, RunHistoryEntry[]>();
-  for (const row of rows) {
-    const entry: RunHistoryEntry = {
-      testRunId: row.testRun.id,
-      runName: row.testRun.name,
-      phase: row.testRun.phase,
-      testResult: row.testResult,
-      notes: row.notes,
-      ranAt: row.ranAt,
-      ranBy: row.ranBy?.name ?? null,
-      attempts: toAttempts(row.events),
-      /* Whatever the round ended on. A round that went red before it went
-       * green is the one worth seeing, and the row's own result cannot say
-       * so — it only ever holds the last answer. */
-      everFailed: row.events.some((event) => event.testResult === "FAILED"),
-    };
-    const existing = byCase.get(row.testCaseId);
-    if (existing) {
-      existing.push(entry);
-    } else {
-      byCase.set(row.testCaseId, [entry]);
-    }
-  }
+  const caseWhere = {
+    deletedAt: null,
+    ...(filters.moduleId
+      ? { testGroup: { scenario: { requirement: { moduleId: filters.moduleId } } } }
+      : {}),
+  };
 
-  /* `stable` and `untested` are left out: a case that has only ever passed
-   * is not a problem, and one with no verdicts has no shape to show. The
-   * page is a list of things to do something about, and padding it with the
-   * rest would bury them. */
+  const [rounds, loose] = await Promise.all([
+    prisma.testRunCase.findMany({
+      where: {
+        testRun: {
+          projectId,
+          deletedAt: null,
+          ...(filters.phase ? { phase: filters.phase } : {}),
+        },
+        testCase: caseWhere,
+      },
+      select: {
+        testCaseId: true,
+        testResult: true,
+        notes: true,
+        ranAt: true,
+        ranBy: { select: { name: true } },
+        events: EVENT_SELECT,
+        testRun: { select: { id: true, name: true, phase: true, createdAt: true } },
+      },
+    }),
+    wantsLoose
+      ? prisma.testResultEvent.findMany({
+          where: {
+            testRunCaseId: null,
+            testCase: {
+              ...caseWhere,
+              testGroup: {
+                ...(caseWhere.testGroup ?? {}),
+                scenario: {
+                  ...(caseWhere.testGroup?.scenario ?? {}),
+                  requirement: {
+                    ...(caseWhere.testGroup?.scenario?.requirement ?? {}),
+                    projectId,
+                  },
+                },
+              },
+            },
+          },
+          select: LOOSE_EVENT_SELECT,
+          orderBy: { recordedAt: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const byCase = buildHistories(rounds, loose);
+
+  /* Only `untested` is left out: with no pass and no fail there is no shape
+   * to show, and the Runs column on the Test Cases list is where a case
+   * nothing has reached is found. Everything anyone has answered for is
+   * here, `stable` included — the page is read to judge a case as well as to
+   * fix one, and "this has passed every time for six rounds" is the answer
+   * to half of those questions. The sections keep them apart. */
   const interesting = [...byCase.entries()]
     .map(([id, history]) => ({ id, history, pattern: classifyPattern(history) }))
-    .filter((row) => row.pattern !== "stable" && row.pattern !== "untested");
+    .filter((row) => row.pattern !== "untested");
 
   if (interesting.length === 0) {
     return [];
@@ -463,7 +594,12 @@ export async function listProblemCases(
               id: true,
               name: true,
               requirement: {
-                select: { id: true, name: true, module: { select: { id: true, name: true } } },
+                select: {
+                  id: true,
+                  name: true,
+                  feature: true,
+                  module: { select: { id: true, name: true } },
+                },
               },
             },
           },
@@ -486,6 +622,7 @@ export async function listProblemCases(
         id,
         name: detail.name,
         path: [requirement.module.name, requirement.name, scenario.name, group.name].join(" › "),
+        feature: requirement.feature,
         href:
           `/projects/${projectId}/modules/${requirement.module.id}` +
           `/requirements/${requirement.id}/scenarios/${scenario.id}` +
@@ -493,18 +630,31 @@ export async function listProblemCases(
         pattern,
         history,
         brokeAt: brokeAt(history),
-        lastFailure: lastFailure(history),
       } satisfies ProblemCase;
     })
-    .filter((row): row is ProblemCase => row !== null);
+    .filter((row): row is ProblemCase => row !== null)
+    /* Most failures first. Within one pattern the count is the only thing
+     * that separates a case somebody should look at today from one that
+     * slipped once a year ago, and the order used to be whatever the
+     * database handed back. Ties go to whichever was answered for most
+     * recently, so a long-quiet case sinks below a live one. */
+    .sort((a, b) => {
+      const byFailures = failureCount(b.history) - failureCount(a.history);
+      if (byFailures !== 0) {
+        return byFailures;
+      }
+      return lastAnsweredAt(b.history) - lastAnsweredAt(a.history);
+    });
 }
 
 /** The order the page reads in: what broke first, what never worked next,
- *  what cannot be trusted after that, and what got fixed last. */
+ *  what cannot be trusted after that, what got fixed, and what has never
+ *  given anyone trouble last. */
 export const PROBLEM_PATTERN_ORDER = [
   "regression",
   "never-passed",
   "unstable",
   "reworked",
   "recovered",
+  "stable",
 ] as const satisfies readonly CasePattern[];
