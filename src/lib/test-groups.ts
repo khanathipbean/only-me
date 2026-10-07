@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { purgeTestGroup } from "@/lib/hard-delete";
+import { rollUpAfter } from "@/lib/status-rollup";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -62,7 +63,7 @@ async function setTestGroupDeletedAt(
     where: { id },
     include: { scenario: { select: { projectId: true } } },
   });
-  return setDeletedAt({
+  const result = await setDeletedAt({
     entityType: "TestGroup",
     actorId,
     action,
@@ -70,6 +71,10 @@ async function setTestGroupDeletedAt(
     projectId: before.scenario.projectId,
     update: (deletedAt) => prisma.testGroup.update({ where: { id }, data: { deletedAt } }),
   });
+
+  await rollUpAfter("scenario", before.scenarioId);
+
+  return result;
 }
 
 export async function createTestGroup(
@@ -98,6 +103,7 @@ export async function createTestGroup(
     },
   });
 
+  await rollUpAfter("scenario", scenarioId);
   await logTestGroupEvent("create", testGroup, projectId, actorId, { newValue: testGroup });
 
   return testGroup;
@@ -205,6 +211,7 @@ export async function updateTestGroup(
     },
   });
 
+  await rollUpAfter("scenario", before.scenarioId);
   await logTestGroupEvent("update", after, before.scenario.projectId, actorId, {
     oldValue: before,
     newValue: after,
@@ -281,6 +288,7 @@ export async function duplicateTestGroup(id: string, actorId: string) {
     },
   });
 
+  await rollUpAfter("scenario", source.scenarioId);
   await logTestGroupEvent("duplicate", copy, source.scenario.projectId, actorId, {
     newValue: copy,
   });
@@ -357,6 +365,7 @@ export async function deleteTestGroup(id: string, actorId: string, confirm: bool
     oldValue: before,
   });
   const purged = await purgeTestGroup(id);
+  await rollUpAfter("scenario", before.scenarioId);
 
   return { ...before, descendantCounts, purged };
 }
@@ -381,6 +390,12 @@ export async function moveTestGroup(id: string, targetScenarioId: string, actorI
       sequence: (maxSequence._max.sequence ?? 0) + 1,
     },
   });
+
+  // Both ends, the same reason moving a Test Case recomputes both of its.
+  await rollUpAfter("scenario", before.scenarioId);
+  if (targetScenarioId !== before.scenarioId) {
+    await rollUpAfter("scenario", targetScenarioId);
+  }
 
   await logTestGroupEvent("move", testGroup, targetProjectId, actorId, {
     oldValue: { scenarioId: before.scenarioId },

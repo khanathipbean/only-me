@@ -3,6 +3,7 @@ import { UNASSIGNED_NAME } from "@/lib/requirements";
 import type { ImportRow } from "@/lib/import/parse";
 import { parseTestSteps } from "@/lib/import/steps";
 import { normalizePriority, validateRow, type ValidatedRow } from "@/lib/import/validate";
+import { rollUpFrom } from "@/lib/status-rollup";
 
 export const MAX_IMPORT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
@@ -682,6 +683,23 @@ export async function confirmImport(
             testCaseId: testCase.id,
           });
         });
+      }
+
+      /* Once per Test Group touched, not once per row: a sheet brings in
+       * thousands of cases, and rolling up after each would be thousands of
+       * walks to the top of the tree inside one transaction.
+       *
+       * It matters even though every row an import creates starts at DRAFT.
+       * A sheet landing new cases in a Test Group that was COMPLETED leaves
+       * it holding both, and nothing else would notice. */
+      const touchedGroups = new Set<string>([
+        ...toCreate.map((w) => testGroupIdByKey.get(testGroupKey(w))!),
+        ...toUpdate.map(({ existing }) => existing.testGroupId),
+      ]);
+      for (const testGroupId of touchedGroups) {
+        if (testGroupId) {
+          await rollUpFrom(tx, "testGroup", testGroupId);
+        }
       }
 
       const details = rows

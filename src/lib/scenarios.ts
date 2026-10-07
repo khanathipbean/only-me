@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { purgeScenario } from "@/lib/hard-delete";
+import { rollUpAfter } from "@/lib/status-rollup";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { writeAuditLog } from "@/lib/audit";
@@ -57,7 +58,7 @@ async function setScenarioDeletedAt(
   deletedAt: Date | null,
 ) {
   const before = await prisma.scenario.findUniqueOrThrow({ where: { id } });
-  return setDeletedAt({
+  const result = await setDeletedAt({
     entityType: "Scenario",
     actorId,
     action,
@@ -65,6 +66,10 @@ async function setScenarioDeletedAt(
     projectId: before.projectId,
     update: (deletedAt) => prisma.scenario.update({ where: { id }, data: { deletedAt } }),
   });
+
+  await rollUpAfter("requirement", before.requirementId);
+
+  return result;
 }
 
 export async function createScenario(
@@ -94,6 +99,7 @@ export async function createScenario(
     },
   });
 
+  await rollUpAfter("requirement", input.requirementId);
   await logScenarioEvent("create", scenario, actorId, { newValue: scenario });
 
   return scenario;
@@ -215,6 +221,12 @@ export async function updateScenario(
     },
   });
 
+  /* Both, when the edit re-filed it: the Requirement it left loses a child
+   * and nothing else would notice. */
+  await rollUpAfter("requirement", before.requirementId);
+  if (after.requirementId !== before.requirementId) {
+    await rollUpAfter("requirement", after.requirementId);
+  }
   await logScenarioEvent("update", after, actorId, { oldValue: before, newValue: after });
 
   return after;
@@ -240,6 +252,7 @@ export async function duplicateScenario(id: string, actorId: string) {
     },
   });
 
+  await rollUpAfter("requirement", source.requirementId);
   await logScenarioEvent("duplicate", copy, actorId, { newValue: copy });
 
   return copy;
@@ -330,6 +343,7 @@ export async function deleteScenario(id: string, actorId: string, confirm: boole
   // Written before the rows go, since it is what will be left of them.
   await logScenarioEvent("delete", before, actorId, { oldValue: before });
   const purged = await purgeScenario(id);
+  await rollUpAfter("requirement", before.requirementId);
 
   return { ...before, descendantCounts, purged };
 }
@@ -372,6 +386,10 @@ export async function moveScenario(id: string, targetProjectId: string, actorId:
     where: { id },
     data: { projectId: targetProjectId, requirementId },
   });
+
+  // It is re-filed on arrival, so both Requirements change what they hold.
+  await rollUpAfter("requirement", before.requirementId);
+  await rollUpAfter("requirement", requirementId);
 
   await logScenarioEvent("move", scenario, actorId, {
     oldValue: { projectId: before.projectId, requirementId: before.requirementId },

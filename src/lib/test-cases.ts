@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { purgeTestCase } from "@/lib/hard-delete";
+import { rollUpAfter, rollUpFrom } from "@/lib/status-rollup";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
@@ -84,7 +85,7 @@ async function setTestCaseDeletedAt(
   if (!before) {
     throw new Error("Test Case not found");
   }
-  return setDeletedAt({
+  const result = await setDeletedAt({
     entityType: "TestCase",
     actorId,
     action,
@@ -93,6 +94,14 @@ async function setTestCaseDeletedAt(
     update: (deletedAt) =>
       prisma.testCase.update({ where: { id }, data: { deletedAt, updatedById: actorId } }),
   });
+
+  /* Archiving changes the set the parent derives from as surely as editing a
+   * status does — and settling a parent whose last stray child is obsolete is
+   * exactly what this app asks people to do instead of typing over the
+   * parent's status. */
+  await rollUpAfter("testGroup", before.testGroupId);
+
+  return result;
 }
 
 export async function createTestCase(
@@ -129,6 +138,10 @@ export async function createTestCase(
         expectedResult: step.expectedResult,
       })),
     });
+
+    /* Inside the caller's own transaction, so the case and everything its
+     * status moves above it commit together. */
+    await rollUpFrom(tx, "testGroup", testGroupId);
 
     return created;
   });
@@ -260,6 +273,8 @@ export async function updateTestCase(
       })),
     });
 
+    await rollUpFrom(tx, "testGroup", before.testGroupId);
+
     return updated;
   });
 
@@ -353,6 +368,8 @@ export async function duplicateTestCase(id: string, actorId: string) {
       })),
     });
 
+    await rollUpFrom(tx, "testGroup", source.testGroupId);
+
     return created;
   });
 
@@ -427,6 +444,7 @@ export async function deleteTestCase(id: string, actorId: string, confirm: boole
     oldValue: before,
   });
   const counts = await purgeTestCase(id);
+  await rollUpAfter("testGroup", before.testGroupId);
 
   return { ...before, purged: counts };
 }
@@ -444,6 +462,14 @@ export async function moveTestCase(id: string, targetTestGroupId: string, actorI
     where: { id },
     data: { testGroupId: targetTestGroupId, updatedById: actorId },
   });
+
+  /* Both ends. The Test Group it left has one fewer child and nothing else
+   * will ever notice — this is the easiest of these to forget, and the one
+   * that leaves a parent stuck at a status its children stopped saying. */
+  await rollUpAfter("testGroup", before.testGroupId);
+  if (targetTestGroupId !== before.testGroupId) {
+    await rollUpAfter("testGroup", targetTestGroupId);
+  }
 
   await logTestCaseEvent("move", testCase, targetProjectId, actorId, {
     oldValue: { testGroupId: before.testGroupId },
