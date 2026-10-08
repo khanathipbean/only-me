@@ -6,6 +6,7 @@ import {
   ValidationError,
   bulkArchiveTestCases,
   createTestCase,
+  listTestCaseIdsForTestGroup,
   listTestCasesWithStepsForTestGroupPage,
   updateTestCase,
   updateTestCaseStatus,
@@ -270,7 +271,25 @@ export default async function TestCasesPage({
     invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-    const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
+    /* Which cases this touches. The row checkboxes send their ids; "Select all
+     * N that match" sends a marker instead and the set is read from the same
+     * filters the list was drawn with, so what is archived is what the reader
+     * was looking at rather than a list assembled in a browser that has seen
+     * one page of it.
+     *
+     * Written out here rather than shared through a helper in this scope: a
+     * server action serialises everything it closes over and a function is
+     * not serialisable — the run page shipped that mistake and failed on
+     * every request. */
+    const ids =
+      formData.get("scope") === "all"
+        ? await listTestCaseIdsForTestGroup(testGroupId, {
+            search,
+            priority: priority as Priority | undefined,
+            testResult: testResult as TestResult | undefined,
+            status: status as WorkflowStatus | undefined,
+          })
+        : formData.getAll("testCaseId").map(String).filter(Boolean);
     const archived = await bulkArchiveTestCases(testGroupId, ids, session!.user.id);
     redirect(
       withToast(
@@ -382,7 +401,12 @@ export default async function TestCasesPage({
             confirmMessage="Archive the selected Test Cases?"
             variant="secondary"
           >
-            <BulkActionBar noun="Test Case">
+            <BulkActionBar
+              noun="Test Case"
+              formId="bulk-archive-test-cases"
+              totalMatching={testCasePage.total}
+              pageSize={testCases.length}
+            >
               <SubmitButton variant="secondary" pendingLabel="Archiving…">
                 Archive selected
               </SubmitButton>

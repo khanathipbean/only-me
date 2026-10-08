@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+import {
+  createTestCase,
+  listTestCaseIdsForTestGroup,
+  listTestCasesWithStepsForTestGroupPage,
+} from "@/lib/test-cases";
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
@@ -550,5 +555,44 @@ describe("test case routes", () => {
     );
     expect(blankStep.status).toBe(400);
     expect((await blankStep.json()).error).toMatch(/needs its own step/i);
+  });
+
+  it("hands back every id a filter matches, not just the page in view", async () => {
+    /* What "Select all N that match" archives. The browser has only ever seen
+     * one page, so the set is read here from the same `where` the list was
+     * drawn with — if the two came apart, Archive would reach rows nobody had
+     * looked at. */
+    const { owner, testGroup } = await setup("tc-owner10@example.com", "PRJ-TC-10");
+
+    for (const name of ["Alpha one", "Alpha two", "Beta"]) {
+      await createTestCase(
+        testGroup.id,
+        {
+          name,
+          expectedResult: "ok",
+          priority: "MEDIUM",
+          steps: [{ step: "s", expectedResult: "r" }],
+        },
+        owner.id,
+      );
+    }
+
+    const everything = await listTestCaseIdsForTestGroup(testGroup.id);
+    expect(everything).toHaveLength(3);
+
+    // One page at a time shows fewer; the ids do not care.
+    const firstPage = await listTestCasesWithStepsForTestGroupPage(testGroup.id, { pageSize: 1 });
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage.total).toBe(3);
+
+    // And a filter narrows both the same way.
+    const matching = await listTestCaseIdsForTestGroup(testGroup.id, { search: "alpha" });
+    expect(matching).toHaveLength(2);
+    expect(await listTestCaseIdsForTestGroup(testGroup.id, { search: "nothing" })).toEqual([]);
+
+    /* Archived cases are not in it: the list never offers them, so neither may
+     * the set that stands in for "everything on the list". */
+    await prisma.testCase.update({ where: { id: matching[0] }, data: { deletedAt: new Date() } });
+    expect(await listTestCaseIdsForTestGroup(testGroup.id, { search: "alpha" })).toHaveLength(1);
   });
 });

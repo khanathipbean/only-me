@@ -14,6 +14,10 @@ type BulkSelection = {
   toggle: (id: string, checked: boolean) => void;
   selectAll: (ids: string[]) => void;
   clear: () => void;
+  /** True once the reader has asked for every row the filter matches, not
+   *  only the page in front of them. */
+  allMatching: boolean;
+  setAllMatching: (on: boolean) => void;
 };
 
 const BulkSelectionContext = createContext<BulkSelection | null>(null);
@@ -27,6 +31,10 @@ const BulkSelectionContext = createContext<BulkSelection | null>(null);
 export function BulkSelectionProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /* Reaching past this page is a second, deliberate step, never a side effect
+   * of ticking the header box: Archive is one press away, and the rows it
+   * would reach are not on screen to be looked at. */
+  const [allMatching, setAllMatching] = useState(false);
 
   function toggle(id: string, checked: boolean) {
     setSelected((prev) => {
@@ -50,13 +58,27 @@ export function BulkSelectionProvider({ children }: { children: ReactNode }) {
           setActive((on) => {
             if (on) {
               setSelected(new Set());
+              setAllMatching(false);
             }
             return !on;
           }),
         selected,
-        toggle,
-        selectAll: (ids) => setSelected(new Set(ids)),
-        clear: () => setSelected(new Set()),
+        toggle: (id, checked) => {
+          /* Any change to the ticks is a narrower choice than "everything
+           * that matches", so the wider scope stops applying. */
+          setAllMatching(false);
+          toggle(id, checked);
+        },
+        selectAll: (ids) => {
+          setAllMatching(false);
+          setSelected(new Set(ids));
+        },
+        clear: () => {
+          setAllMatching(false);
+          setSelected(new Set());
+        },
+        allMatching,
+        setAllMatching,
       }}
     >
       {children}

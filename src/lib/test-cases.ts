@@ -194,6 +194,25 @@ function testCaseListWhere(testGroupId: string, filters: TestCaseFilters) {
   };
 }
 
+/**
+ * Just the ids a filter matches, every page of them.
+ *
+ * For "select all N, not only the ten you can see". Read on the server from
+ * the same `where` the list was drawn with, so a bulk action touches the set
+ * the reader was looking at rather than whatever a browser that has seen one
+ * page managed to collect.
+ */
+export async function listTestCaseIdsForTestGroup(
+  testGroupId: string,
+  filters: TestCaseFilters = {},
+) {
+  const rows = await prisma.testCase.findMany({
+    where: testCaseListWhere(testGroupId, filters),
+    select: { id: true },
+  });
+  return rows.map((row) => row.id);
+}
+
 /** One page of the list above, for the table's pager. */
 export async function listTestCasesWithStepsForTestGroupPage(
   testGroupId: string,
