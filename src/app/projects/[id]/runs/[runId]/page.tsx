@@ -255,28 +255,30 @@ export default async function TestRunPage({
   /* The panel's two actions. Page-level rather than bound per row: the panel
    * belongs to the selection, not to any one case, and the ids arrive in the
    * form it submits. */
-  /**
-   * Which cases a bulk action touches.
-   *
-   * "Select all on this page" sends its ids. "Select all N that match" sends
-   * a marker instead, and the set is read here from the same filters the list
-   * was drawn with — so what gets touched is what the reader was looking at,
-   * not a list of ids assembled in a browser that has only ever seen one page
-   * of them.
-   */
-  async function selectedIds(formData: FormData) {
-    if (formData.get("scope") === "all") {
-      return listCaseIdsInRun(runId, { result: result as TestResult | undefined, search: caseSearch });
-    }
-    return formData.getAll("testCaseId").map(String).filter(Boolean);
-  }
-
   async function recordSelected(formData: FormData) {
     "use server";
     invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-    const ids = await selectedIds(formData);
+    /* Which cases this touches. "Select all on this page" sends its ids;
+     * "Select all N that match" sends a marker instead, and the set is read
+     * from the same filters the list was drawn with — so what is touched is
+     * what the reader was looking at, not a list assembled in a browser that
+     * has only ever seen one page of it.
+     *
+     * Written out in both actions rather than shared through a helper in this
+     * scope. A server action serialises everything it closes over and a
+     * function is not serialisable: closing over one compiled cleanly, passed
+     * every test, and then failed on every request to this page with
+     * "Functions cannot be passed directly to Client Components". An imported
+     * function and the strings beside it are all that may cross that line. */
+    const ids =
+      formData.get("scope") === "all"
+        ? await listCaseIdsInRun(runId, {
+            result: result as TestResult | undefined,
+            search: caseSearch,
+          })
+        : formData.getAll("testCaseId").map(String).filter(Boolean);
     const testResult = formData.get("testResult") as TestResult;
     try {
       await setRunCaseResults(runId, ids, { testResult }, session!.user.id);
@@ -299,7 +301,25 @@ export default async function TestRunPage({
     invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-    const ids = await selectedIds(formData);
+    /* Which cases this touches. "Select all on this page" sends its ids;
+     * "Select all N that match" sends a marker instead, and the set is read
+     * from the same filters the list was drawn with — so what is touched is
+     * what the reader was looking at, not a list assembled in a browser that
+     * has only ever seen one page of it.
+     *
+     * Written out in both actions rather than shared through a helper in this
+     * scope. A server action serialises everything it closes over and a
+     * function is not serialisable: closing over one compiled cleanly, passed
+     * every test, and then failed on every request to this page with
+     * "Functions cannot be passed directly to Client Components". An imported
+     * function and the strings beside it are all that may cross that line. */
+    const ids =
+      formData.get("scope") === "all"
+        ? await listCaseIdsInRun(runId, {
+            result: result as TestResult | undefined,
+            search: caseSearch,
+          })
+        : formData.getAll("testCaseId").map(String).filter(Boolean);
     let removed = 0;
     let skipped = 0;
     try {
