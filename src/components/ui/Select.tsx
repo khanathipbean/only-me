@@ -49,7 +49,6 @@ export function Select({
   ariaLabel,
   leadingIcon,
   autoWidth = false,
-  compact = false,
   className = "",
 }: {
   options: SelectOption[];
@@ -75,12 +74,6 @@ export function Select({
    * on every choice and shove whatever sits beside it sideways.
    */
   autoWidth?: boolean;
-  /**
-   * A tighter trigger, for a control that sits in a table row rather than in
-   * a form. The form-sized one next to a badge in the next column made the
-   * row look like it had grown a toolbar.
-   */
-  compact?: boolean;
   className?: string;
 }) {
   const isControlled = value !== undefined;
@@ -107,11 +100,10 @@ export function Select({
   const nativeRef = useRef<HTMLSelectElement>(null);
   const listboxId = useId();
 
-  /* Shared by the trigger and by the hidden copy `autoWidth` measures: if the
-   * two ever differ the measured width is the wrong one. */
-  const BOX = compact
-    ? "py-1 pr-2 pl-2.5 text-xs"
-    : "py-2 pr-2.5 pl-3 text-sm";
+  /* Shared by the trigger and by the hidden copy `autoWidth` measures: the
+   * two were written out separately, and if they ever differ the measured
+   * width is the wrong one. */
+  const BOX = "py-2 pr-2.5 pl-3 text-sm";
 
   const selectedIndex = Math.max(
     options.findIndex((option) => option.value === selected),

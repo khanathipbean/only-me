@@ -866,7 +866,14 @@ export default async function TestRunPage({
                                   <form
                                     id={`record-${row.id}`}
                                     action={actions.record}
-                                    className="flex items-center gap-2"
+                                    /* Centred under its own heading. The cell
+                                       centres its text, but this form is a
+                                       flex box filling the cell, so the
+                                       control sat against the left edge while
+                                       the heading above it sat in the middle.
+                                       Once Save moved to the Notes cell this
+                                       was the only thing left in here. */
+                                    className="flex items-center justify-center gap-2"
                                   >
                                     <Select
                                       name="testResult"

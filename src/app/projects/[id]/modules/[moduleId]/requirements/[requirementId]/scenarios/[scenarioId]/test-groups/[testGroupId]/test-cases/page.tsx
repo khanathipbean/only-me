@@ -458,7 +458,6 @@ export default async function TestCasesPage({
                           needsNote={["FAILED", "BLOCKED"]}
                           noteTitle={testCase.name}
                           className="mx-auto"
-                          compact
                         />
                       </td>
                       {/* The dash is the point. NOT RUN beside a dash is a
@@ -486,7 +485,6 @@ export default async function TestCasesPage({
                             options={WORKFLOW_STATUS_OPTIONS}
                             ariaLabel={`Status for ${testCase.name}`}
                             className="mx-auto"
-                            compact
                           />
                         ) : (
                           <span title="Follows the Test Result">

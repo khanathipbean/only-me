@@ -42,7 +42,6 @@ export function InlineSelect({
   ariaLabel,
   needsNote = [],
   noteTitle = "Say what happened",
-  compact = false,
   className = "",
 }: {
   /** A server action taking this one field, plus `notes` where one was asked for. */
@@ -56,8 +55,6 @@ export function InlineSelect({
   /** Values that may not be saved without a note. */
   needsNote?: string[];
   noteTitle?: string;
-  /** A tighter control, for one that sits in a table row. */
-  compact?: boolean;
   className?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -93,7 +90,6 @@ export function InlineSelect({
           options={options}
           ariaLabel={ariaLabel}
           autoWidth
-          compact={compact}
           className={className}
           onChange={(next) => {
             setShown(next);
