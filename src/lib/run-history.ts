@@ -36,6 +36,10 @@ export type RunHistoryEntry = {
   attempts: RunAttempt[];
   /** True if any attempt in this round failed, whatever it ended on. */
   everFailed: boolean;
+  /** True if any attempt in this round passed, whatever it ended on. A case
+   *  seen working, however briefly, has passed — and a section called Never
+   *  passed must not contain it. */
+  everPassed: boolean;
 };
 
 export type RunAttempt = {
@@ -118,6 +122,7 @@ function placeRound(row: RoundRow): Placed {
        * green is the one worth seeing, and the row's own result cannot say
        * so — it only ever holds the last answer. */
       everFailed: row.events.some((event) => event.testResult === "FAILED"),
+      everPassed: row.events.some((event) => event.testResult === "PASSED"),
     },
   };
 }
@@ -161,6 +166,7 @@ function placeLoose(events: LooseRow[]): Placed[] {
         ranBy: last.recordedBy?.name ?? null,
         attempts: toAttempts(group),
         everFailed: group.some((event) => event.testResult === "FAILED"),
+        everPassed: group.some((event) => event.testResult === "PASSED"),
       },
     };
   });
@@ -279,11 +285,17 @@ export async function listRunHistoryForCases(
  * the work, which is the thing the strip exists to show. Which group a mark
  * belongs to is not lost: it is on the mark, and the tooltip says it.
  *
- * A group with no recorded answers still gets exactly one mark, from the
- * round's own result. Two cases need this and neither is an edge case:
- * a case sitting in a round nobody has reached yet, and every round recorded
- * before results were kept individually — drawing those from attempts alone
- * would empty the strip of all the history there was.
+ * A group with no recorded answers still gets one mark from the round's own
+ * result. Every round recorded before results were kept one by one has no
+ * attempts, and drawing those from attempts alone would empty the strip of
+ * all the history there was.
+ *
+ * NOT_RUN is never drawn, in either form. It is the absence of an answer, not
+ * one: a round nobody reached carries it by default, and setting it by hand
+ * is how a result gets taken back. Either way a square for it sat under a
+ * heading promising every result recorded while recording none. The pattern
+ * rules have always skipped it for the same reason; the strip was the one
+ * place still drawing it.
  */
 export type ResultMark = {
   /** Null when this was recorded outside any round — there is nowhere to link
@@ -301,7 +313,11 @@ export type ResultMark = {
 export function toResultMarks(entries: RunHistoryEntry[]): ResultMark[] {
   return entries.flatMap<ResultMark>((entry) => {
     const group = { testRunId: entry.testRunId, runName: entry.runName };
-    if (entry.attempts.length === 0) {
+    const answers = entry.attempts.filter((attempt) => attempt.testResult !== "NOT_RUN");
+    if (answers.length === 0) {
+      if (entry.attempts.length > 0 || entry.testResult === "NOT_RUN") {
+        return [];
+      }
       return [
         {
           ...group,
@@ -313,7 +329,7 @@ export function toResultMarks(entries: RunHistoryEntry[]): ResultMark[] {
         },
       ];
     }
-    return entry.attempts.map((attempt, index) => ({
+    return answers.map((attempt, index) => ({
       ...group,
       testResult: attempt.testResult,
       at: attempt.recordedAt,
@@ -418,7 +434,12 @@ export function classifyPattern(entries: RunHistoryEntry[]): CasePattern {
     return "untested";
   }
   if (results.every((result) => result === "FAILED")) {
-    return "never-passed";
+    /* Unless somebody saw it working inside one of those sittings. The strip
+     * draws every answer, so a case recorded passing and then failing in one
+     * round shows a green square — and a section headed "Never passed" with a
+     * green square in it is the page telling its reader not to believe it. It
+     * worked and now does not, which is what a regression is. */
+    return entries.some((entry) => entry.everPassed) ? "regression" : "never-passed";
   }
   if (results.every((result) => result === "PASSED")) {
     /* Green at the end of every round is not the same as green all the way

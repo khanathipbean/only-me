@@ -193,15 +193,16 @@ describe("project dashboard", () => {
     expect(first.attention.byPattern["never-passed"]).toBe(1);
     expect(first.attention.byPattern.regression).toBe(0);
 
-    /* Failing tc1 brings it in. Not as a regression: answers given outside a
-     * round are grouped by the day they were given, so passing and then
-     * failing within one afternoon is one sitting that ended badly, the same
-     * as a round would be. A regression needs two groups, which here means
-     * two days or a round. */
+    /* Failing tc1 brings it in, as a regression. Answers given outside a round
+     * are grouped by the day, so passing and then failing in one afternoon is
+     * one sitting that ended badly — but it was seen working inside it, and a
+     * case that worked and now does not is a regression whether the pass was
+     * a sitting ago or an hour ago. */
     await updateTestResultAndNotes(tc1.id, { testResult: "FAILED" }, owner.id);
     const second = await dashboard(project.id);
     expect(second.attention.total).toBe(2);
-    expect(second.attention.byPattern["never-passed"]).toBe(2);
+    expect(second.attention.byPattern.regression).toBe(1);
+    expect(second.attention.byPattern["never-passed"]).toBe(1);
 
     /* Passing tc2 does not clear it. The sitting ends green, but it was
      * reported broken first and somebody had to come back to it — that is
@@ -210,7 +211,7 @@ describe("project dashboard", () => {
      * at even though nothing is left broken. */
     await updateTestResultAndNotes(tc2.id, { testResult: "PASSED" }, owner.id);
     const third = await dashboard(project.id);
-    expect(third.attention.byPattern["never-passed"]).toBe(1);
+    expect(third.attention.byPattern.regression).toBe(1);
     expect(third.attention.byPattern.reworked).toBe(1);
     expect(third.attention.total).toBe(2);
   });

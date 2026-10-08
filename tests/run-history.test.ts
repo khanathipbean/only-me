@@ -299,8 +299,11 @@ describe("the shape a case's results make", () => {
         notes: null,
         ranAt: testResult === "NOT_RUN" ? null : new Date(2026, 0, index + 1),
         ranBy: null,
+        /* A bare "NOT_RUN" is a round nobody reached, so it has no attempts.
+           Written as a list it is a round somebody recorded Not Run in, which
+           is an answer like any other. */
         attempts:
-          testResult === "NOT_RUN"
+          !Array.isArray(round) && testResult === "NOT_RUN"
             ? []
             : attempts.map((result, step) => ({
                 testResult: result,
@@ -309,6 +312,7 @@ describe("the shape a case's results make", () => {
                 recordedBy: null,
               })),
         everFailed: attempts.includes("FAILED"),
+        everPassed: attempts.includes("PASSED"),
       };
     });
 
@@ -343,7 +347,25 @@ describe("the shape a case's results make", () => {
     expect(classifyPattern(of(["FAILED", "PASSED"], "FAILED", "PASSED", "FAILED"))).toBe(
       "unstable",
     );
-    expect(classifyPattern(of(["PASSED", "FAILED"], ["PASSED", "FAILED"]))).toBe("never-passed");
+    /* Not "never passed", which is what this used to say. Both sittings ended
+     * broken, so every verdict is a failure — but somebody saw it working in
+     * each of them, and the strip draws those green squares. A section headed
+     * Never passed with green squares in it teaches its reader to distrust
+     * the page. It worked and now does not, which is a regression. */
+    expect(classifyPattern(of(["PASSED", "FAILED"], ["PASSED", "FAILED"]))).toBe("regression");
+  });
+
+  it("will not call a case that was seen working one that never passed", () => {
+    /* The reported symptom: four cases sat under Never passed showing a green
+     * square followed by a red one — recorded passing, then recorded failing,
+     * inside one round. */
+    expect(classifyPattern(of(["PASSED", "FAILED"]))).toBe("regression");
+
+    // Never a pass anywhere, in any sitting, is what the name has to mean.
+    expect(classifyPattern(of("FAILED", "FAILED"))).toBe("never-passed");
+    expect(classifyPattern(of(["FAILED", "FAILED"], "FAILED"))).toBe("never-passed");
+    // Blocked and skipped are not passes either.
+    expect(classifyPattern(of(["BLOCKED", "FAILED"], "FAILED"))).toBe("never-passed");
   });
 
   it("counts rounds that cost a round trip apart from rounds left broken", () => {
@@ -399,6 +421,7 @@ describe("the shape a case's results make", () => {
         ranBy: "Super Admin",
         attempts: [],
         everFailed: false,
+        everPassed: false,
       },
     ];
     const marks = toResultMarks(legacy);
@@ -410,8 +433,22 @@ describe("the shape a case's results make", () => {
       startsRound: true,
     });
 
-    // And a case sitting in a round nobody has reached still gets its square.
-    expect(toResultMarks(of("NOT_RUN"))).toHaveLength(1);
+    /* But a round nobody ever reached draws nothing. NOT_RUN is the absence
+     * of an answer, and a square for it sat under a heading promising every
+     * result recorded while recording none — the same reason the pattern
+     * rules have always skipped it. */
+    expect(toResultMarks(of("NOT_RUN"))).toEqual([]);
+    expect(toResultMarks(of("PASSED", "NOT_RUN", "FAILED")).map((m) => m.testResult)).toEqual([
+      "PASSED",
+      "FAILED",
+    ]);
+
+    /* Setting Not Run by hand is not drawn either. It is how a result gets
+     * taken back — the only way the app offered to free a case for removal —
+     * and a grey square saying somebody answered "nothing" is not what that
+     * was. The answers around it still stand. */
+    expect(toResultMarks(of(["PASSED", "NOT_RUN"])).map((m) => m.testResult)).toEqual(["PASSED"]);
+    expect(toResultMarks(of(["NOT_RUN"]))).toEqual([]);
   });
 
   it("separates what broke from what is unreliable, which a count cannot", () => {

@@ -48,12 +48,14 @@ const SECTIONS: Record<
 > = {
   regression: {
     title: "Regression",
-    blurb: "Passed before, failing now — read these first",
+    blurb: "Worked before, failing now — read these first",
     tone: "red",
   },
   "never-passed": {
     title: "Never passed",
-    blurb: "Failed every round it has been in",
+    /* Not "failed every round": a round that was recorded passing and then
+       failing has failed, and this is not where it belongs. */
+    blurb: "Nobody has ever seen it work",
     tone: "red",
   },
   unstable: {
@@ -344,7 +346,11 @@ export default async function ProblemCasesPage({
                   </thead>
                   <tbody>
                     {slice.items.map((row) => {
-                      const { hadFailure } = summariseHistory(row.history);
+                      /* `ran`, not every group: a round the case sat in and
+                         nobody reached draws no square, so counting it in the
+                         denominator would describe a strip that is not
+                         there. */
+                      const { hadFailure, ran } = summariseHistory(row.history);
                       return (
                         <tr key={row.id} className="border-b border-border last:border-b-0">
                           <td className="px-3 py-3 align-top">
@@ -395,13 +401,12 @@ export default async function ProblemCasesPage({
                                    round, and calling it one would make the
                                    number disagree with the squares. */
                                 const outside = row.history.filter(
-                                  (entry) => entry.testRunId === null,
+                                  (entry) =>
+                                    entry.testRunId === null && entry.testResult !== "NOT_RUN",
                                 ).length;
                                 return outside === 0
-                                  ? `failed in ${hadFailure} of ${row.history.length} round${
-                                      row.history.length === 1 ? "" : "s"
-                                    }`
-                                  : `failed in ${hadFailure} of ${row.history.length} — ${outside} outside a round`;
+                                  ? `failed in ${hadFailure} of ${ran} round${ran === 1 ? "" : "s"}`
+                                  : `failed in ${hadFailure} of ${ran} — ${outside} outside a round`;
                               })()}
                               {/* The notes moved into the squares, so say so
                                   once rather than leave someone to find it. */}

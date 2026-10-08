@@ -794,14 +794,15 @@ function SummaryWidget({
  * without pulling this file's client boundary along for the ride.
  */
 
-/** The shapes this strip reports, in the order Problem Cases lists them, with
- *  the words that page uses. Two names rather than one: the key is what the
- *  filter takes, the label is what a reader has already seen. */
+/** The shapes this strip reports, in the order Problem Cases lists them, under
+ *  the headings that page uses — word for word, so following a chip lands on a
+ *  section whose title is the one that was pressed. Two names rather than one:
+ *  the key is what the filter takes, the label is what a reader has seen. */
 const ATTENTION_LABELS: Array<{ key: string; label: string; dot: string }> = [
   { key: "regression", label: "Regression", dot: "bg-red-500" },
   { key: "never-passed", label: "Never passed", dot: "bg-red-500" },
   { key: "unstable", label: "Unstable", dot: "bg-amber-500" },
-  { key: "reworked", label: "Reworked", dot: "bg-amber-500" },
+  { key: "reworked", label: "Reworked every round", dot: "bg-amber-500" },
 ];
 
 /**
