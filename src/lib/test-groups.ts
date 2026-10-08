@@ -233,8 +233,13 @@ export async function reorderTestGroups(
 ) {
   const projectId = await resolveProjectId(scenarioId);
 
+  /* Live ones only, which is what the caller sends. The list the arrows are
+   * drawn from leaves archived groups out, so counting them here meant the
+   * two sets never matched and every reorder in a Scenario that had ever
+   * archived a group was refused — the arrows did nothing at all, with no
+   * sign of why. */
   const existing = await prisma.testGroup.findMany({
-    where: { scenarioId },
+    where: { scenarioId, deletedAt: null },
     select: { id: true },
   });
   const existingIds = new Set(existing.map((tg) => tg.id));

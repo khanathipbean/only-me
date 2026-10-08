@@ -137,6 +137,47 @@ describe("test group routes", () => {
     expect(ordered.map((tg: { id: string }) => tg.id)).toEqual([second.id, first.id]);
   });
 
+  it("still reorders after one of the Scenario's Test Groups is archived", async () => {
+    /* The arrows are drawn from the live list, so that is what they send
+     * back. Counting archived groups as members meant the two sets could
+     * never match, and every reorder in a Scenario that had ever archived a
+     * group was refused — the arrows did nothing, and said nothing. */
+    const { owner, scenario } = await setup("tg-owner7@example.com", "PRJ-TG-7");
+    const names = ["First", "Second", "Gone"];
+    const made = [];
+    for (const name of names) {
+      made.push(
+        await (
+          await createTestGroupRoute(
+            jsonRequest(`http://test/api/scenarios/${scenario.id}/test-groups`, "POST", { name }),
+            { params: Promise.resolve({ id: scenario.id }) },
+          )
+        ).json(),
+      );
+    }
+    const [first, second, gone] = made;
+
+    await archiveTestGroupRoute(jsonRequest(`http://test/api/test-groups/${gone.id}/archive`, "POST"), {
+      params: Promise.resolve({ id: gone.id }),
+    });
+
+    const response = await reorderTestGroupsRoute(
+      jsonRequest("http://test/api/test-groups/reorder", "POST", {
+        scenarioId: scenario.id,
+        orderedIds: [second.id, first.id],
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    const ordered = await (
+      await listTestGroups(jsonRequest(`http://test/api/scenarios/${scenario.id}/test-groups`, "GET"), {
+        params: Promise.resolve({ id: scenario.id }),
+      })
+    ).json();
+    expect(ordered.map((group: { name: string }) => group.name)).toEqual(["Second", "First"]);
+    expect(owner.id).toBeTruthy();
+  });
+
   it("duplicates, archives, restores, and deletes-with-confirm a test group", async () => {
     const { owner, scenario } = await setup("tg-owner3@example.com", "PRJ-TG-3");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
