@@ -11,11 +11,15 @@ import {
   LastPageIcon,
 } from "@/components/icons";
 
-/** The first entry is the server-side default (see DEFAULT_PAGE_SIZE in
- * lib/audit-log.ts) and the last must stay within MAX_PAGE_SIZE, which clamps
- * anything larger. Not imported from there on purpose: that module pulls in
- * Prisma, and this is a client component. */
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+/** The last must stay within MAX_PAGE_SIZE, which clamps anything larger. Not
+ * imported from lib/audit-log.ts on purpose: that module pulls in Prisma, and
+ * this is a client component.
+ *
+ * Five is here for Problem Cases, whose sections default to it. A size the
+ * control cannot offer is worse than a missing option: the Select falls back
+ * to its first entry, so the page would show five rows while the control
+ * read "10". */
+const PAGE_SIZE_OPTIONS = [5, 10, 25, 50, 100];
 
 /** How many numbered buttons sit in the sliding window around the current
  * page (excluding the pinned first/last). Five was chosen to match the
@@ -152,6 +156,11 @@ export function Pagination({
     ) : (
       <IconLinkButton
         href={hrefForPage(target)}
+        /* Next sends the reader to the top of the document otherwise, which
+           on a page of several lists means losing the one they were paging
+           — the control they just pressed scrolls out of sight and the rows
+           that changed are somewhere below. Only the rows should move. */
+        scroll={false}
         variant="secondary"
         aria-label={label}
         title={label}

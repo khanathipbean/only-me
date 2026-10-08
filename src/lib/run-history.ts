@@ -490,6 +490,9 @@ export type ProblemCaseFilters = {
    *  decision taken for them. */
   phase?: string;
   moduleId?: string;
+  /** Matches the case's name. Applied where the names are already being read,
+   *  so it costs nothing extra. */
+  search?: string;
 };
 
 /**
@@ -503,10 +506,13 @@ export type ProblemCaseFilters = {
  * Cases nothing has reached are deliberately absent: with no verdicts there
  * is no shape, and they are the Runs column's job on the Test Cases list.
  */
-export async function listProblemCases(
-  projectId: string,
-  filters: ProblemCaseFilters = {},
-): Promise<ProblemCase[]> {
+/**
+ * Every case in a project that anyone has answered for, with its groups in
+ * order. Shared by the report and by the Dashboard's count, so the two can
+ * never disagree about what counts.
+ */
+async function readProjectHistories(projectId: string, filters: ProblemCaseFilters) {
+
   /* Phase is a property of a round, so an answer recorded outside one has no
    * phase to match. Narrowing to a phase is asking "what happened in this
    * phase", and the honest answer leaves them out rather than letting them in
@@ -564,7 +570,14 @@ export async function listProblemCases(
       : Promise.resolve([]),
   ]);
 
-  const byCase = buildHistories(rounds, loose);
+  return buildHistories(rounds, loose);
+}
+
+export async function listProblemCases(
+  projectId: string,
+  filters: ProblemCaseFilters = {},
+): Promise<ProblemCase[]> {
+  const byCase = await readProjectHistories(projectId, filters);
 
   /* Only `untested` is left out: with no pass and no fail there is no shape
    * to show, and the Runs column on the Test Cases list is where a case
@@ -581,7 +594,15 @@ export async function listProblemCases(
   }
 
   const cases = await prisma.testCase.findMany({
-    where: { id: { in: interesting.map((row) => row.id) } },
+    where: {
+      id: { in: interesting.map((row) => row.id) },
+      /* Narrowed here rather than in memory: this query is the first point at
+       * which a name is known, and the rows it does not return drop out of
+       * the result below on their own. */
+      ...(filters.search
+        ? { name: { contains: filters.search, mode: "insensitive" as const } }
+        : {}),
+    },
     select: {
       id: true,
       name: true,
@@ -645,6 +666,50 @@ export async function listProblemCases(
       }
       return lastAnsweredAt(b.history) - lastAnsweredAt(a.history);
     });
+}
+
+/**
+ * How many cases fall into each shape, without reading a single name.
+ *
+ * The report's own query follows every interesting case up to its Module to
+ * build a path and a link. A count needs none of that, and the Dashboard asks
+ * for it on every load — so this stops after the classifying, which is the
+ * part that actually answers the question.
+ *
+ * Only the shapes worth acting on. `recovered` and `stable` are both good
+ * news, and folding them in would push the number towards the size of the
+ * project and leave it meaning nothing.
+ */
+export const ATTENTION_PATTERNS = [
+  "regression",
+  "never-passed",
+  "unstable",
+  "reworked",
+] as const satisfies readonly CasePattern[];
+
+export type AttentionPattern = (typeof ATTENTION_PATTERNS)[number];
+
+export async function countCasesNeedingAttention(
+  projectId: string,
+  filters: ProblemCaseFilters = {},
+): Promise<{ total: number; byPattern: Record<AttentionPattern, number> }> {
+  const byPattern = Object.fromEntries(ATTENTION_PATTERNS.map((key) => [key, 0])) as Record<
+    AttentionPattern,
+    number
+  >;
+
+  const histories = await readProjectHistories(projectId, filters);
+  for (const history of histories.values()) {
+    const pattern = classifyPattern(history);
+    if ((ATTENTION_PATTERNS as readonly string[]).includes(pattern)) {
+      byPattern[pattern as AttentionPattern] += 1;
+    }
+  }
+
+  return {
+    total: Object.values(byPattern).reduce((sum, n) => sum + n, 0),
+    byPattern,
+  };
 }
 
 /** The order the page reads in: what broke first, what never worked next,

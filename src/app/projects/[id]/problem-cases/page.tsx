@@ -22,7 +22,14 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { nameOr, problemCasesBreadcrumb } from "@/lib/breadcrumb";
 import { formatDate } from "@/lib/dates";
-import { formRowClass, labelClass, mutedTextClass, pageClass, thClass } from "@/lib/ui";
+import {
+  formRowClass,
+  inputClass,
+  labelClass,
+  mutedTextClass,
+  pageClass,
+  thClass,
+} from "@/lib/ui";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -71,9 +78,20 @@ const SECTIONS: Record<
   },
 };
 
-/** How many rows a section shows before it pages. Ten, the same as every
- *  other list in the app, so one screen holds several sections at once. */
-const SECTION_SIZE = 10;
+/**
+ * How many rows a section shows before it pages.
+ *
+ * Five, not the ten every other list uses. A row here is a name, a feature
+ * tag, a path that wraps, a strip and a line of counts — nearly twice the
+ * height of a row anywhere else — and there are six sections of them, so ten
+ * apiece put the last heading five screens down.
+ *
+ * Five is enough because the rows are sorted by how much trouble each case
+ * has been: the five shown are the five worst, not the first five the
+ * database happened to return. Anyone who wants the rest has the rows-per-page
+ * control on the section itself.
+ */
+const SECTION_SIZE = 5;
 
 /** One section's slice of its rows, from the query string.
  *
@@ -193,7 +211,7 @@ export default async function ProblemCasesPage({
 }) {
   const { id: projectId } = await params;
   const query = await searchParams;
-  const { phase, moduleId, pattern } = query;
+  const { phase, moduleId, pattern, search } = query;
   const session = await auth();
 
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
@@ -202,7 +220,7 @@ export default async function ProblemCasesPage({
     getProjectById(projectId),
     listModulesForProject(projectId),
     listPhasesForProject(projectId),
-    listProblemCases(projectId, { phase, moduleId }),
+    listProblemCases(projectId, { phase, moduleId, search }),
   ]);
 
   const shown = pattern ? cases.filter((row) => row.pattern === pattern) : cases;
@@ -216,7 +234,7 @@ export default async function ProblemCasesPage({
     }
   }
 
-  const hasFilters = Boolean(phase || moduleId || pattern);
+  const hasFilters = Boolean(phase || moduleId || pattern || search);
 
   return (
     <main className={pageClass}>
@@ -230,6 +248,18 @@ export default async function ProblemCasesPage({
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className={`${formRowClass} flex-1`} ownLayout>
+          {/* No visible label: the placeholder already says what it searches,
+              the way every other search box on the site does, and a label
+              above it only costs a row. `aria-label` keeps the name for
+              anyone not reading the placeholder. */}
+          <input
+            type="text"
+            name="search"
+            defaultValue={search ?? ""}
+            placeholder="Search name, e.g. Semantic Type"
+            aria-label="Search cases"
+            className={`${inputClass} max-w-xs self-end`}
+          />
           <label className={labelClass}>
             Phase
             <Select
@@ -339,7 +369,13 @@ export default async function ProblemCasesPage({
                                 first working out which Module it came from. */}
                             <p className="mt-0.5 text-xs text-muted">{row.path}</p>
                           </td>
-                          <td className="px-3 py-3 align-top">
+                          {/* Centred, unlike the cell beside it. That one
+                              holds a block of text, which has to start at the
+                              top; this one holds two short lines, and pinned
+                              to the top of a row made tall by a path that
+                              wrapped they floated away from the case they
+                              belong to. */}
+                          <td className="px-3 py-3 align-middle">
                             <ResultStrip entries={row.history} projectId={projectId} />
                             <p className="mt-1.5 text-xs text-muted">
                               {row.brokeAt && (

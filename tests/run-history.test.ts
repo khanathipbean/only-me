@@ -613,6 +613,39 @@ describe("the Problem cases report", () => {
     expect(failureCount(rows[1].history)).toBe(1);
   });
 
+  it("narrows to cases whose name matches, whatever shape they are", async () => {
+    const { owner, project, group } = await seed("PRJ-PROB-10");
+    const wanted = await createTestCase(
+      group.id,
+      {
+        name: "ลบ Domain ออกจาก Policy",
+        expectedResult: "ok",
+        priority: "MEDIUM",
+        steps: [{ step: "s", expectedResult: "r" }],
+      },
+      owner.id,
+    );
+    const other = await createTestCase(
+      group.id,
+      {
+        name: "Nothing to do with it",
+        expectedResult: "ok",
+        priority: "MEDIUM",
+        steps: [{ step: "s", expectedResult: "r" }],
+      },
+      owner.id,
+    );
+    await updateTestResultAndNotes(wanted.id, { testResult: "FAILED" }, owner.id);
+    await updateTestResultAndNotes(other.id, { testResult: "FAILED" }, owner.id);
+
+    const rows = await listProblemCases(project.id, { search: "domain" });
+    expect(rows.map((row) => row.id)).toEqual([wanted.id]);
+
+    // Case does not matter, and a search nothing matches is empty, not everything.
+    expect(await listProblemCases(project.id, { search: "DOMAIN" })).toHaveLength(1);
+    expect(await listProblemCases(project.id, { search: "nothing like this" })).toHaveLength(0);
+  });
+
   it("never reaches into another project", async () => {
     /* The loose events are read by their own query rather than through a
      * round, so the project filter on them is written by hand and is the one
