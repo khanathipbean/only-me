@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
@@ -134,6 +135,7 @@ type DashboardData = {
   testCasesByPriority: Record<string, number>;
   testCasesByAssignee: Array<{ assigneeId: string | null; assigneeName: string; count: number }>;
   testProgress: number;
+  attention: { total: number; byPattern: Record<string, number> };
   tree: TreeModule[];
   options: {
     modules: Array<{ id: string; name: string }>;
@@ -689,6 +691,8 @@ function SummaryWidget({
         />
       </div>
 
+      <AttentionStrip projectId={projectId} attention={data.attention} />
+
       <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3">
         <BreakdownList
           title="By Test Result"
@@ -789,6 +793,96 @@ function SummaryWidget({
  * summary reuses the exact same tile, and a plain module lets it do that
  * without pulling this file's client boundary along for the ride.
  */
+
+/** The shapes this strip reports, in the order Problem Cases lists them, with
+ *  the words that page uses. Two names rather than one: the key is what the
+ *  filter takes, the label is what a reader has already seen. */
+const ATTENTION_LABELS: Array<{ key: string; label: string; dot: string }> = [
+  { key: "regression", label: "Regression", dot: "bg-red-500" },
+  { key: "never-passed", label: "Never passed", dot: "bg-red-500" },
+  { key: "unstable", label: "Unstable", dot: "bg-amber-500" },
+  { key: "reworked", label: "Reworked", dot: "bg-amber-500" },
+];
+
+/**
+ * How many cases keep going wrong, and in what way.
+ *
+ * The result breakdown below answers "how many are failing now". This answers
+ * "how many keep failing", which the same number cannot: a case that broke
+ * this morning and one that has broken every sprint for two months are both
+ * one FAILED there.
+ *
+ * Absent when there is nothing to report, rather than showing a zero. A strip
+ * that exists to say there is nothing to do costs a row and earns none, and
+ * its disappearing is itself the good news.
+ */
+function AttentionStrip({
+  projectId,
+  attention,
+}: {
+  projectId: string;
+  attention: { total: number; byPattern: Record<string, number> };
+}) {
+  if (attention.total === 0) {
+    return null;
+  }
+  const base = `/projects/${projectId}/problem-cases`;
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-border bg-black/[.02] px-4 py-3 dark:bg-white/[.02]">
+      {/* Centred on each other, not sat on a shared baseline: the figure is
+          twice the label's size, and a shared baseline hangs the label off
+          the bottom of it. */}
+      <span className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-foreground">Problem cases</span>
+        <span className="text-2xl font-semibold text-red-600 dark:text-red-400">
+          {attention.total}
+        </span>
+      </span>
+      <span aria-hidden className="hidden h-6 w-px bg-border sm:block" />
+      <span className="flex flex-wrap items-center gap-2">
+        {ATTENTION_LABELS.map((row) => {
+          const count = attention.byPattern[row.key] ?? 0;
+          const chip =
+            "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs";
+
+          /* A shape nothing is in is still worth a place. Showing only the
+             shapes with something in them made the strip a different width
+             every time it was read, and left no way to tell "no regressions"
+             from "regressions are not counted here". */
+          if (count === 0) {
+            return (
+              <span key={row.key} className={`${chip} border-border/60 text-muted/60`}>
+                <span className={`size-2 rounded-full ${row.dot} opacity-40`} />
+                {row.label} <span className="font-semibold">0</span>
+              </span>
+            );
+          }
+
+          /* Each one lands on its own section rather than the top of the
+             page: the reader has already chosen which kind they are here
+             for. */
+          return (
+            <Link
+              key={row.key}
+              href={`${base}?pattern=${row.key}`}
+              className={`${chip} border-border text-muted hover:border-brand hover:text-foreground`}
+            >
+              <span className={`size-2 rounded-full ${row.dot}`} />
+              {row.label} <span className="font-semibold text-foreground">{count}</span>
+            </Link>
+          );
+        })}
+      </span>
+      <Link
+        href={base}
+        className="ml-auto shrink-0 text-xs text-muted hover:text-brand hover:underline"
+      >
+        Open Problem Cases →
+      </Link>
+    </div>
+  );
+}
 
 function BreakdownList({
   title,

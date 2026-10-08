@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import {
+  countCasesNeedingAttention,
+  type AttentionPattern,
+} from "@/lib/run-history";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES } from "@/lib/enums";
 import type {
   Priority,
@@ -154,6 +158,11 @@ export type ProjectDashboard = {
   options: DashboardFilterOptions;
   runProgress: DashboardRunProgress[];
   coverage: DashboardCoverage;
+  /** How many cases are in a shape worth doing something about, and which
+   *  shapes. The result breakdown above says how many are failing now; this
+   *  says how many keep failing, which is a different question and the one
+   *  Problem Cases was built to answer. */
+  attention: { total: number; byPattern: Record<AttentionPattern, number> };
 };
 
 /** A live Test Case under a live Test Group under a live Scenario in this
@@ -425,6 +434,7 @@ export async function getProjectDashboard(
     runResultRows,
     inAnyRun,
     notInAnyRun,
+    attention,
   ] = await Promise.all([
       prisma.module.findMany({
         where: { projectId, deletedAt: null },
@@ -500,6 +510,14 @@ export async function getProjectDashboard(
           runCases: { none: { testRun: { deletedAt: null } } },
         },
       }),
+      /* Only the two filters this question can honour. A phase belongs to a
+       * round and a Module is where a case lives; the rest of the dashboard's
+       * filters — a priority, an assignee, a tag — say nothing about which
+       * rounds a case has been through. */
+      countCasesNeedingAttention(projectId, {
+        phase: filters.phase,
+        moduleId: filters.moduleId,
+      }),
     ]);
 
   const runProgress: DashboardRunProgress[] = testRunOptions.map((run) => {
@@ -542,6 +560,7 @@ export async function getProjectDashboard(
       testRuns: testRunOptions,
       phases: phaseRows.map((row) => row.phase as string),
     },
+    attention,
     runProgress,
     coverage: phaseResults
       ? { inAnyRun: totalTestCases, notInAnyRun: 0 }

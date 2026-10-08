@@ -178,6 +178,43 @@ describe("project dashboard", () => {
     expect(scenarioANode.testGroups[0].testCaseCount).toBe(2);
   });
 
+  it("counts the cases that keep going wrong, and leaves out the ones that do not", async () => {
+    /* The result breakdown says how many are failing now. This says how many
+     * keep failing — a different question, and the one the strip above it
+     * exists to answer. */
+    const owner = await createUser("dash-attention@example.com");
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-ATT");
+
+    /* tc1 passed and tc2 failed in the fixture, both outside any round. One
+     * has never passed; the other has never failed. */
+    const first = await dashboard(project.id);
+    expect(first.attention.total).toBe(1);
+    expect(first.attention.byPattern["never-passed"]).toBe(1);
+    expect(first.attention.byPattern.regression).toBe(0);
+
+    /* Failing tc1 brings it in. Not as a regression: answers given outside a
+     * round are grouped by the day they were given, so passing and then
+     * failing within one afternoon is one sitting that ended badly, the same
+     * as a round would be. A regression needs two groups, which here means
+     * two days or a round. */
+    await updateTestResultAndNotes(tc1.id, { testResult: "FAILED" }, owner.id);
+    const second = await dashboard(project.id);
+    expect(second.attention.total).toBe(2);
+    expect(second.attention.byPattern["never-passed"]).toBe(2);
+
+    /* Passing tc2 does not clear it. The sitting ends green, but it was
+     * reported broken first and somebody had to come back to it — that is
+     * `reworked`, and it stays on the list for the same reason the report
+     * keeps it: a case that costs a round trip every time is worth looking
+     * at even though nothing is left broken. */
+    await updateTestResultAndNotes(tc2.id, { testResult: "PASSED" }, owner.id);
+    const third = await dashboard(project.id);
+    expect(third.attention.byPattern["never-passed"]).toBe(1);
+    expect(third.attention.byPattern.reworked).toBe(1);
+    expect(third.attention.total).toBe(2);
+  });
+
   it("applies one filter consistently across counts, breakdowns, and the tree", async () => {
     const owner = await createUser("dash-owner2@example.com");
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
