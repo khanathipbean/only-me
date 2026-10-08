@@ -10,6 +10,7 @@ import {
   addCasesToRun,
   createRun,
   listCandidateCases,
+  listCaseIdsInRun,
   listCasesInRunPage,
   listRunsForProjectPage,
   removeCaseFromRun,
@@ -392,6 +393,34 @@ describe("test runs", () => {
       { result: "NOT_RUN", count: 1 },
     ]);
   });
+  it("hands back every id a filter matches, not just the page in view", async () => {
+    /* What "Select all N that match" acts on. The browser has only ever seen
+     * one page, so the set is read here from the same filters the list was
+     * drawn with — if the two ever came apart, a bulk action would touch rows
+     * nobody had looked at. */
+    const { owner, project, cases } = await seed("run-owner15@example.com", "PRJ-RUN-15");
+    const run = await createRun(project.id, { name: "Selecting" }, owner.id);
+    await addCasesToRun(
+      run.id,
+      cases.map((testCase) => testCase.id),
+      owner.id,
+    );
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "FAILED" }, owner.id);
+
+    // Unfiltered: everything in the round, however the pages fall.
+    const everything = await listCaseIdsInRun(run.id);
+    expect(everything.sort()).toEqual(cases.map((testCase) => testCase.id).sort());
+
+    // The page shows one at a time; the ids do not care.
+    const firstPage = await listCasesInRunPage(run.id, { pageSize: 1 });
+    expect(firstPage.items).toHaveLength(1);
+    expect(everything.length).toBeGreaterThan(firstPage.items.length);
+
+    // And a filter narrows both the same way.
+    expect(await listCaseIdsInRun(run.id, { result: "FAILED" })).toEqual([cases[0].id]);
+    expect(await listCaseIdsInRun(run.id, { search: "nothing like this" })).toEqual([]);
+  });
+
   it("filters a round by result and by case name, without letting either touch the round's own totals", async () => {
     const { owner, project, cases } = await seed("run-owner11@example.com", "PRJ-RUN-11");
     const run = await createRun(project.id, { name: "Filtering" }, owner.id);

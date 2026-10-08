@@ -266,6 +266,28 @@ export type RunCaseFilters = PageFilters & {
   search?: string;
 };
 
+/**
+ * Just the Test Case ids a filter matches, every page of them.
+ *
+ * For "select all 200, not just the 25 you can see". The ids are read on the
+ * server from the same filters the list was drawn with rather than collected
+ * in the browser, so the set a bulk action touches is the set the reader was
+ * looking at — and the page the reader is on has nothing to do with it.
+ */
+export async function listCaseIdsInRun(testRunId: string, filters: RunCaseFilters = {}) {
+  const rows = await prisma.testRunCase.findMany({
+    where: {
+      testRunId,
+      ...(filters.result ? { testResult: filters.result } : {}),
+      ...(filters.search
+        ? { testCase: { name: { contains: filters.search, mode: "insensitive" as const } } }
+        : {}),
+    },
+    select: { testCaseId: true },
+  });
+  return rows.map((row) => row.testCaseId);
+}
+
 export async function listCasesInRunPage(testRunId: string, filters: RunCaseFilters = {}) {
   const where = {
     testRunId,

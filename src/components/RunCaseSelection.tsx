@@ -59,11 +59,15 @@ export type SelectableCase = {
 
 export function RunCaseSelection({
   cases,
+  totalMatching,
   setResultAction,
   removeAction,
   children,
 }: {
   cases: SelectableCase[];
+  /** How many rows the current filter matches across every page, so the panel
+   *  can offer the rest rather than pretending this page is all there is. */
+  totalMatching: number;
   setResultAction: (formData: FormData) => void;
   removeAction: (formData: FormData) => void;
   children: ReactNode;
@@ -75,6 +79,10 @@ export function RunCaseSelection({
    * would be offering to do it before any decision was made. Choosing is the
    * step that makes Save appear. */
   const [result, setResult] = useState("");
+  /* Reaching past this page is a second, deliberate step, never a side
+     effect of ticking the header box. A single control that quietly covered
+     every page would put Remove one click from rows nobody has seen. */
+  const [allMatching, setAllMatching] = useState(false);
 
   /* Only what is on this page. The list is paginated, and a count on a button
    * that doesn't match what the button will touch is the worst thing this
@@ -121,6 +129,7 @@ export function RunCaseSelection({
   );
 
   function close() {
+    setAllMatching(false);
     setActive(false);
     setSelected(new Set());
     setResult("");
@@ -140,7 +149,7 @@ export function RunCaseSelection({
             {/* The count first: it is what the rest of the row acts on, and
                 every button beside it reads as "…these". */}
             <span className="text-sm font-medium text-foreground">
-              {onPage.length} selected
+              {allMatching ? `All ${totalMatching} selected` : `${onPage.length} selected`}
             </span>
             {/* Select all lives here rather than in a row of its own above the
                 table: the panel is the only thing on screen that belongs to
@@ -149,17 +158,31 @@ export function RunCaseSelection({
             <Button
               type="button"
               variant="secondary"
-              onClick={() =>
-                setSelected(allSelected ? new Set() : new Set(cases.map((row) => row.testCaseId)))
-              }
+              onClick={() => {
+                setAllMatching(false);
+                setSelected(allSelected ? new Set() : new Set(cases.map((row) => row.testCaseId)));
+              }}
             >
-              {allSelected ? "Clear all" : `Select all ${cases.length}`}
+              {allSelected ? "Clear all" : `Select all ${cases.length} here`}
             </Button>
 
             <form action={setResultAction} className="flex items-center gap-2">
-              {onPage.map((row) => (
-                <input key={row.testCaseId} type="hidden" name="testCaseId" value={row.testCaseId} />
-              ))}
+              {/* A marker, not two hundred ids: the server reads the set back
+                  from the same filters the list was drawn with, so what is
+                  touched is what was on screen rather than whatever a browser
+                  that has seen one page managed to collect. */}
+              {allMatching ? (
+                <input type="hidden" name="scope" value="all" />
+              ) : (
+                onPage.map((row) => (
+                  <input
+                    key={row.testCaseId}
+                    type="hidden"
+                    name="testCaseId"
+                    value={row.testCaseId}
+                  />
+                ))
+              )}
               <Select
                 name="testResult"
                 value={result}
@@ -168,7 +191,7 @@ export function RunCaseSelection({
                 ariaLabel="Result to record for the selected cases"
                 /* Nothing ticked, nothing to set it on. Disabled rather than
                    hidden so the panel keeps its shape as rows are ticked. */
-                disabled={onPage.length === 0}
+                disabled={!allMatching && onPage.length === 0}
                 className="max-w-40"
               />
               {/* Appears on choosing a result, rather than sitting there
@@ -185,9 +208,14 @@ export function RunCaseSelection({
             <form
               action={removeAction}
               onSubmit={(event) => {
+                /* Across every page the browser cannot say how many already
+                   have a result, so it does not pretend to. The server skips
+                   those either way and its toast reports the real numbers. */
                 const skipped = onPage.length - removable.length;
-                const message =
-                  skipped > 0
+                const message = allMatching
+                  ? `Remove every case matching this filter that has no result yet — up to ` +
+                    `${totalMatching}? Any with a result are kept.`
+                  : skipped > 0
                     ? `Remove ${removable.length} from this run? ${skipped} already ` +
                       `${skipped === 1 ? "has a result and will be" : "have results and will be"} kept.`
                     : `Remove ${removable.length} from this run?`;
@@ -196,20 +224,62 @@ export function RunCaseSelection({
                 }
               }}
             >
-              {removable.map((row) => (
-                <input key={row.testCaseId} type="hidden" name="testCaseId" value={row.testCaseId} />
-              ))}
+              {allMatching ? (
+                <input type="hidden" name="scope" value="all" />
+              ) : (
+                removable.map((row) => (
+                  <input
+                    key={row.testCaseId}
+                    type="hidden"
+                    name="testCaseId"
+                    value={row.testCaseId}
+                  />
+                ))
+              )}
               {/* The count is the removable ones, not everything ticked: the
                   button says what it will actually do before it is pressed,
                   and goes dead rather than lying when that number is zero. */}
               <SubmitButton
                 variant="secondary"
                 pendingLabel="Removing…"
-                disabled={removable.length === 0}
+                disabled={!allMatching && removable.length === 0}
               >
-                Remove ({removable.length})
+                {allMatching ? "Remove" : `Remove (${removable.length})`}
               </SubmitButton>
             </form>
+
+            {/* The second step, and only once the first has been taken and
+                there is more to reach. Written as a sentence rather than a
+                button: it is an offer about what is already selected, and a
+                row of three buttons reads as three things to do. */}
+            {allSelected && totalMatching > cases.length && (
+              <span className="flex items-center gap-2 text-sm text-muted">
+                <span aria-hidden className="h-5 w-px bg-border" />
+                {allMatching ? (
+                  <>
+                    Every case matching this filter is selected.{" "}
+                    <button
+                      type="button"
+                      className="text-brand hover:underline"
+                      onClick={() => setAllMatching(false)}
+                    >
+                      Just this page
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    All {cases.length} on this page.{" "}
+                    <button
+                      type="button"
+                      className="text-brand hover:underline"
+                      onClick={() => setAllMatching(true)}
+                    >
+                      Select all {totalMatching} that match
+                    </button>
+                  </>
+                )}
+              </span>
+            )}
 
             <Button
               type="button"

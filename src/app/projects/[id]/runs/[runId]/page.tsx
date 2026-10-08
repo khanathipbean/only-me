@@ -7,6 +7,7 @@ import { listRequirementsForProject } from "@/lib/requirements";
 import {
   TestRunValidationError,
   addCasesToRun,
+  listCaseIdsInRun,
   getRunById,
   listCandidateCases,
   listCasesInRunPage,
@@ -164,6 +165,22 @@ export default async function TestRunPage({
   const ran = casePage.ranCount;
 
   const basePath = `/projects/${projectId}/runs/${runId}`;
+
+  /**
+   * Where an action sends the reader back to: the page they were on, with the
+   * filters they had set.
+   *
+   * Every action used to redirect to `basePath` bare, so recording a result
+   * on page three of a filtered list put the reader back on page one with the
+   * filters cleared — then they had to find their place again before the next
+   * case. Only the list's own view state is carried; the picker's fields and
+   * the one-shot `error`/`toast` are left behind on purpose.
+   */
+  const listQuery = new URLSearchParams(
+    Object.entries({ result, caseSearch, page, pageSize }).filter(([, value]) => Boolean(value)) as
+      Array<[string, string]>,
+  ).toString();
+  const listHref = listQuery ? `${basePath}?${listQuery}` : basePath;
   /* Grouped by Scenario then Test Group: the chain above a case is what tells
    * two cases of the same name apart, and repeating four levels on every row
    * would bury the case itself.
@@ -218,7 +235,7 @@ export default async function TestRunPage({
       ({ added } = await addCasesToRun(runId, ids, session!.user.id));
     } catch (err) {
       if (err instanceof TestRunValidationError) {
-        redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+        redirect(withToast(listHref, err.message));
       }
       throw err;
     }
@@ -227,7 +244,7 @@ export default async function TestRunPage({
     // a long grouped list, a dozen new rows are not something anyone can spot.
     redirect(
       withToast(
-        basePath,
+        listHref,
         added === 0
           ? "Nothing added — those Test Cases are already in this run"
           : `Added ${added} Test Case${added === 1 ? "" : "s"}`,
@@ -238,24 +255,40 @@ export default async function TestRunPage({
   /* The panel's two actions. Page-level rather than bound per row: the panel
    * belongs to the selection, not to any one case, and the ids arrive in the
    * form it submits. */
+  /**
+   * Which cases a bulk action touches.
+   *
+   * "Select all on this page" sends its ids. "Select all N that match" sends
+   * a marker instead, and the set is read here from the same filters the list
+   * was drawn with — so what gets touched is what the reader was looking at,
+   * not a list of ids assembled in a browser that has only ever seen one page
+   * of them.
+   */
+  async function selectedIds(formData: FormData) {
+    if (formData.get("scope") === "all") {
+      return listCaseIdsInRun(runId, { result: result as TestResult | undefined, search: caseSearch });
+    }
+    return formData.getAll("testCaseId").map(String).filter(Boolean);
+  }
+
   async function recordSelected(formData: FormData) {
     "use server";
     invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-    const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
+    const ids = await selectedIds(formData);
     const testResult = formData.get("testResult") as TestResult;
     try {
       await setRunCaseResults(runId, ids, { testResult }, session!.user.id);
     } catch (err) {
       if (err instanceof TestRunValidationError) {
-        redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+        redirect(withToast(listHref, err.message));
       }
       throw err;
     }
     redirect(
       withToast(
-        basePath,
+        listHref,
         `Recorded ${testResult.replace(/_/g, " ").toLowerCase()} for ${ids.length} case${ids.length === 1 ? "" : "s"}`,
       ),
     );
@@ -266,14 +299,14 @@ export default async function TestRunPage({
     invalidateRouteCache();
     const session = await auth();
     await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-    const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
+    const ids = await selectedIds(formData);
     let removed = 0;
     let skipped = 0;
     try {
       ({ removed, skipped } = await removeCasesFromRun(runId, ids, session!.user.id));
     } catch (err) {
       if (err instanceof TestRunValidationError) {
-        redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+        redirect(withToast(listHref, err.message));
       }
       throw err;
     }
@@ -283,7 +316,7 @@ export default async function TestRunPage({
      * avoid. */
     redirect(
       withToast(
-        basePath,
+        listHref,
         skipped > 0
           ? `Removed ${removed}; kept ${skipped} that already had a result`
           : `Removed ${removed} case${removed === 1 ? "" : "s"} from this run`,
@@ -330,7 +363,7 @@ export default async function TestRunPage({
           ));
         } catch (err) {
           if (err instanceof TestRunValidationError) {
-            redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+            redirect(withToast(listHref, err.message));
           }
           throw err;
         }
@@ -340,10 +373,10 @@ export default async function TestRunPage({
         redirect(
           mirrorHeldBy
             ? withToast(
-                basePath,
+                listHref,
                 `Recorded in this run — the Test Case still shows ${mirrorHeldBy}, which is newer`,
               )
-            : basePath,
+            : listHref,
         );
       },
       async remove() {
@@ -355,13 +388,13 @@ export default async function TestRunPage({
           await removeCaseFromRun(runId, testCaseId, session!.user.id);
         } catch (err) {
           if (err instanceof TestRunValidationError) {
-            redirect(`${basePath}?error=${encodeURIComponent(err.message)}`);
+            redirect(withToast(listHref, err.message));
           }
           throw err;
         }
         // Dropping the round's record of a case is not reversible by putting
         // it back — a re-added case starts with no result.
-        redirect(withToast(basePath, "Test Case removed from this run"));
+        redirect(withToast(listHref, "Test Case removed from this run"));
       },
     };
   }
@@ -388,7 +421,7 @@ export default async function TestRunPage({
           }
           throw err;
         }
-        redirect(withToast(basePath, "Attachment uploaded"));
+        redirect(withToast(listHref, "Attachment uploaded"));
       },
       remove(attachmentId: string) {
         return async function removeAttachment() {
@@ -407,7 +440,7 @@ export default async function TestRunPage({
               throw err;
             }
           }
-          redirect(withToast(basePath, "Attachment deleted"));
+          redirect(withToast(listHref, "Attachment deleted"));
         };
       },
     };
@@ -420,6 +453,7 @@ export default async function TestRunPage({
           panel does. */}
       <RunCaseSelection
         cases={cases.map((row) => ({ testCaseId: row.testCase.id, ran: Boolean(row.ranAt) }))}
+        totalMatching={casePage.total}
         setResultAction={recordSelected}
         removeAction={removeSelected}
       >
