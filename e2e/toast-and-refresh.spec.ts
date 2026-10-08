@@ -25,8 +25,11 @@ test("creating a project confirms with a toast in the top-right", async ({ page 
 
   await page.goto("/projects");
   await page.getByRole("button", { name: "+ New Project" }).click();
-  await page.locator('input[name="code"]').fill(code);
-  await page.locator('input[name="name"]').fill(`E2E project ${code}`);
+  /* Scoped to the dialog. Every row on the list behind it carries its own edit
+     form with the same field names, so the bare selector matched eleven. */
+  const dialog = page.getByRole("dialog");
+  await dialog.locator('input[name="code"]').fill(code);
+  await dialog.locator('input[name="name"]').fill(`E2E project ${code}`);
   await page.getByRole("button", { name: "Create Project" }).click();
 
   const toast = page.getByRole("status");
@@ -60,12 +63,19 @@ test("archiving a Module takes it off the list straight away", async ({ page }) 
   // A project of its own, so this never depends on what another test left.
   await page.goto("/projects");
   await page.getByRole("button", { name: "+ New Project" }).click();
-  await page.locator('input[name="code"]').fill(`E2E-M${suffix}`);
-  await page.locator('input[name="name"]').fill(`E2E archive host ${suffix}`);
+  // Scoped to the dialog, for the same reason as the test above.
+  const newProject = page.getByRole("dialog");
+  await newProject.locator('input[name="code"]').fill(`E2E-M${suffix}`);
+  await newProject.locator('input[name="name"]').fill(`E2E archive host ${suffix}`);
   await page.getByRole("button", { name: "Create Project" }).click();
   await page.waitForURL(/\/projects\/[^/]+$/);
 
-  await page.getByRole("link", { name: "Modules" }).click();
+  /* Inside the project's own tab bar: the same word is a breadcrumb
+     segment and a row link elsewhere on these pages, and the plain
+     query matched all of them. */
+  await page.getByRole("navigation", { name: "Project" })
+    .getByRole("link", { name: "Modules" })
+    .click();
   await page.waitForURL(/\/modules/);
 
   await page.getByRole("button", { name: "+ New Module" }).click();

@@ -19,7 +19,12 @@ test("a long name doesn't break the count across two lines", async ({ page }, te
   await page.goto("/projects?search=E2E-FIXTURE");
   await page.getByRole("link", { name: "E2E Fixture" }).click();
   await page.waitForURL(/\/projects\/[^/]+$/);
-  await page.getByRole("link", { name: "Modules" }).click();
+  /* Inside the project's own tab bar: the same word is a breadcrumb
+     segment and a row link elsewhere on these pages, and the plain
+     query matched all of them. */
+  await page.getByRole("navigation", { name: "Project" })
+    .getByRole("link", { name: "Modules" })
+    .click();
   await page.waitForURL(/\/modules/);
 
   await page.getByRole("button", { name: "+ New Module" }).click();

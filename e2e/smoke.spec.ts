@@ -24,7 +24,24 @@ test.describe("signed in", () => {
     const html = page.locator("html");
     const before = await html.getAttribute("data-theme");
 
-    await page.getByRole("button", { name: /switch to (light|dark) mode/i }).click();
+    /* A menu, not a two-way switch: there are three themes now, and the one
+       button that used to say "switch to dark mode" became "Change theme"
+       with the choice inside. The spec went on pressing a button that had not
+       existed for weeks, and nobody noticed because nothing was running it.
+
+       Opened under `toPass` because the first press can land before the page
+       has hydrated, and a press nothing is listening for is simply lost. */
+    const trigger = page.getByRole("button", { name: /change theme/i });
+    const menu = page.getByRole("menu");
+    await expect(async () => {
+      await trigger.click();
+      await expect(menu).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+
+    /* The three are "Light", "Bull Terrier" and "Dark", so either word picks
+       out one of them on its own. */
+    const wanted = before === "light" ? "Dark" : "Light";
+    await menu.getByRole("menuitemradio").filter({ hasText: wanted }).click();
     await expect(html).not.toHaveAttribute("data-theme", before ?? "");
 
     const after = await html.getAttribute("data-theme");

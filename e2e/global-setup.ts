@@ -7,6 +7,9 @@ import { assertSafeDatabase } from "./support/guard";
  *  passed through a shell are concatenated rather than escaped. */
 const TSX_CLI = "node_modules/tsx/dist/cli.mjs";
 
+/** Prisma's own entry point, run the same way and for the same reason. */
+const PRISMA_CLI = "node_modules/prisma/build/index.js";
+
 /**
  * Runs once, before the browser starts: checks the suite is pointed at a
  * database it is allowed to write to, then makes sure that database has the
@@ -20,6 +23,24 @@ const TSX_CLI = "node_modules/tsx/dist/cli.mjs";
  */
 export default async function globalSetup() {
   assertSafeDatabase();
+
+  /* The schema first, every run.
+   *
+   * This step was missing and the suite rotted quietly: `e2edb` had been
+   * pushed by hand once, long enough ago that it held fifteen of the schema's
+   * eighteen tables, and every spec since then failed on the first query to
+   * one of the three that arrived later. A failing suite is noticed; one that
+   * has been broken so long nobody runs it is not, and this one was not
+   * running when a page shipped broken for every reader.
+   *
+   * `--accept-data-loss` is the point of a separate database rather than a
+   * risk taken with one: this is the database the tests are allowed to break,
+   * `assertSafeDatabase` has already refused anything that is not local, and
+   * the seed below puts back everything the suite needs. */
+  execFileSync(process.execPath, [PRISMA_CLI, "db", "push", "--accept-data-loss"], {
+    env: { ...process.env, DATABASE_URL: E2E_DATABASE_URL },
+    stdio: "inherit",
+  });
 
   execFileSync(process.execPath, [TSX_CLI, "scripts/seed-e2e.ts"], {
     env: { ...process.env, DATABASE_URL: E2E_DATABASE_URL },
