@@ -129,20 +129,44 @@ export async function changePassword(
  * therefore the whole check, by explicit product choice for this app's
  * threat model — not an oversight.
  */
-export async function resetPasswordByEmail(email: string, newPassword: string) {
+/**
+ * Set someone else's password, for an administrator who has already been
+ * checked by the caller.
+ *
+ * This replaces a self-serve reset that took an email address and a new
+ * password from an unauthenticated page and simply applied them. Anyone who
+ * knew an address could take that account, including the one that administers
+ * every project, and no email was ever sent to the owner to say so.
+ *
+ * An emailed token is the usual answer and is not available here: the app has
+ * no way to send mail at all, so a token would have to be read out of the
+ * database by the person it is meant to authenticate. Until there is a mailer,
+ * the person who vouches for someone is an administrator, which is the same
+ * answer the app already gives for creating the account in the first place.
+ *
+ */
+export async function setPasswordForUser(targetUserId: string, newPassword: string) {
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
     throw new ProfileValidationError(
       `New password must be at least ${MIN_PASSWORD_LENGTH} characters`,
     );
   }
 
-  const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true },
+  });
   if (!user) {
-    throw new ProfileValidationError("No account uses that email");
+    throw new ProfileValidationError("That user no longer exists");
   }
 
   await prisma.user.update({
     where: { id: user.id },
     data: { passwordHash: await hashPassword(newPassword) },
   });
+
+  /* Not written to the audit log. Every entry it takes belongs to a project,
+   * and a password is not a project's business — recording this properly
+   * means user-level entries, which the log has never had. Worth adding; not
+   * worth widening a schema inside a security fix. */
 }

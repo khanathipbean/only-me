@@ -1,56 +1,25 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { ProfileValidationError, resetPasswordByEmail } from "@/lib/users";
-import { withToast } from "@/lib/toast";
-import { SubmitButton } from "@/components/SubmitButton";
-import { PasswordInput } from "@/components/ui/PasswordInput";
-import { invalidateRouteCache } from "@/lib/revalidate";
 
 /**
- * Same glass-on-dark shell as `/login` — this page floats on the same dark
- * background, so its fields follow that page's own styling rather than the
- * theme-aware `inputClass`/`labelClass` (which would go near-black here).
+ * There is no self-serve password reset, and this page says so.
+ *
+ * It used to take an email address and a new password and apply them, from a
+ * page that sits outside authentication — so anyone who knew an address could
+ * take that account, the one that administers every project included, and
+ * nothing was ever sent to the owner to say it had happened. The page is kept
+ * rather than removed because `/forgot-password` is linked from sign-in and
+ * is where somebody locked out will go; what it must not keep is a form that
+ * changes a password for whoever fills it in.
+ *
+ * An emailed one-time link is the usual answer and cannot be built here yet:
+ * the app has no way to send mail at all, so a token would have to be read out
+ * of the database by the very person it is meant to authenticate. Until there
+ * is a mailer, an administrator sets the password from Members — the same
+ * person who creates accounts in the first place.
  */
-const GLASS_FIELD =
-  "rounded-md border border-white/15 bg-white/10 text-white shadow-sm outline-none transition-colors placeholder:text-white/40 focus:border-white/45 focus:bg-white/15 focus:ring-1 focus:ring-white/40";
-const glassInputClass = `block w-full ${GLASS_FIELD} px-4 py-3 text-base`;
-const glassPasswordClass = `block w-full ${GLASS_FIELD} py-3 pr-11 pl-4 text-base`;
-const glassLabelClass = "flex flex-col gap-2 text-sm font-medium text-white/90";
-const glassToggleClass = "text-white/50 hover:text-white focus-visible:ring-white/50";
-
 export const metadata = { title: "Forgot password" };
 
-export default async function ForgotPasswordPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const { error } = await searchParams;
-
-  async function resetPassword(formData: FormData) {
-    "use server";
-    invalidateRouteCache();
-
-    const email = formData.get("email") as string;
-    const newPassword = formData.get("newPassword") as string;
-    const confirmPassword = formData.get("confirmPassword") as string;
-
-    if (newPassword !== confirmPassword) {
-      redirect(`/forgot-password?error=${encodeURIComponent("Passwords don't match")}`);
-    }
-
-    try {
-      await resetPasswordByEmail(email, newPassword);
-    } catch (err) {
-      if (err instanceof ProfileValidationError) {
-        redirect(`/forgot-password?error=${encodeURIComponent(err.message)}`);
-      }
-      throw err;
-    }
-
-    redirect(withToast("/login", "Password updated — sign in with your new password"));
-  }
-
+export default function ForgotPasswordPage() {
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050506]">
       <div className="absolute inset-0 bg-[linear-gradient(120deg,#050506_0%,#0c0d0f_28%,#181a1e_58%,#08090b_100%)]" />
@@ -59,61 +28,16 @@ export default async function ForgotPasswordPage({
 
       <div className="relative w-full max-w-md rounded-3xl border border-white/20 bg-white/10 p-10 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.75)] ring-1 ring-white/5 backdrop-blur-2xl">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Reset your password</h1>
-          <p className="mt-1.5 text-sm text-white/60">
-            Enter the email on your account and choose a new password.
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            Ask an administrator
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-white/70">
+            Passwords are set by whoever administers your projects. Ask them to set a new one
+            for you, then sign in and change it from your profile.
           </p>
         </div>
 
-        {error && (
-          <p
-            role="alert"
-            className="mt-6 rounded-md border border-red-400/30 bg-red-500/15 px-3 py-2 text-sm text-red-200"
-          >
-            {error}
-          </p>
-        )}
-
-        <form action={resetPassword} className="mt-8 flex flex-col gap-5">
-          <label className={glassLabelClass}>
-            Email
-            <input
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-              className={glassInputClass}
-            />
-          </label>
-          <label className={glassLabelClass}>
-            New password
-            <PasswordInput
-              name="newPassword"
-              required
-              autoComplete="new-password"
-              placeholder="At least 8 characters"
-              inputClassName={glassPasswordClass}
-              toggleClassName={glassToggleClass}
-            />
-          </label>
-          <label className={glassLabelClass}>
-            Confirm new password
-            <PasswordInput
-              name="confirmPassword"
-              required
-              autoComplete="new-password"
-              placeholder="Re-enter the new password"
-              inputClassName={glassPasswordClass}
-              toggleClassName={glassToggleClass}
-            />
-          </label>
-          <SubmitButton size="lg" className="mt-2 w-full" pendingLabel="Updating…">
-            Reset password
-          </SubmitButton>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-white/60">
+        <p className="mt-8 text-center text-sm text-white/60">
           <Link href="/login" className="text-white/80 hover:text-white">
             Back to sign in
           </Link>

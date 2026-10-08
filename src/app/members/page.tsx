@@ -27,7 +27,7 @@ import { RequiredMark } from "@/components/forms/RequiredMark";
 import { Badge, type Tone } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EditIcon, TrashIcon } from "@/components/icons";
-import { MIN_PASSWORD_LENGTH } from "@/lib/users";
+import { MIN_PASSWORD_LENGTH, ProfileValidationError, setPasswordForUser } from "@/lib/users";
 import { ASSIGNABLE_PROJECT_ROLE_OPTIONS, PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import {
   checkboxClass,
@@ -187,6 +187,30 @@ export default async function MembersPage({
     };
   }
 
+  /* The only way a forgotten password gets replaced. The page that used to do
+   * it sat outside authentication and asked for nothing but an email address,
+   * so it is gone; this is the same hand that creates the account in the first
+   * place. */
+  function setPasswordAction(targetUserId: string) {
+    return async function setPassword(formData: FormData) {
+      "use server";
+      invalidateRouteCache();
+      const session = await auth();
+      await requireAdminAnywhereOrNotFound(session!.user.id);
+
+      try {
+        await setPasswordForUser(targetUserId, formData.get("password") as string);
+      } catch (err) {
+        if (err instanceof ProfileValidationError) {
+          redirect(`/members?userId=${targetUserId}&error=${encodeURIComponent(err.message)}`);
+        }
+        throw err;
+      }
+
+      redirect(withToast("/members", "Password set — tell them to change it once they are in"));
+    };
+  }
+
   function deleteMemberAction(targetUserId: string) {
     return async function deleteMember() {
       "use server";
@@ -332,6 +356,32 @@ export default async function MembersPage({
                         </p>
                         <ProjectAccessChecklist projects={projects} current={member.memberships} />
                       </form>
+                      <form
+                        action={setPasswordAction(member.userId)}
+                        className="mt-6 flex flex-col gap-3 border-t border-border pt-5"
+                      >
+                        <p className={mutedTextClass}>
+                          Set a new password for this account. There is no self-serve reset —
+                          hand it over yourself, and ask them to change it from their profile
+                          once they are signed in.
+                        </p>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className={`${labelClass} flex-1`}>
+                            New password
+                            <PasswordInput
+                              name="password"
+                              required
+                              minLength={MIN_PASSWORD_LENGTH}
+                              autoComplete="new-password"
+                              placeholder="At least 8 characters"
+                            />
+                          </label>
+                          <SubmitButton variant="secondary" pendingLabel="Setting…">
+                            Set password
+                          </SubmitButton>
+                        </div>
+                      </form>
+
                       <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
                         <ConfirmForm
                           action={deleteMemberAction(member.userId)}
