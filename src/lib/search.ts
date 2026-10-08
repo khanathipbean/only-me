@@ -35,6 +35,17 @@ export type SearchResult = {
  * covered, because this is the only way to reach a row without walking down
  * from the Modules tab.
  */
+/**
+ * At most this many rows from each kind.
+ *
+ * Every one of these queries ran uncapped, so a single-letter search pulled
+ * every matching row in every project the person belongs to — including each
+ * Note in full — built them all into results, and sent the lot to a dropdown
+ * that shows a handful. The cap is per kind so one crowded kind cannot starve
+ * the others out of the list.
+ */
+const PER_KIND = 20;
+
 export async function searchAll(userId: string, query: string): Promise<SearchResult[]> {
   const trimmed = query.trim();
   if (!trimmed) {
@@ -60,10 +71,12 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
         deletedAt: null,
         OR: [{ name: textMatch }, { code: textMatch }],
       },
+      take: PER_KIND,
     }),
     prisma.module.findMany({
       where: { projectId: { in: memberProjectIds }, deletedAt: null, name: textMatch },
       include: { project: { select: { id: true, name: true } } },
+      take: PER_KIND,
     }),
     prisma.requirement.findMany({
       where: {
@@ -72,6 +85,7 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
         OR: [{ name: textMatch }, { code: textMatch }],
       },
       include: { project: { select: { id: true, name: true } }, module: true },
+      take: PER_KIND,
     }),
     prisma.scenario.findMany({
       where: {
@@ -83,6 +97,7 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
         project: { select: { id: true, name: true } },
         requirement: { include: { module: { select: { id: true, name: true } } } },
       },
+      take: PER_KIND,
     }),
     prisma.testGroup.findMany({
       where: {
@@ -98,6 +113,7 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
           },
         },
       },
+      take: PER_KIND,
     }),
     prisma.testCase.findMany({
       where: {
@@ -120,6 +136,7 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
           },
         },
       },
+      take: PER_KIND,
     }),
     /* Title *and* body — the only type here matched on prose rather than a
      * name, because a note's worth is mostly in its body. `contains` on a
@@ -136,6 +153,7 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
         project: { select: { id: true, name: true } },
         module: { select: { name: true } },
       },
+      take: PER_KIND,
     }),
   ]);
 
