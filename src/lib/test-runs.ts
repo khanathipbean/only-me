@@ -674,7 +674,12 @@ export async function addCasesToRun(testRunId: string, testCaseIds: string[], ac
   return { added: result.count };
 }
 
-export async function removeCaseFromRun(testRunId: string, testCaseId: string, actorId: string) {
+export async function removeCaseFromRun(
+  testRunId: string,
+  testCaseId: string,
+  actorId: string,
+  options: { discardResult?: boolean } = {},
+) {
   const run = await prisma.testRun.findUniqueOrThrow({ where: { id: testRunId } });
   requireOpen(run.status);
 
@@ -684,11 +689,18 @@ export async function removeCaseFromRun(testRunId: string, testCaseId: string, a
 
   /* A recorded result is the round's record of what happened, and removing
    * the case takes it — along with whatever was attached as evidence — with
-   * no way back. The rule existed before this line, but only as the condition
-   * deciding whether the page rendered a Remove button at all: nothing in the
-   * function itself said so, and a caller that isn't a table row (the bulk
-   * panel, a future API route) would have walked straight past it. */
-  if (runCase.ranAt) {
+   * no way back. So the caller has to say it means to.
+   *
+   * It used to be a flat refusal, and that was worse than no rule at all: the
+   * only way out was to set the result to Not Run, which clears `ranAt` and
+   * made the case removable — so the result was destroyed anyway, and an
+   * answer nobody meant to give was written into the case's history on the
+   * way past. A rule with no way forward is a rule people route around.
+   *
+   * The check stays in the function rather than in the page that draws the
+   * button: a caller that is not a table row — the bulk panel, a future API
+   * route — would otherwise walk straight past it. */
+  if (runCase.ranAt && !options.discardResult) {
     throw new TestRunValidationError(
       "This case already has a result in this run. Removing it would discard that result and anything attached to it.",
     );

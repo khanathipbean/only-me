@@ -399,13 +399,17 @@ export default async function TestRunPage({
             : listHref,
         );
       },
-      async remove() {
+      async remove(formData: FormData) {
         "use server";
         invalidateRouteCache();
         const session = await auth();
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         try {
-          await removeCaseFromRun(runId, testCaseId, session!.user.id);
+          /* The button only sends this when the case has a result, and its
+             confirmation says what goes with it. */
+          await removeCaseFromRun(runId, testCaseId, session!.user.id, {
+            discardResult: formData.get("discardResult") === "yes",
+          });
         } catch (err) {
           if (err instanceof TestRunValidationError) {
             redirect(withToast(listHref, err.message));
@@ -936,6 +940,40 @@ export default async function TestRunPage({
                                   <>
                                     {formatDate(row.ranAt)}
                                     {row.ranBy && <div>{row.ranBy.name}</div>}
+                                    {/* Removable even now. Without this the
+                                        cell showed a date and nothing else,
+                                        so the only way to take a case out of
+                                        a round it did not belong in was to
+                                        set its result to Not Run — which
+                                        cleared `ranAt`, freed the button, and
+                                        wrote an answer nobody meant to give
+                                        into the case's history on the way
+                                        past. The confirmation says what goes
+                                        with it instead. */}
+                                    {isOpen && (
+                                      <ConfirmForm
+                                        action={actions.remove}
+                                        confirmMessage={
+                                          `Remove ${row.testCase.name} from this run? Its result` +
+                                          (row.attachments.length > 0
+                                            ? ` and ${row.attachments.length} attachment${
+                                                row.attachments.length === 1 ? "" : "s"
+                                              }`
+                                            : "") +
+                                          " will be discarded, and putting the case back will not bring them back."
+                                        }
+                                        variant="danger"
+                                      >
+                                        <input type="hidden" name="discardResult" value="yes" />
+                                        <SubmitButton
+                                          variant="ghost"
+                                          pendingLabel="Removing…"
+                                          className="mt-1 text-xs"
+                                        >
+                                          Remove
+                                        </SubmitButton>
+                                      </ConfirmForm>
+                                    )}
                                   </>
                                 ) : isOpen ? (
                                   <ConfirmForm

@@ -393,6 +393,30 @@ describe("test runs", () => {
       { result: "NOT_RUN", count: 1 },
     ]);
   });
+  it("removes a case that has a result only when the caller says to", async () => {
+    /* The refusal used to be flat, and the only way past it was to set the
+     * result to Not Run — which clears `ranAt`, freed the case for removal,
+     * and wrote an answer nobody meant to give into its history. The result
+     * was destroyed either way; the detour just left a mark. */
+    const { owner, project, cases } = await seed("run-owner16@example.com", "PRJ-RUN-16");
+    const run = await createRun(project.id, { name: "Removing" }, owner.id);
+    await addCasesToRun(run.id, [cases[0].id], owner.id);
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "PASSED" }, owner.id);
+
+    // Still refused by default: nothing discards a result by accident.
+    await expect(removeCaseFromRun(run.id, cases[0].id, owner.id)).rejects.toBeInstanceOf(
+      TestRunValidationError,
+    );
+    expect(await listCaseIdsInRun(run.id)).toEqual([cases[0].id]);
+
+    // Said out loud, it goes, and takes the round's record of it with it.
+    await removeCaseFromRun(run.id, cases[0].id, owner.id, { discardResult: true });
+    expect(await listCaseIdsInRun(run.id)).toEqual([]);
+    expect(
+      await prisma.testResultEvent.count({ where: { testCase: { id: cases[0].id } } }),
+    ).toBe(0);
+  });
+
   it("hands back every id a filter matches, not just the page in view", async () => {
     /* What "Select all N that match" acts on. The browser has only ever seen
      * one page, so the set is read here from the same filters the list was
