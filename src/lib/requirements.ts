@@ -228,6 +228,22 @@ export async function createRequirement(
   actorId: string,
 ) {
   validate(input);
+
+  /* The same check the edit path makes, for the same reason: the Module id
+   * arrives from a form field, and a form field is whatever the request says
+   * it is. The picker only ever offers this Project's Modules, so nothing in
+   * the UI can reach another one — but nothing stopped a crafted request, and
+   * a Requirement filed under another Project's Module keeps this Project's
+   * `projectId` and shows up in both, leaking the other Module's name into a
+   * list its members never asked to see. */
+  const targetModule = await prisma.module.findFirst({
+    where: { id: input.moduleId, projectId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!targetModule) {
+    throw new RequirementValidationError("That Module is not in this project");
+  }
+
   const requirement = await prisma.requirement.create({
     data: {
       projectId,

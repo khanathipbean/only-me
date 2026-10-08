@@ -613,6 +613,24 @@ describe("the Problem cases report", () => {
     expect(failureCount(rows[1].history)).toBe(1);
   });
 
+  it("never reaches into another project", async () => {
+    /* The loose events are read by their own query rather than through a
+     * round, so the project filter on them is written by hand and is the one
+     * thing standing between two customers' reports. */
+    const mine = await seed("PRJ-PROB-8");
+    const theirs = await seed("PRJ-PROB-9");
+
+    await updateTestResultAndNotes(theirs.testCase.id, { testResult: "FAILED" }, theirs.owner.id);
+    await updateTestResultAndNotes(mine.testCase.id, { testResult: "FAILED" }, mine.owner.id);
+
+    const rows = await listProblemCases(mine.project.id);
+    expect(rows.map((row) => row.id)).toEqual([mine.testCase.id]);
+
+    // And the same the other way round, so neither is leaking into the other.
+    const others = await listProblemCases(theirs.project.id);
+    expect(others.map((row) => row.id)).toEqual([theirs.testCase.id]);
+  });
+
   it("narrows to one phase, which can change what shape a case has", async () => {
     const { owner, project, testCase } = await seed("PRJ-PROB-2");
 

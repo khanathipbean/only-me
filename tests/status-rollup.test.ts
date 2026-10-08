@@ -194,6 +194,31 @@ describe("rolling a status up the tree", () => {
     expect(await prisma.testStep.count({ where: { testCaseId: only.id } })).toBe(1);
   });
 
+  it("refuses a Scenario filed under another project's Requirement", async () => {
+    /* The Requirement id comes from a form field, so it is whatever the
+     * request says it is. A Scenario filed across keeps its own project's
+     * `projectId` while sitting under another's heading — it belongs to one
+     * and is listed under the other. The edit path has always refused it;
+     * creating did not. */
+    const mine = await seed("PRJ-ROLL-11");
+    const theirs = await seed("PRJ-ROLL-12");
+
+    await expect(
+      createScenario(
+        mine.project.id,
+        {
+          requirementId: theirs.requirement.id,
+          name: "Reaching across",
+          expectedResult: "ok",
+          priority: "MEDIUM",
+        },
+        mine.owner.id,
+      ),
+    ).rejects.toThrow(/not in this project/);
+
+    expect(await prisma.scenario.count({ where: { name: "Reaching across" } })).toBe(0);
+  });
+
   it("carries one Test Case's status all the way to the Requirement", async () => {
     const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-1");
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };

@@ -61,6 +61,28 @@ describe("requirements", () => {
     mockAuth.mockReset();
   });
 
+  it("refuses a Module that belongs to another project", async () => {
+    /* The Module id comes from a form field, so it is whatever the request
+     * says it is. Filed under another project's Module, a Requirement keeps
+     * this project's own `projectId` — it belongs to one and is listed under
+     * the other, which also puts that Module's name in front of people who
+     * were never given access to it. The edit path has always refused this;
+     * creating did not. */
+    const mine = await setup("requirement-owner11@example.com", "PRJ-REQ-11");
+    const theirs = await setup("requirement-owner12@example.com", "PRJ-REQ-12");
+
+    await expect(
+      createRequirement(
+        mine.project.id,
+        { name: "Reaching across", moduleId: theirs.testModule.id, priority: "MEDIUM" },
+        mine.owner.id,
+      ),
+    ).rejects.toBeInstanceOf(RequirementValidationError);
+
+    // Nothing was written on the way to the refusal.
+    expect(await prisma.requirement.count({ where: { name: "Reaching across" } })).toBe(0);
+  });
+
   it("deletes a Requirement, requiring confirm: true, and records it in the audit log", async () => {
     const { owner, project, testModule } = await setup("requirement-owner1@example.com", "PRJ-REQ-1");
     const requirement = await createRequirement(

@@ -82,6 +82,18 @@ export async function createScenario(
     throw new ValidationError("requirementId is required");
   }
 
+  /* The same check the edit path makes. A Requirement id from a form field is
+   * whatever the request says it is, and a Scenario filed under another
+   * Project's Requirement keeps this Project's `projectId` — so it belongs to
+   * one project and sits under another's heading. */
+  const parent = await prisma.requirement.findFirst({
+    where: { id: input.requirementId, projectId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!parent) {
+    throw new ValidationError("That Requirement is not in this project");
+  }
+
   const scenario = await prisma.scenario.create({
     data: {
       projectId,
