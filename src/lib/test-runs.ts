@@ -755,6 +755,77 @@ export async function removeCaseFromRun(
  * A round that merely holds the case does not hold the mirror: it has to have
  * recorded something. An archived round holds nothing at all.
  */
+/**
+ * The note for a result already recorded, without recording another one.
+ *
+ * Saving a note used to go through `setRunCaseResult`, because the field
+ * shared a form with the result — so correcting a typo appended another
+ * answer identical to the last. That is not a lie about the round, but it is
+ * a lie about the case: Problem Cases sorts by how many failures a case has
+ * cost, and three passes over the wording made a case look three times worse
+ * than one that had actually failed once.
+ *
+ * Recording the same answer again is still a real event and still appends one
+ * — a tester who runs it a second time and finds it broken again has learned
+ * something. That is what the Save beside the result is for. This is for the
+ * words.
+ *
+ * The latest answer's own note moves with it. The two describe the same
+ * attempt, and leaving the event behind would have the row saying one thing
+ * and the square beside it another.
+ */
+export async function updateRunCaseNote(
+  testRunId: string,
+  testCaseId: string,
+  notes: string | null,
+  actorId: string,
+) {
+  const run = await prisma.testRun.findUniqueOrThrow({ where: { id: testRunId } });
+  requireOpen(run.status);
+
+  const runCase = await prisma.testRunCase.findUniqueOrThrow({
+    where: { testRunId_testCaseId: { testRunId, testCaseId } },
+  });
+
+  const latest = await prisma.testResultEvent.findFirst({
+    where: { testRunCaseId: runCase.id },
+    orderBy: { recordedAt: "desc" },
+    select: { id: true },
+  });
+
+  /* The same guard the result takes: the case's own columns mirror whichever
+   * round spoke last, and a note typed into an older round must not overwrite
+   * what a newer one said. */
+  const newerRound = await prisma.testRunCase.findFirst({
+    where: {
+      testCaseId,
+      testResult: { not: "NOT_RUN" },
+      testRun: { deletedAt: null, createdAt: { gt: run.createdAt } },
+    },
+    select: { id: true },
+  });
+
+  await prisma.$transaction([
+    prisma.testRunCase.update({
+      where: { id: runCase.id },
+      data: { notes },
+    }),
+    ...(latest
+      ? [prisma.testResultEvent.update({ where: { id: latest.id }, data: { notes } })]
+      : []),
+    ...(newerRound
+      ? []
+      : [
+          prisma.testCase.update({
+            where: { id: testCaseId },
+            data: { notes, updatedById: actorId },
+          }),
+        ]),
+  ]);
+
+  return { mirrored: !newerRound };
+}
+
 export async function setRunCaseResult(
   testRunId: string,
   testCaseId: string,

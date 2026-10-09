@@ -18,6 +18,7 @@ import {
   setRunCaseResult,
   setRunCaseResults,
   setRunStatus,
+  updateRunCaseNote,
   summariseRunResults,
   summariseRunScope,
 } from "@/lib/test-runs";
@@ -393,6 +394,60 @@ describe("test runs", () => {
       { result: "NOT_RUN", count: 1 },
     ]);
   });
+  it("saves a note without recording another answer", async () => {
+    /* The two shared a form, so correcting a typo resubmitted the result and
+     * appended an answer identical to the last — and Problem Cases, which
+     * sorts by how many failures a case has cost, counted every pass over the
+     * wording as another one. */
+    const { owner, project, cases } = await seed("run-owner17@example.com", "PRJ-RUN-17");
+    const run = await createRun(project.id, { name: "Noting" }, owner.id);
+    await addCasesToRun(run.id, [cases[0].id], owner.id);
+    await setRunCaseResult(
+      run.id,
+      cases[0].id,
+      { testResult: "FAILED", notes: "sort by brokn" },
+      owner.id,
+    );
+
+    const before = await prisma.testResultEvent.count({ where: { testCaseId: cases[0].id } });
+    await updateRunCaseNote(run.id, cases[0].id, "sort by broken", owner.id);
+
+    // No new answer.
+    expect(await prisma.testResultEvent.count({ where: { testCaseId: cases[0].id } })).toBe(before);
+
+    /* And the answer already recorded carries the corrected words, or the row
+     * would say one thing and the square beside it another. */
+    const event = await prisma.testResultEvent.findFirstOrThrow({
+      where: { testCaseId: cases[0].id },
+      orderBy: { recordedAt: "desc" },
+    });
+    expect(event.notes).toBe("sort by broken");
+    expect(event.testResult).toBe("FAILED");
+
+    const row = await prisma.testRunCase.findFirstOrThrow({
+      where: { testRunId: run.id, testCaseId: cases[0].id },
+    });
+    expect(row.notes).toBe("sort by broken");
+    // Mirrored onto the case too, the way a result is.
+    expect((await prisma.testCase.findUniqueOrThrow({ where: { id: cases[0].id } })).notes).toBe(
+      "sort by broken",
+    );
+  });
+
+  it("still records an answer when the same result is saved again", async () => {
+    /* Running it a second time and finding it broken again has taught
+     * somebody something, and that is what the Save beside the result is
+     * for. Only the words are free. */
+    const { owner, project, cases } = await seed("run-owner18@example.com", "PRJ-RUN-18");
+    const run = await createRun(project.id, { name: "Retesting" }, owner.id);
+    await addCasesToRun(run.id, [cases[0].id], owner.id);
+
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "FAILED" }, owner.id);
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "FAILED" }, owner.id);
+
+    expect(await prisma.testResultEvent.count({ where: { testCaseId: cases[0].id } })).toBe(2);
+  });
+
   it("removes a case that has a result only when the caller says to", async () => {
     /* The refusal used to be flat, and the only way past it was to set the
      * result to Not Run — which clears `ranAt`, freed the case for removal,

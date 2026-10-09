@@ -8,6 +8,7 @@ import {
   TestRunValidationError,
   addCasesToRun,
   listCaseIdsInRun,
+  updateRunCaseNote,
   getRunById,
   listCandidateCases,
   listCasesInRunPage,
@@ -54,7 +55,6 @@ import { TrashIcon } from "@/components/icons";
 import { isTestRunOverdue } from "@/lib/deadlines";
 
 import { SubmitButton } from "@/components/SubmitButton";
-import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { Select } from "@/components/ui/Select";
 import { TEST_RESULT_OPTIONS, PRIORITY_OPTIONS } from "@/lib/enums";
 import {
@@ -82,6 +82,30 @@ export async function generateMetadata({
   const [project, run] = await Promise.all([getProjectById(id), getRunById(runId)]);
   return { title: run ? `${run.name} · ${project?.name ?? "Test Run"}` : "Test Run" };
 }
+
+/**
+ * How a row's control is tinted, by the result the round has recorded.
+ *
+ * The column used to be badges, which a reader could scan down to see how far
+ * the round had got. Making every row an editable dropdown took the colour
+ * with it, and a page of identical grey controls says nothing about which
+ * cases have been tested.
+ *
+ * Applied to the trigger rather than the wrapper, which is where `className`
+ * lands — hence the arbitrary variant. The tint follows what is saved, so a
+ * value picked and not yet saved shows its new word in the old colour; that
+ * is the honest reading, and pressing Save settles it.
+ */
+const RESULT_TINT: Record<string, string> = {
+  PASSED:
+    "[&_button]:border-emerald-500/40 [&_button]:text-emerald-700 dark:[&_button]:text-emerald-400",
+  FAILED: "[&_button]:border-red-500/40 [&_button]:text-red-700 dark:[&_button]:text-red-400",
+  BLOCKED:
+    "[&_button]:border-amber-500/40 [&_button]:text-amber-700 dark:[&_button]:text-amber-400",
+  SKIPPED:
+    "[&_button]:border-purple-500/40 [&_button]:text-purple-700 dark:[&_button]:text-purple-400",
+  NOT_RUN: "[&_button]:text-muted",
+};
 
 export default async function TestRunPage({
   params,
@@ -399,6 +423,30 @@ export default async function TestRunPage({
             : listHref,
         );
       },
+      /* The words only. Recording the same answer again is a real event and
+         still belongs to the Save beside the result; correcting a typo is
+         not, and used to append one because the two shared a form. */
+      async saveNote(formData: FormData) {
+        "use server";
+        invalidateRouteCache();
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        try {
+          await updateRunCaseNote(
+            runId,
+            testCaseId,
+            (formData.get("notes") as string) || null,
+            session!.user.id,
+          );
+        } catch (err) {
+          if (err instanceof TestRunValidationError) {
+            redirect(withToast(listHref, err.message));
+          }
+          throw err;
+        }
+        redirect(withToast(listHref, "Actual result saved"));
+      },
+
       async remove(formData: FormData) {
         "use server";
         invalidateRouteCache();
@@ -828,7 +876,7 @@ export default async function TestRunPage({
                       <th className={thClass}>Test Case</th>
                       <th className={thCenterClass}>Priority</th>
                       <th className={thCenterClass}>Result in this run</th>
-                      <th className={thClass}>Notes</th>
+                      <th className={thClass}>Actual Result</th>
                       <th className={thCenterClass}>Attachments</th>
                       {/* Last of the data columns because it doubles as the
                           row's action: a case that has not run yet shows
@@ -868,15 +916,23 @@ export default async function TestRunPage({
                               <td className={tdCenterClass}>
                                 {isOpen ? (
                                   <form
+                                    /* Keyed on what the server last said, so
+                                       the control is built again whenever it
+                                       changes. React resets a form once its
+                                       action resolves, handing every
+                                       uncontrolled field in it back the value
+                                       it was built with — which is the old
+                                       answer, over a row that has already
+                                       been changed. */
+                                    key={`record-${row.id}-${row.testResult}`}
                                     id={`record-${row.id}`}
                                     action={actions.record}
-                                    /* Centred under its own heading. The cell
+                                    /* Centred under its own heading: the cell
                                        centres its text, but this form is a
                                        flex box filling the cell, so the
                                        control sat against the left edge while
-                                       the heading above it sat in the middle.
-                                       Once Save moved to the Notes cell this
-                                       was the only thing left in here. */
+                                       the heading above it sat in the
+                                       middle. */
                                     className="flex items-center justify-center gap-2"
                                   >
                                     <Select
@@ -884,8 +940,12 @@ export default async function TestRunPage({
                                       defaultValue={row.testResult}
                                       options={TEST_RESULT_OPTIONS}
                                       ariaLabel={`Result for ${row.testCase.name}`}
-                                      className="max-w-36"
+                                      className={`max-w-36 ${RESULT_TINT[row.testResult] ?? ""}`}
                                     />
+                                    {/* Back beside the result it records. It
+                                        sat in the Notes cell while the two
+                                        shared a form; they no longer do. */}
+                                    <SubmitButton variant="secondary">Save</SubmitButton>
                                   </form>
                                 ) : (
                                   <Badge tone={testResultTone(row.testResult)}>
@@ -895,39 +955,46 @@ export default async function TestRunPage({
                               </td>
                               <td className={tdClass}>
                                 {isOpen ? (
-                                  /* The note belongs to the result and saves
-                                     with it, so it is a field of the form in
-                                     the cell beside this one — reached by
-                                     `form=`, the way the footer buttons on the
-                                     edit dialogs are. It was a hidden input
-                                     carrying the old value back unchanged,
-                                     which left the column it feeds, and the
-                                     Problem cases report that reads it, empty
-                                     for ever. */
-                                  <div className="flex items-center gap-2">
+                                  /* Its own form and its own Save. The two
+                                     used to share one, so correcting a typo
+                                     resubmitted the result and appended an
+                                     answer identical to the last — which the
+                                     report that sorts by how often a case has
+                                     failed then counted as another failure.
+                                     Recording the same answer again is a real
+                                     event and still belongs to the Save
+                                     beside the result; this is for the
+                                     words. */
+                                  <form
+                                    /* Same reason as the result beside it.
+                                       Without this the field emptied itself
+                                       on every save after the first: it had
+                                       been built when the round had no actual
+                                       result, and the reset kept handing that
+                                       back. */
+                                    key={`note-${row.id}-${row.notes ?? ""}`}
+                                    action={actions.saveNote}
+                                    className="flex items-center gap-2"
+                                  >
                                     <input
                                       type="text"
                                       name="notes"
-                                      form={`record-${row.id}`}
                                       defaultValue={row.notes ?? ""}
-                                      placeholder="What happened?"
-                                      aria-label={`Note for ${row.testCase.name}`}
+                                      placeholder="What happened instead?"
+                                      aria-label={`Actual result for ${row.testCase.name}`}
                                       className={inputClass}
                                     />
-                                    {/* After the last field it saves, not
-                                        between the two. One Save for both,
-                                        because recording a result and writing
-                                        down what happened is one act — but a
-                                        button sitting ahead of a field it
-                                        submits reads as belonging to the
-                                        field before it. */}
-                                    <FormSubmitButton
-                                      formId={`record-${row.id}`}
-                                      variant="secondary"
-                                    >
+                                    {/* "Save", like the one beside the result.
+                                        Each sits under its own heading, which
+                                        is what says which is which — and a
+                                        label long enough to tell them apart
+                                        on its own wrapped onto two lines in a
+                                        column this narrow. The toast names
+                                        what was saved. */}
+                                    <SubmitButton variant="secondary" pendingLabel="Saving…">
                                       Save
-                                    </FormSubmitButton>
-                                  </div>
+                                    </SubmitButton>
+                                  </form>
                                 ) : (
                                   <span className="text-muted">{row.notes || "—"}</span>
                                 )}
