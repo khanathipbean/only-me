@@ -110,14 +110,19 @@ export function RunHistoryList({
                 <span className="text-xs text-muted">skipped</span>
               )}
 
-              {/* The round being worked on included. It used to be left out,
-                  on the grounds that its own field is on screen above — but
-                  that reading made the first actual result typed into a round
-                  appear nowhere in its history, and only show up once the
-                  result beside it changed and a second answer was recorded.
-                  A panel headed Run history that omits the newest thing in it
-                  is not one anyone can trust. */}
-              {entry.notes && (
+              {/* Only where the list below does not already say it.
+                  
+                  The round carries one actual result, kept in step with its
+                  newest answer, so once the answers are listed this line is
+                  that same text a second time — printed above the list, where
+                  it read as a heading for the whole round, while its twin sat
+                  at the bottom under the answer it belongs to.
+                  
+                  It stays for a round with nothing listed: text written before
+                  any answer was recorded has nowhere else to appear, and
+                  leaving it out was what made the first thing typed into a
+                  round vanish until a second answer arrived. */}
+              {entry.notes && entry.attempts.length <= 1 && (
                 <span className="w-full text-xs text-muted">{entry.notes}</span>
               )}
 
