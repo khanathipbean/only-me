@@ -434,6 +434,77 @@ describe("test runs", () => {
     );
   });
 
+  it("keeps an actual result written before the answer was recorded", async () => {
+    /* The order people work in: see what happened, write it down, then say
+     * whether it passed. Splitting the two Saves meant the result's form no
+     * longer carried the words — so recording the answer sent nothing for
+     * them, and nothing overwrote what had been written. */
+    const { owner, project, cases } = await seed("run-owner19@example.com", "PRJ-RUN-19");
+    const run = await createRun(project.id, { name: "Writing first" }, owner.id);
+    await addCasesToRun(run.id, [cases[0].id], owner.id);
+
+    await updateRunCaseNote(run.id, cases[0].id, "Domain ไม่ขึ้นหลังกด Save", owner.id);
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "FAILED" }, owner.id);
+
+    const row = await prisma.testRunCase.findFirstOrThrow({
+      where: { testRunId: run.id, testCaseId: cases[0].id },
+    });
+    expect(row.notes).toBe("Domain ไม่ขึ้นหลังกด Save");
+    expect(row.testResult).toBe("FAILED");
+
+    /* And the answer carries them, so the square drawn for it has something
+     * to say when somebody hovers it. */
+    const event = await prisma.testResultEvent.findFirstOrThrow({
+      where: { testCaseId: cases[0].id },
+      orderBy: { recordedAt: "desc" },
+    });
+    expect(event.notes).toBe("Domain ไม่ขึ้นหลังกด Save");
+
+    // An explicit empty note still clears it — only silence means "leave it".
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "PASSED", notes: null }, owner.id);
+    expect(
+      (await prisma.testRunCase.findFirstOrThrow({ where: { id: row.id } })).notes,
+    ).toBeNull();
+  });
+
+  it("does not carry one answer's words onto the next", async () => {
+    /* Only a round's first answer inherits what the row is holding. After
+     * that the row still carries whatever described the answer before, and
+     * putting "Domain did not appear" under a green square would be worse
+     * than a square with nothing to say. */
+    const { owner, project, cases } = await seed("run-owner20@example.com", "PRJ-RUN-20");
+    const run = await createRun(project.id, { name: "Fixing" }, owner.id);
+    await addCasesToRun(run.id, [cases[0].id], owner.id);
+
+    await setRunCaseResult(
+      run.id,
+      cases[0].id,
+      { testResult: "FAILED", notes: "Domain ไม่ขึ้น" },
+      owner.id,
+    );
+    await setRunCaseResult(run.id, cases[0].id, { testResult: "PASSED" }, owner.id);
+
+    const answers = await prisma.testResultEvent.findMany({
+      where: { testCaseId: cases[0].id },
+      orderBy: { recordedAt: "asc" },
+    });
+    expect(answers.map((a) => [a.testResult, a.notes])).toEqual([
+      ["FAILED", "Domain ไม่ขึ้น"],
+      ["PASSED", null],
+    ]);
+
+    /* And the row clears with it. It used to keep the old words while the new
+     * answer got nothing, so the field said one thing and the history beside
+     * it said another about the same moment — and the field is what somebody
+     * reads first. */
+    const row = await prisma.testRunCase.findFirstOrThrow({
+      where: { testRunId: run.id, testCaseId: cases[0].id },
+    });
+    expect(row.notes).toBeNull();
+    expect((await prisma.testCase.findUniqueOrThrow({ where: { id: cases[0].id } })).notes)
+      .toBeNull();
+  });
+
   it("still records an answer when the same result is saved again", async () => {
     /* Running it a second time and finding it broken again has taught
      * somebody something, and that is what the Save beside the result is

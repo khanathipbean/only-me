@@ -399,10 +399,11 @@ export default async function TestRunPage({
           ({ mirrorHeldBy } = await setRunCaseResult(
             runId,
             testCaseId,
-            {
-              testResult: formData.get("testResult") as TestResult,
-              notes: (formData.get("notes") as string) || null,
-            },
+            /* The result only. The actual result has its own field and its
+               own Save now, and this form no longer carries it — so sending
+               anything for it here would send `null` and wipe what somebody
+               had already written. Left out, the service keeps it. */
+            { testResult: formData.get("testResult") as TestResult },
             session!.user.id,
           ));
         } catch (err) {

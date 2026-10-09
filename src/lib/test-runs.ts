@@ -851,6 +851,27 @@ export async function setRunCaseResult(
 
   const ran = input.testResult !== "NOT_RUN";
   const derivedStatus = statusFromResult(input.testResult);
+  const priorAnswers = await prisma.testResultEvent.count({
+    where: { testRunCaseId: before.id },
+  });
+
+  /**
+   * The actual result this answer is recorded with — and the row's, because
+   * the two must agree.
+   *
+   * A round's first answer takes what the row is already carrying. People
+   * work in that order: see what happened, write it down, then say whether it
+   * passed, and splitting the two Saves meant the result's form stopped
+   * carrying the words.
+   *
+   * Every answer after it starts blank. The row is still holding whatever
+   * described the answer before, and keeping it would put "Domain did not
+   * appear" under a green square. The row used to keep it while the new
+   * answer got nothing, so the field said one thing and the history beside it
+   * said another about the same moment.
+   */
+  const recordedNotes =
+    input.notes !== undefined ? input.notes : priorAnswers === 0 ? before.notes : null;
 
   const [, runCase] = await prisma.$transaction([
     /* The row below holds only the latest answer, so every answer is also
@@ -866,7 +887,7 @@ export async function setRunCaseResult(
           connect: { testRunId_testCaseId: { testRunId, testCaseId } },
         },
         testResult: input.testResult,
-        notes: input.notes ?? null,
+        notes: recordedNotes,
         recordedBy: { connect: { id: actorId } },
       },
     }),
@@ -874,7 +895,7 @@ export async function setRunCaseResult(
       where: { testRunId_testCaseId: { testRunId, testCaseId } },
       data: {
         testResult: input.testResult,
-        ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        notes: recordedNotes,
         ranById: ran ? actorId : null,
         ranAt: ran ? new Date() : null,
       },
@@ -888,7 +909,7 @@ export async function setRunCaseResult(
             where: { id: testCaseId },
             data: {
               testResult: input.testResult,
-              ...(input.notes !== undefined ? { notes: input.notes } : {}),
+              notes: recordedNotes,
               /* The result settles the case's status as well, by the same
                * rule the Test Case page uses. Null for NOT_RUN, which leaves
                * a case nobody has reached with the status it was given. */
