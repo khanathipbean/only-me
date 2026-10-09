@@ -110,18 +110,31 @@ export function RunHistoryList({
                 <span className="text-xs text-muted">skipped</span>
               )}
 
-              {entry.notes && !isCurrent && (
+              {/* The round being worked on included. It used to be left out,
+                  on the grounds that its own field is on screen above — but
+                  that reading made the first actual result typed into a round
+                  appear nowhere in its history, and only show up once the
+                  result beside it changed and a second answer was recorded.
+                  A panel headed Run history that omits the newest thing in it
+                  is not one anyone can trust. */}
+              {entry.notes && (
                 <span className="w-full text-xs text-muted">{entry.notes}</span>
               )}
 
-              {/* What happened inside the round before it settled. The badge
-                  above holds only the last answer, so a round that was
-                  reported broken, fixed and retested looks from the outside
-                  exactly like one that passed first time — and that is most
-                  rounds, which is why nothing ever appeared to go wrong. */}
+              {/* Every answer this round was given, oldest first. The badge
+                  above is where it ended; this is how it got there, and a
+                  round that was reported broken, fixed and retested looks
+                  from the outside exactly like one that passed first time.
+                  That is most rounds, which is why nothing ever appeared to
+                  go wrong.
+
+                  All of them, including the last. It used to stop one short
+                  and close with "then recorded again", which named neither
+                  the answer nor the day — so the final line of a round the
+                  badge called PASSED read "failed", and the two argued. */}
               {entry.attempts.length > 1 && (
                 <ul className="w-full border-l border-border pl-2.5 text-xs text-muted">
-                  {entry.attempts.slice(0, -1).map((attempt, index) => (
+                  {entry.attempts.map((attempt, index) => (
                     <li key={index} className="flex flex-wrap items-baseline gap-1.5 py-0.5">
                       <span
                         className={
@@ -139,7 +152,6 @@ export function RunHistoryList({
                       {attempt.notes && <span className="w-full">{attempt.notes}</span>}
                     </li>
                   ))}
-                  <li className="py-0.5">then recorded again</li>
                 </ul>
               )}
             </li>
