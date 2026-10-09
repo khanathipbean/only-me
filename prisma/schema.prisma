@@ -370,9 +370,13 @@ model TestResultEvent {
   /// Null when this was recorded outside any round.
   testRunCaseId String?
   testResult    TestResult
-  /// What was written down at that attempt. Kept per attempt rather than per
-  /// round for the same reason the result is: the note explaining the first
-  /// failure is not the note explaining the third.
+  /// The actual result — what the tester saw, which the UI asks for under
+  /// that name. The column is still called `notes` because it was named
+  /// before the field had a job, and renaming it would mean a migration on a
+  /// live database to change a word no reader ever sees.
+  ///
+  /// Kept per attempt rather than per round for the same reason the result
+  /// is: what was seen on the first failure is not what was seen on the third.
   notes         String?
   recordedById  String
   recordedAt    DateTime   @default(now())

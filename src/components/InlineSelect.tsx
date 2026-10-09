@@ -111,12 +111,12 @@ export function InlineSelect({
       <Dialog open={asking} onClose={cancel} title={noteTitle}>
         <div className="flex flex-col gap-4">
           <label className={labelClass}>
-            Note
+            Actual Result
             <textarea
               autoFocus
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="What went wrong, and where"
+              placeholder="What happened instead?"
               className={textareaClass}
             />
           </label>

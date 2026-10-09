@@ -567,7 +567,7 @@ export default async function TestCasesPage({
                           {testCase.assigneeId ?? "Unassigned"}
                         </DetailField>
                       )}
-                      <DetailField label="Notes">{testCase.notes}</DetailField>
+                      <DetailField label="Actual Result">{testCase.notes}</DetailField>
                       <DetailField label="Test Steps" wide>
                         {testCase.steps.length === 0 ? null : (
                           <ol className="flex flex-col gap-1.5">

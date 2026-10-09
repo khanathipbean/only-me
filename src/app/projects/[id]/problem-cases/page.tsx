@@ -411,7 +411,7 @@ export default async function ProblemCasesPage({
                               {/* The notes moved into the squares, so say so
                                   once rather than leave someone to find it. */}
                               {" · "}
-                              <span>hover a square for the note</span>
+                              <span>hover a square for what happened</span>
                             </p>
                           </td>
                         </tr>

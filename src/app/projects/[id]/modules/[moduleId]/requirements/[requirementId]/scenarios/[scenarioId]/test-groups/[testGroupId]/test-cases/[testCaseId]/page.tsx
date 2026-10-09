@@ -407,7 +407,7 @@ export default async function TestCaseDetailPage({
             />
           </label>
           <label className={labelClass}>
-            Notes
+            Actual Result
             <textarea name="notes" defaultValue={testCase.notes ?? ""} className={textareaClass} />
           </label>
           <SubmitButton className="self-start">
