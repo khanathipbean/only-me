@@ -184,7 +184,12 @@ export function ProjectOverviewSummary({
           </div>
         </div>
 
-        <dl className="grid shrink-0 grid-cols-2 gap-x-8 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:w-72 lg:grid-cols-1 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
+        {/* `content-start` so the four facts keep their own spacing. The column
+            is stretched to the card's height — that is what draws the divider
+            all the way down — and a stretched grid shares the spare room out
+            between its rows, so expanding the description either side of it
+            pulled these four apart into a ladder. */}
+        <dl className="grid shrink-0 grid-cols-2 gap-x-8 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:w-72 lg:grid-cols-1 lg:content-start lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
           <div className="flex items-center gap-2.5">
             <CalendarIcon className="size-4 shrink-0 text-muted" />
             <dt className="w-24 shrink-0 text-sm text-muted">Created</dt>
