@@ -81,7 +81,15 @@ export function ExpandableRow({
               cell and relies on nothing else in it having width — this way
               the icons sit on the column's centre line regardless. */}
           <div className="inline-flex items-center gap-1">
-            {actions}
+            {/* Wrapped, and the wrapper is not decoration: `actions` is an
+                element the caller built in a prop, so React never marked it as
+                checked for a key. Dropped straight in here it becomes one of
+                two siblings — a list — and React asks for the key the caller
+                had no reason to give it ("Check the render method of
+                `ExpandableRow`. It was passed a child from ProjectsPage").
+                Inside a fragment it is an only child, so no key is wanted.
+                Renders nothing of its own. */}
+            <>{actions}</>
             <IconButton
               type="button"
               onClick={() => setOpen((value) => !value)}
