@@ -100,7 +100,17 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           {THEME_INIT_SCRIPT}
         </Script>
       </head>
-      <body>
+      {/* Same reason as `<html>` above, different culprit: browser extensions
+          stamp their own attributes on `<body>` before React hydrates — a
+          password manager, an accessibility tool, a shopping helper. React
+          sees an attribute the server never sent, calls it a mismatch and
+          throws the whole hydration away, which takes every client component
+          on the page down with it. We can't stop the extension, and the user
+          who installed it shouldn't lose the theme toggle over it.
+
+          Shallow by design: this covers `<body>`'s own attributes and nothing
+          inside it, so a genuine mismatch in our own markup still reports. */}
+      <body suppressHydrationWarning>
         <ThemeSync />
         <ToastListener />
         {/* Ambient backdrop: the same charcoal gradient and soft blooms the
