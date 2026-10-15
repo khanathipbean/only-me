@@ -421,10 +421,13 @@ export default async function ProblemCasesPage({
                 </table>
               </div>
 
-              {/* Only once a section has more than fits. A control saying
-                  "1 of 1" under every section would be five of them on a
-                  page where nothing can be paged. */}
-              {slice.totalPages > 1 && (
+              {/* Always, not only when there is a second page. The rows-per-page
+                  selector lives inside this control, so hiding it the moment
+                  everything fits was a trap: raise a section to 25, find it
+                  all on one page, and the only way back to 5 is gone with the
+                  control that set it. A quiet "1 of 1" is a smaller price than
+                  a setting nobody can undo. */}
+              {slice.total > 0 && (
                 <Pagination
                   page={slice.page}
                   totalPages={slice.totalPages}
