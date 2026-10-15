@@ -43,30 +43,9 @@ import {
   GET as listAttachmentsRoute,
   POST as uploadAttachmentRoute,
 } from "@/app/api/test-cases/[id]/attachments/route";
+import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
-
-function sessionFor(userId: string) {
-  return {
-    user: { id: userId, email: `${userId}@example.com` },
-    expires: new Date(Date.now() + 86_400_000).toISOString(),
-  };
-}
-
-async function createUser(email: string) {
-  return prisma.user.create({
-    data: { email, passwordHash: "irrelevant", name: email },
-  });
-}
-
-function jsonRequest(url: string, method: string, body?: unknown) {
-  return new NextRequest(url, {
-    method,
-    ...(body !== undefined
-      ? { body: JSON.stringify(body), headers: { "content-type": "application/json" } }
-      : {}),
-  });
-}
 
 async function setup(ownerEmail: string, code: string) {
   const owner = await createUser(ownerEmail);

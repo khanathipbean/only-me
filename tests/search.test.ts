@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { searchAll } from "@/lib/search";
 import { createScenario } from "@/lib/scenarios";
@@ -16,30 +15,9 @@ vi.mock("@/auth", () => ({
 import { auth } from "@/auth";
 import { POST as createProjectRoute } from "@/app/api/projects/route";
 import { GET as searchRoute } from "@/app/api/search/route";
+import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
-
-function sessionFor(userId: string) {
-  return {
-    user: { id: userId, email: `${userId}@example.com` },
-    expires: new Date(Date.now() + 86_400_000).toISOString(),
-  };
-}
-
-async function createUser(email: string) {
-  return prisma.user.create({
-    data: { email, passwordHash: "irrelevant", name: email },
-  });
-}
-
-function jsonRequest(url: string, method: string, body?: unknown) {
-  return new NextRequest(url, {
-    method,
-    ...(body !== undefined
-      ? { body: JSON.stringify(body), headers: { "content-type": "application/json" } }
-      : {}),
-  });
-}
 
 async function seedHierarchy(ownerId: string, code: string) {
   const project = await (
