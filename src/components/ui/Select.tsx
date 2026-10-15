@@ -418,6 +418,14 @@ export function Select({
         createPortal(
           <div
             ref={popupRef}
+            /* The list is portalled to the body, but React still bubbles its
+               events up the React tree — so a click on an option arrived at
+               whatever the Select happens to sit inside. In a table row that
+               expands when clicked, picking a result also opened the panel
+               underneath it, every time, with nothing on screen to explain
+               why. Stopped here rather than in each container, because every
+               container has the same problem. */
+            onClick={(event) => event.stopPropagation()}
             style={{
               top: listBox.top,
               left: listBox.left,

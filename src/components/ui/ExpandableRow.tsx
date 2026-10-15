@@ -7,7 +7,13 @@ import { tdCenterClass, trHoverClass } from "@/lib/ui";
 
 /** Elements a row click shouldn't hijack — the name link, action buttons,
  * and anything a row's own cells might embed (a Select, say). */
-const INTERACTIVE_SELECTOR = "a, button, input, select, label, [role='button']";
+/* The roles are here for the same reason the tags are: a listbox option or a
+ * menu item is something to press, not a piece of the row. They cover the
+ * menus that are portalled out of the row and whose clicks React still bubbles
+ * back into it — belt and braces beside the stopPropagation those menus do. */
+const INTERACTIVE_SELECTOR =
+  "a, button, input, select, label, textarea, [role='button'], [role='option'], " +
+  "[role='menuitem'], [role='menuitemradio'], [role='listbox'], [role='menu']";
 
 /**
  * A table row that expands a detail panel underneath itself instead of
