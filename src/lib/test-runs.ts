@@ -241,22 +241,11 @@ const RUN_CASE_ORDER = [
   { testCase: { name: "asc" } },
 ] satisfies Prisma.TestRunCaseOrderByWithRelationInput[];
 
-/** Every case in a round, with the chain above it so the list can group by
- *  Scenario and Test Group instead of repeating four levels on every row. */
-export async function listCasesInRun(testRunId: string) {
-  return prisma.testRunCase.findMany({
-    where: { testRunId },
-    include: RUN_CASE_INCLUDE,
-    orderBy: RUN_CASE_ORDER,
-  });
-}
-
-/** The same query as `listCasesInRun` — literally, now — one page at a time — a round with
- *  thousands of cases rendered every one of them into the DOM at once
- *  otherwise, on a page opened routinely rather than occasionally like the
- *  export. `ranCount` is counted separately rather than derived from the
- *  page's own rows, since "N of M run" has to mean the whole round, not just
- *  whichever page happens to be showing. */
+/** One page of a round at a time: a round with thousands of cases rendered
+ *  every one of them into the DOM at once otherwise, on a page opened
+ *  routinely rather than occasionally like the export. `ranCount` is counted
+ *  separately rather than derived from the page's own rows, since "N of M
+ *  run" has to mean the whole round, not just whichever page is showing. */
 export type RunCaseFilters = PageFilters & {
   /** One result to show. During a round the question is almost always "what
    *  is left" or "what failed" — both are this filter. */
@@ -404,8 +393,8 @@ export async function summariseRunScope(testRunId: string) {
 }
 
 /** Every case in a round with its full ancestor chain, for the results
- *  export — `listCasesInRun` stops at Scenario/Test Group because the page it
- *  serves groups by those; this needs Requirement and Module too. */
+ *  export. The round's own page stops at Scenario and Test Group, because
+ *  that is what it groups by; this needs Requirement and Module too. */
 export async function listRunResultsForExport(testRunId: string) {
   return prisma.testRunCase.findMany({
     where: { testRunId },

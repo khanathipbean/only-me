@@ -14,7 +14,7 @@ export type HierarchyIds = {
   testCaseId?: string;
 };
 
-export function projectHref(projectId: string) {
+function projectHref(projectId: string) {
   return `/projects/${projectId}`;
 }
 

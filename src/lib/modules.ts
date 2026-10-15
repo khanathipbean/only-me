@@ -176,7 +176,7 @@ export async function duplicateModule(id: string, actorId: string) {
   return copy;
 }
 
-export async function setModuleDeletedAt(
+async function setModuleDeletedAt(
   id: string,
   deletedAt: Date | null,
   actorId: string,

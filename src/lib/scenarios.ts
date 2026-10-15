@@ -271,7 +271,7 @@ export async function duplicateScenario(id: string, actorId: string) {
 }
 
 /** Counts shown to the UI before a destructive or cross-project action. */
-export async function getScenarioDescendantCounts(scenarioId: string) {
+async function getScenarioDescendantCounts(scenarioId: string) {
   const testGroups = await prisma.testGroup.findMany({
     where: { scenarioId, deletedAt: null },
     select: { id: true },
@@ -285,8 +285,8 @@ export async function getScenarioDescendantCounts(scenarioId: string) {
 /**
  * Descendant counts for a whole page of Scenarios in two queries instead of
  * two per row. The list needs them to word each row's archive/delete
- * confirmation, and calling `getScenarioDescendantCounts` in a loop would be
- * 2N round trips to a remote database.
+ * confirmation, and counting them one Scenario at a time would be 2N round
+ * trips to a remote database.
  */
 export async function getScenarioDescendantCountsForMany(scenarioIds: string[]) {
   const counts = new Map<string, { testGroups: number; testCases: number }>(

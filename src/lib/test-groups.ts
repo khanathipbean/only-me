@@ -168,10 +168,6 @@ export async function listTestGroupsForProject(projectId: string) {
   });
 }
 
-export async function getTestGroupById(id: string) {
-  return prisma.testGroup.findUnique({ where: { id } });
-}
-
 /**
  * Resolves { projectId } for a Test Group id, for RBAC checks that only know
  * the parent Project. Wrapped in React's `cache` so `generateMetadata` and the
@@ -302,7 +298,7 @@ export async function duplicateTestGroup(id: string, actorId: string) {
 }
 
 /** Counts shown to the UI before a destructive or cross-scenario action. */
-export async function getTestGroupDescendantCounts(testGroupId: string) {
+async function getTestGroupDescendantCounts(testGroupId: string) {
   const testCases = await prisma.testCase.count({
     where: { testGroupId, deletedAt: null },
   });

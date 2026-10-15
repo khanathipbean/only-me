@@ -140,10 +140,6 @@ export async function listNotesForProjectPage(
   );
 }
 
-export async function getNoteById(id: string) {
-  return prisma.note.findUnique({ where: { id }, include: WITH_LIST_FIELDS });
-}
-
 export async function createNote(projectId: string, input: NoteInput, actorId: string) {
   const { title, body, feature, moduleId } = await validate(projectId, input);
 
@@ -202,7 +198,7 @@ export async function updateNote(id: string, input: NoteInput, actorId: string) 
   return note;
 }
 
-export async function setNoteDeletedAt(
+async function setNoteDeletedAt(
   id: string,
   deletedAt: Date | null,
   actorId: string,

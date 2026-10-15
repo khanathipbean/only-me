@@ -349,7 +349,7 @@ export async function duplicateRequirement(id: string, actorId: string) {
   return copy;
 }
 
-export async function setRequirementDeletedAt(
+async function setRequirementDeletedAt(
   id: string,
   deletedAt: Date | null,
   actorId: string,
