@@ -18,7 +18,7 @@ vi.mock("@/auth", () => ({
 import { auth } from "@/auth";
 import { POST as createProjectRoute } from "@/app/api/projects/route";
 import { GET as getDashboard } from "@/app/api/projects/[id]/dashboard/route";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
@@ -47,7 +47,8 @@ function caseNames(tree: Array<{ requirements: Array<{ scenarios: Array<{ testGr
     .sort();
 }
 
-async function seedDashboardFixture(ownerId: string, code: string) {
+async function seedDashboardFixture(ownerId: string) {
+  const code = uniqueCode("prj-dash");
   const project = await (
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", { code, name: `Project ${code}`, status: "DRAFT" }),
@@ -109,9 +110,9 @@ describe("project dashboard", () => {
   });
 
   it("matches a known seeded dataset for totals, breakdowns, and Test Progress", async () => {
-    const owner = await createUser("dash-owner1@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, user1, user2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-1");
+    const { project, user1, user2 } = await seedDashboardFixture(owner.id);
 
     const result = await dashboard(project.id);
 
@@ -159,9 +160,9 @@ describe("project dashboard", () => {
     /* The result breakdown says how many are failing now. This says how many
      * keep failing — a different question, and the one the strip above it
      * exists to answer. */
-    const owner = await createUser("dash-attention@example.com");
+    const owner = await createUser(uniqueEmail("dash-attention"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-ATT");
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id);
 
     /* tc1 passed and tc2 failed in the fixture, both outside any round. One
      * has never passed; the other has never failed. */
@@ -194,9 +195,9 @@ describe("project dashboard", () => {
   });
 
   it("applies one filter consistently across counts, breakdowns, and the tree", async () => {
-    const owner = await createUser("dash-owner2@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1 } = await seedDashboardFixture(owner.id, "PRJ-DASH-2");
+    const { project, tc1 } = await seedDashboardFixture(owner.id);
 
     const filtered = await dashboard(project.id, "?testResult=PASSED");
 
@@ -217,9 +218,9 @@ describe("project dashboard", () => {
   });
 
   it("filters by scenarioId, testGroupId, priority, status, assigneeId, and tags", async () => {
-    const owner = await createUser("dash-owner3@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, scenarioA, groupA1, user1 } = await seedDashboardFixture(owner.id, "PRJ-DASH-3");
+    const { project, scenarioA, groupA1, user1 } = await seedDashboardFixture(owner.id);
 
     const byScenario = await dashboard(project.id, `?scenarioId=${scenarioA.id}`);
     expect(byScenario.counts.testCases).toBe(2);
@@ -248,9 +249,9 @@ describe("project dashboard", () => {
   });
 
   it("shows a 'no results' shape (empty tree, zero counts) when a filter matches nothing, while hasAnyData stays true", async () => {
-    const owner = await createUser("dash-owner5@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedDashboardFixture(owner.id, "PRJ-DASH-5");
+    const { project } = await seedDashboardFixture(owner.id);
 
     const result = await dashboard(project.id, "?testResult=BLOCKED");
 
@@ -267,13 +268,13 @@ describe("project dashboard", () => {
   });
 
   it("reports hasAnyData: false for a Project with no Scenarios yet", async () => {
-    const owner = await createUser("dash-owner6@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const project = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-DASH-6",
+          code: uniqueCode("prj-dash"),
           name: "Empty Project",
           status: "DRAFT",
         }),
@@ -292,17 +293,17 @@ describe("project dashboard", () => {
   });
 
   it("rejects a non-member with 403 and isolates counts per project", async () => {
-    const ownerA = await createUser("dash-ownerA@example.com");
-    const ownerB = await createUser("dash-ownerB@example.com");
+    const ownerA = await createUser(uniqueEmail("dash-ownerA"));
+    const ownerB = await createUser(uniqueEmail("dash-ownerB"));
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
-    const { project: projectA } = await seedDashboardFixture(ownerA.id, "PRJ-DASH-7A");
+    const { project: projectA } = await seedDashboardFixture(ownerA.id);
 
     mockAuth.mockResolvedValue(sessionFor(ownerB.id) as never);
     const projectB = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-DASH-7B",
+          code: uniqueCode("prj-dash"),
           name: "Project B",
           status: "DRAFT",
         }),
@@ -326,9 +327,9 @@ describe("project dashboard", () => {
   });
 
   it("reads results from the chosen Test Run, and only its cases", async () => {
-    const owner = await createUser("dash-owner7@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1, tc3 } = await seedDashboardFixture(owner.id, "PRJ-DASH-7");
+    const { project, tc1, tc3 } = await seedDashboardFixture(owner.id);
 
     // A round covering two of the three cases. TC1 already carries PASSED from
     // before the round existed; inside the round it is re-tested and fails.
@@ -368,9 +369,9 @@ describe("project dashboard", () => {
   });
 
   it("filters by the round's result, not the copy left on the Test Case", async () => {
-    const owner = await createUser("dash-owner8@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-8");
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id);
 
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [tc1.id, tc2.id], owner.id);
@@ -389,9 +390,9 @@ describe("project dashboard", () => {
   });
 
   it("reports each round's progress and how much work is scheduled at all", async () => {
-    const owner = await createUser("dash-owner10@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-10");
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id);
 
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [tc1.id, tc2.id], owner.id);
@@ -409,9 +410,9 @@ describe("project dashboard", () => {
   });
 
   it("stops counting a case as scheduled once its only round is archived", async () => {
-    const owner = await createUser("dash-owner12@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1 } = await seedDashboardFixture(owner.id, "PRJ-DASH-12");
+    const { project, tc1 } = await seedDashboardFixture(owner.id);
 
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [tc1.id], owner.id);
@@ -428,9 +429,9 @@ describe("project dashboard", () => {
   });
 
   it("keeps run progress and coverage whole when a filter narrows the page", async () => {
-    const owner = await createUser("dash-owner11@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-11");
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id);
 
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [tc1.id, tc2.id], owner.id);
@@ -445,9 +446,9 @@ describe("project dashboard", () => {
   });
 
   it("narrows the whole page to one phase, counting only the cases its rounds scheduled", async () => {
-    const owner = await createUser("dash-owner13@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1 } = await seedDashboardFixture(owner.id, "PRJ-DASH-13");
+    const { project, tc1 } = await seedDashboardFixture(owner.id);
 
     const first = await createRun(project.id, { name: "Sprint 1", phase: "Phase 1" }, owner.id);
     await createRun(project.id, { name: "Sprint 7", phase: "Phase 2" }, owner.id);
@@ -484,9 +485,9 @@ describe("project dashboard", () => {
   });
 
   it("reads a case tested twice in a phase as its latest result, not twice", async () => {
-    const owner = await createUser("dash-owner15@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id, "PRJ-DASH-15");
+    const { project, tc1, tc2 } = await seedDashboardFixture(owner.id);
 
     const sprint1 = await createRun(project.id, { name: "Sprint 1", phase: "Phase 1" }, owner.id);
     const sprint2 = await createRun(project.id, { name: "Sprint 2", phase: "Phase 1" }, owner.id);
@@ -521,9 +522,9 @@ describe("project dashboard", () => {
   });
 
   it("files a round under an existing phase whatever the typing", async () => {
-    const owner = await createUser("dash-owner14@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedDashboardFixture(owner.id, "PRJ-DASH-14");
+    const { project } = await seedDashboardFixture(owner.id);
 
     await createRun(project.id, { name: "Sprint 1", phase: "Phase 2" }, owner.id);
     await createRun(project.id, { name: "Sprint 2", phase: "  phase 2 " }, owner.id);
@@ -536,9 +537,9 @@ describe("project dashboard", () => {
   });
 
   it("offers the project's rounds as filter options, newest first", async () => {
-    const owner = await createUser("dash-owner9@example.com");
+    const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedDashboardFixture(owner.id, "PRJ-DASH-9");
+    const { project } = await seedDashboardFixture(owner.id);
 
     await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await createRun(project.id, { name: "Sprint 2" }, owner.id);

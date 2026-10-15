@@ -28,13 +28,17 @@ vi.mock("@/auth", () => ({
 
 import { auth } from "@/auth";
 import { POST as createProjectRoute } from "@/app/api/projects/route";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
 /** A project with three Test Cases under one Group, ready to be re-tested. */
-async function seed(ownerEmail: string, code: string) {
-  const owner = await createUser(ownerEmail);
+/* Takes no names: these tests wanted a project and an owner, not a
+ * particular project and a particular owner. The numbers they spelled out by
+ * hand existed only to keep one test apart from another, and kept failing to. */
+async function seed() {
+  const code = uniqueCode("prj-run");
+  const owner = await createUser(uniqueEmail("run-owner"));
   mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
   const project = await (
@@ -71,7 +75,7 @@ async function seed(ownerEmail: string, code: string) {
     );
   }
 
-  return { owner, project, cases };
+  return { owner, project, group, cases };
 }
 
 describe("test runs", () => {
@@ -80,7 +84,7 @@ describe("test runs", () => {
   });
 
   it("records a result against the run and mirrors it onto the Test Case", async () => {
-    const { owner, project, cases } = await seed("run-owner1@example.com", "PRJ-RUN-1");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
 
     await addCasesToRun(run.id, cases.map((testCase) => testCase.id), owner.id);
@@ -99,7 +103,7 @@ describe("test runs", () => {
   });
 
   it("keeps each round's result separate, so a re-test doesn't erase the last one", async () => {
-    const { owner, project, cases } = await seed("run-owner2@example.com", "PRJ-RUN-2");
+    const { owner, project, cases } = await seed();
 
     const first = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(first.id, [cases[0].id], owner.id);
@@ -121,7 +125,7 @@ describe("test runs", () => {
   });
 
   it("leaves the Test Case showing the newest round, whatever order results are typed in", async () => {
-    const { owner, project, cases } = await seed("run-owner7@example.com", "PRJ-RUN-7");
+    const { owner, project, cases } = await seed();
     const testCase = cases[0];
 
     const older = await createRun(project.id, { name: "Sprint 1" }, owner.id);
@@ -161,7 +165,7 @@ describe("test runs", () => {
   });
 
   it("mirrors again once the newest round has its own say", async () => {
-    const { owner, project, cases } = await seed("run-owner8@example.com", "PRJ-RUN-8");
+    const { owner, project, cases } = await seed();
     const testCase = cases[0];
 
     const older = await createRun(project.id, { name: "Sprint 1" }, owner.id);
@@ -186,7 +190,7 @@ describe("test runs", () => {
   });
 
   it("refuses every change to a closed run", async () => {
-    const { owner, project, cases } = await seed("run-owner3@example.com", "PRJ-RUN-3");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [cases[0].id], owner.id);
     await setRunStatus(run.id, "CLOSED", owner.id);
@@ -206,7 +210,7 @@ describe("test runs", () => {
   });
 
   it("adds each case once and offers only the ones not already in the run", async () => {
-    const { owner, project, cases } = await seed("run-owner4@example.com", "PRJ-RUN-4");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
 
     expect(await listCandidateCases(project.id, run.id)).toHaveLength(3);
@@ -223,7 +227,7 @@ describe("test runs", () => {
   });
 
   it("rejects a duplicate run name and an end date before the start", async () => {
-    const { owner, project } = await seed("run-owner5@example.com", "PRJ-RUN-5");
+    const { owner, project } = await seed();
     await createRun(project.id, { name: "Sprint 1" }, owner.id);
 
     await expect(createRun(project.id, { name: "Sprint 1" }, owner.id)).rejects.toBeInstanceOf(
@@ -239,7 +243,7 @@ describe("test runs", () => {
   });
 
   it("reports how far each run has got", async () => {
-    const { owner, project, cases } = await seed("run-owner6@example.com", "PRJ-RUN-6");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, cases.map((testCase) => testCase.id), owner.id);
     await setRunCaseResult(run.id, cases[0].id, { testResult: "PASSED" }, owner.id);
@@ -251,7 +255,7 @@ describe("test runs", () => {
     expect(row?.ranCount).toBe(1);
   });
   it("lists a round's cases by the hierarchy, whatever order they were added in, carrying the Requirement and its Feature", async () => {
-    const { owner, project } = await seed("run-owner9@example.com", "PRJ-RUN-9");
+    const { owner, project } = await seed();
 
     // Two Modules, so the ordering has something to sort across. "Billing"
     // sorts after "Access" by name, and both carry sequence 0 by default.
@@ -309,7 +313,7 @@ describe("test runs", () => {
     expect(items[1].testCase.testGroup.scenario.requirement.feature).toBeNull();
   });
   it("says which Modules and how many Requirements a round reaches across", async () => {
-    const { owner, project } = await seed("run-owner10@example.com", "PRJ-RUN-10");
+    const { owner, project } = await seed();
 
     const [access, billing] = await Promise.all([
       prisma.module.create({ data: { projectId: project.id, name: "Access" } }),
@@ -379,7 +383,7 @@ describe("test runs", () => {
      * appended an answer identical to the last — and Problem Cases, which
      * sorts by how many failures a case has cost, counted every pass over the
      * wording as another one. */
-    const { owner, project, cases } = await seed("run-owner17@example.com", "PRJ-RUN-17");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Noting" }, owner.id);
     await addCasesToRun(run.id, [cases[0].id], owner.id);
     await setRunCaseResult(
@@ -419,7 +423,7 @@ describe("test runs", () => {
      * whether it passed. Splitting the two Saves meant the result's form no
      * longer carried the words — so recording the answer sent nothing for
      * them, and nothing overwrote what had been written. */
-    const { owner, project, cases } = await seed("run-owner19@example.com", "PRJ-RUN-19");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Writing first" }, owner.id);
     await addCasesToRun(run.id, [cases[0].id], owner.id);
 
@@ -452,7 +456,7 @@ describe("test runs", () => {
      * that the row still carries whatever described the answer before, and
      * putting "Domain did not appear" under a green square would be worse
      * than a square with nothing to say. */
-    const { owner, project, cases } = await seed("run-owner20@example.com", "PRJ-RUN-20");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Fixing" }, owner.id);
     await addCasesToRun(run.id, [cases[0].id], owner.id);
 
@@ -489,7 +493,7 @@ describe("test runs", () => {
     /* Running it a second time and finding it broken again has taught
      * somebody something, and that is what the Save beside the result is
      * for. Only the words are free. */
-    const { owner, project, cases } = await seed("run-owner18@example.com", "PRJ-RUN-18");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Retesting" }, owner.id);
     await addCasesToRun(run.id, [cases[0].id], owner.id);
 
@@ -504,7 +508,7 @@ describe("test runs", () => {
      * result to Not Run — which clears `ranAt`, freed the case for removal,
      * and wrote an answer nobody meant to give into its history. The result
      * was destroyed either way; the detour just left a mark. */
-    const { owner, project, cases } = await seed("run-owner16@example.com", "PRJ-RUN-16");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Removing" }, owner.id);
     await addCasesToRun(run.id, [cases[0].id], owner.id);
     await setRunCaseResult(run.id, cases[0].id, { testResult: "PASSED" }, owner.id);
@@ -528,7 +532,7 @@ describe("test runs", () => {
      * one page, so the set is read here from the same filters the list was
      * drawn with — if the two ever came apart, a bulk action would touch rows
      * nobody had looked at. */
-    const { owner, project, cases } = await seed("run-owner15@example.com", "PRJ-RUN-15");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Selecting" }, owner.id);
     await addCasesToRun(
       run.id,
@@ -552,7 +556,7 @@ describe("test runs", () => {
   });
 
   it("filters a round by result and by case name, without letting either touch the round's own totals", async () => {
-    const { owner, project, cases } = await seed("run-owner11@example.com", "PRJ-RUN-11");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Filtering" }, owner.id);
     await addCasesToRun(
       run.id,
@@ -590,7 +594,7 @@ describe("test runs", () => {
     ]);
   });
   it("gives each round in the list its result breakdown, and a ran count that agrees with it", async () => {
-    const { owner, project, cases } = await seed("run-owner12@example.com", "PRJ-RUN-12");
+    const { owner, project, cases } = await seed();
 
     const worked = await createRun(project.id, { name: "Worked on" }, owner.id);
     await addCasesToRun(
@@ -619,7 +623,7 @@ describe("test runs", () => {
     expect(byName.get("Untouched")!.ranCount).toBe(0);
   });
   it("refuses to remove a case whose result is already recorded, and still removes one that is not", async () => {
-    const { owner, project, cases } = await seed("run-owner13@example.com", "PRJ-RUN-13");
+    const { owner, project, cases } = await seed();
     const run = await createRun(project.id, { name: "Guarded" }, owner.id);
     await addCasesToRun(
       run.id,
@@ -646,7 +650,7 @@ describe("test runs", () => {
     ).toBe(0);
   });
   it("acts on several cases at once, skipping the removes it must not do", async () => {
-    const { owner, project, cases } = await seed("run-owner14@example.com", "PRJ-RUN-14");
+    const { owner, project, group, cases } = await seed();
     const run = await createRun(project.id, { name: "Bulk" }, owner.id);
     await addCasesToRun(
       run.id,
@@ -670,7 +674,10 @@ describe("test runs", () => {
 
     // A mixed selection: the unrun one goes, the rest are kept and counted.
     const fresh = await createTestCase(
-      (await prisma.testGroup.findFirstOrThrow({ where: { name: `Group PRJ-RUN-14` } })).id,
+      /* The group `seed()` built, handed over directly. This used to look it
+       * up by name across the whole database, which would have found any
+       * other project's group of the same name just as happily. */
+      group.id,
       {
         name: "Not run yet",
         expectedResult: "ok",

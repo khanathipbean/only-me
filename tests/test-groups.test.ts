@@ -20,12 +20,16 @@ import { POST as duplicateTestGroupRoute } from "@/app/api/test-groups/[id]/dupl
 import { POST as archiveTestGroupRoute } from "@/app/api/test-groups/[id]/archive/route";
 import { POST as restoreTestGroupRoute } from "@/app/api/test-groups/[id]/restore/route";
 import { POST as reorderTestGroupsRoute } from "@/app/api/test-groups/reorder/route";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function setup(ownerEmail: string, code: string) {
-  const owner = await createUser(ownerEmail);
+/* Takes no names: these tests wanted a project and an owner, not a
+ * particular project and a particular owner. The numbers they spelled out by
+ * hand existed only to keep one test apart from another, and kept failing to. */
+async function setup() {
+  const code = uniqueCode("prj-tg");
+  const owner = await createUser(uniqueEmail("tg-owner"));
   mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
   const project = await (
@@ -59,7 +63,7 @@ describe("test group routes", () => {
   });
 
   it("creates a test group under a scenario, requiring the scenario to exist", async () => {
-    const { owner, scenario } = await setup("tg-owner1@example.com", "PRJ-TG-1");
+    const { owner, scenario } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const response = await createTestGroupRoute(
@@ -82,7 +86,7 @@ describe("test group routes", () => {
   });
 
   it("reorders test groups and persists the new sequence", async () => {
-    const { owner, scenario } = await setup("tg-owner2@example.com", "PRJ-TG-2");
+    const { owner, scenario } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const first = await (
@@ -119,7 +123,7 @@ describe("test group routes", () => {
      * back. Counting archived groups as members meant the two sets could
      * never match, and every reorder in a Scenario that had ever archived a
      * group was refused — the arrows did nothing, and said nothing. */
-    const { owner, scenario } = await setup("tg-owner7@example.com", "PRJ-TG-7");
+    const { owner, scenario } = await setup();
     const names = ["First", "Second", "Gone"];
     const made = [];
     for (const name of names) {
@@ -156,7 +160,7 @@ describe("test group routes", () => {
   });
 
   it("duplicates, archives, restores, and deletes-with-confirm a test group", async () => {
-    const { owner, scenario } = await setup("tg-owner3@example.com", "PRJ-TG-3");
+    const { owner, scenario } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const created = await (
@@ -207,8 +211,8 @@ describe("test group routes", () => {
   });
 
   it("returns 403 for a non-member on every test group route", async () => {
-    const { owner, scenario } = await setup("tg-owner4@example.com", "PRJ-TG-4");
-    const outsider = await createUser("tg-outsider1@example.com");
+    const { owner, scenario } = await setup();
+    const outsider = await createUser(uniqueEmail("tg-outsider"));
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const created = await (
@@ -280,7 +284,7 @@ describe("test group routes", () => {
   });
 
   it("rejects reorder when orderedIds don't exactly match the scenario's own test groups", async () => {
-    const { owner, scenario } = await setup("tg-owner5@example.com", "PRJ-TG-5");
+    const { owner, scenario } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const own = await (
@@ -296,7 +300,7 @@ describe("test group routes", () => {
     const otherProject = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-TG-5B",
+          code: uniqueCode("prj-tg"),
           name: "Project PRJ-TG-5B",
           status: "DRAFT",
         }),

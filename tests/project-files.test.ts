@@ -8,6 +8,7 @@ import {
   previewMode,
   NO_MODULE_HEADING,
 } from "@/lib/project-files";
+import { uniqueCode } from "./support/fixtures";
 
 /**
  * The classifier decides both the icon on a card and how the dialog draws the
@@ -65,7 +66,8 @@ describe("project files", () => {
 });
 
 describe("project files by module", () => {
-  async function seed(code: string) {
+  async function seed() {
+    const code = uniqueCode("prj-file");
     const owner = await prisma.user.create({
       data: { email: `${code.toLowerCase()}@example.com`, passwordHash: "x", name: code },
     });
@@ -97,7 +99,7 @@ describe("project files by module", () => {
   }
 
   it("groups files with no Module under their own heading, listed last", async () => {
-    const { owner, project, policy } = await seed("PRJ-FILE-1");
+    const { owner, project, policy } = await seed();
     await addFile(project.id, owner.id, "terms.pdf", null);
     await addFile(project.id, owner.id, "policy-spec.pdf", policy);
 
@@ -110,7 +112,7 @@ describe("project files by module", () => {
   });
 
   it("does not pour those files in with a Module that happens to be called the same", async () => {
-    const { owner, project } = await seed("PRJ-FILE-2");
+    const { owner, project } = await seed();
     // Keyed on the Module's id, not the heading text, so this is two groups.
     const named = await createModule(project.id, NO_MODULE_HEADING, owner.id);
     await addFile(project.id, owner.id, "really-in-a-module.pdf", named);
@@ -123,7 +125,7 @@ describe("project files by module", () => {
   });
 
   it("filters to the files with no Module, which an empty value cannot ask for", async () => {
-    const { owner, project, policy } = await seed("PRJ-FILE-3");
+    const { owner, project, policy } = await seed();
     await addFile(project.id, owner.id, "terms.pdf", null);
     await addFile(project.id, owner.id, "policy-spec.pdf", policy);
 

@@ -43,12 +43,16 @@ import {
   GET as listAttachmentsRoute,
   POST as uploadAttachmentRoute,
 } from "@/app/api/test-cases/[id]/attachments/route";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function setup(ownerEmail: string, code: string) {
-  const owner = await createUser(ownerEmail);
+/* Takes no names: these tests wanted a project and an owner, not a
+ * particular project and a particular owner. The numbers they spelled out by
+ * hand existed only to keep one test apart from another, and kept failing to. */
+async function setup() {
+  const code = uniqueCode("prj-tc");
+  const owner = await createUser(uniqueEmail("tc-owner"));
   mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
   const project = await (
@@ -95,7 +99,7 @@ describe("test case routes", () => {
   });
 
   it("creates a test case requiring name, steps, and expectedResult, defaulting to NOT_RUN", async () => {
-    const { owner, testGroup } = await setup("tc-owner1@example.com", "PRJ-TC-1");
+    const { owner, testGroup } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const missingSteps = await createTestCaseRoute(
@@ -145,8 +149,8 @@ describe("test case routes", () => {
   });
 
   it("lets a Tester edit every field, same as QA_LEAD/ADMIN", async () => {
-    const { owner, project, testGroup } = await setup("tc-owner2@example.com", "PRJ-TC-2");
-    const tester = await createUser("tc-tester1@example.com");
+    const { owner, project, testGroup } = await setup();
+    const tester = await createUser(uniqueEmail("tc-tester"));
     await addMember(project.id, tester.id, "TESTER");
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
@@ -182,7 +186,7 @@ describe("test case routes", () => {
   });
 
   it("records updatedById and a fresh timestamp on every update", async () => {
-    const { owner, testGroup } = await setup("tc-owner3@example.com", "PRJ-TC-3");
+    const { owner, testGroup } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const created = await (
@@ -216,7 +220,7 @@ describe("test case routes", () => {
   });
 
   it("duplicates, archives, restores, and deletes-with-confirm a test case", async () => {
-    const { owner, testGroup } = await setup("tc-owner4@example.com", "PRJ-TC-4");
+    const { owner, testGroup } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const created = await (
@@ -271,8 +275,8 @@ describe("test case routes", () => {
   });
 
   it("returns 403 for a non-member on every test case route", async () => {
-    const { owner, testGroup } = await setup("tc-owner5@example.com", "PRJ-TC-5");
-    const outsider = await createUser("tc-outsider1@example.com");
+    const { owner, testGroup } = await setup();
+    const outsider = await createUser(uniqueEmail("tc-outsider"));
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const created = await (
@@ -353,8 +357,8 @@ describe("test case routes", () => {
   });
 
   it("lets a Tester set the assignee too, same as ADMIN/QA_LEAD", async () => {
-    const { owner, project, testGroup } = await setup("tc-owner6@example.com", "PRJ-TC-6");
-    const tester = await createUser("tc-tester2@example.com");
+    const { owner, project, testGroup } = await setup();
+    const tester = await createUser(uniqueEmail("tc-tester"));
     await addMember(project.id, tester.id, "TESTER");
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
@@ -384,8 +388,8 @@ describe("test case routes", () => {
   });
 
   it("lets a Tester upload an attachment, listing it afterward", async () => {
-    const { owner, project, testGroup } = await setup("tc-owner7@example.com", "PRJ-TC-7");
-    const tester = await createUser("tc-tester3@example.com");
+    const { owner, project, testGroup } = await setup();
+    const tester = await createUser(uniqueEmail("tc-tester"));
     await addMember(project.id, tester.id, "TESTER");
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
@@ -433,7 +437,7 @@ describe("test case routes", () => {
   });
 
   it("refuses an empty attachment, and one past the size cap", async () => {
-    const { owner, testGroup } = await setup("tc-owner8@example.com", "PRJ-TC-8");
+    const { owner, testGroup } = await setup();
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const created = await (
@@ -478,7 +482,7 @@ describe("test case routes", () => {
     expect(attachments).toBe(0);
   });
   it("accepts a Test Step with no expected result of its own, but still refuses a blank step", async () => {
-    const { owner, testGroup } = await setup("tc-owner9@example.com", "PRJ-TC-9");
+    const { owner, testGroup } = await setup();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     // The shape the importer writes: one overall Expected Result on the last
@@ -541,7 +545,7 @@ describe("test case routes", () => {
      * one page, so the set is read here from the same `where` the list was
      * drawn with — if the two came apart, Archive would reach rows nobody had
      * looked at. */
-    const { owner, testGroup } = await setup("tc-owner10@example.com", "PRJ-TC-10");
+    const { owner, testGroup } = await setup();
 
     for (const name of ["Alpha one", "Alpha two", "Beta"]) {
       await createTestCase(

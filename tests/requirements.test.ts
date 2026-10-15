@@ -18,12 +18,16 @@ import {
   restoreRequirement,
   updateRequirement,
 } from "@/lib/requirements";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function setup(ownerEmail: string, code: string) {
-  const owner = await createUser(ownerEmail);
+/* Takes no names: these tests wanted a project and an owner, not a
+ * particular project and a particular owner. The numbers they spelled out by
+ * hand existed only to keep one test apart from another, and kept failing to. */
+async function setup() {
+  const code = uniqueCode("prj-req");
+  const owner = await createUser(uniqueEmail("req-owner"));
   mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
   const project = await (
     await createProjectRoute(
@@ -46,8 +50,8 @@ describe("requirements", () => {
      * the other, which also puts that Module's name in front of people who
      * were never given access to it. The edit path has always refused this;
      * creating did not. */
-    const mine = await setup("requirement-owner11@example.com", "PRJ-REQ-11");
-    const theirs = await setup("requirement-owner12@example.com", "PRJ-REQ-12");
+    const mine = await setup();
+    const theirs = await setup();
 
     await expect(
       createRequirement(
@@ -62,7 +66,7 @@ describe("requirements", () => {
   });
 
   it("deletes a Requirement, requiring confirm: true, and records it in the audit log", async () => {
-    const { owner, project, testModule } = await setup("requirement-owner1@example.com", "PRJ-REQ-1");
+    const { owner, project, testModule } = await setup();
     const requirement = await createRequirement(
       project.id,
       { name: "Req A", moduleId: testModule.id, priority: "MEDIUM" },
@@ -87,7 +91,7 @@ describe("requirements", () => {
   });
 
   it("takes a Requirement's Scenarios with it", async () => {
-    const { owner, project, testModule } = await setup("requirement-owner2@example.com", "PRJ-REQ-2");
+    const { owner, project, testModule } = await setup();
     const requirement = await createRequirement(
       project.id,
       { name: "Req A", moduleId: testModule.id, priority: "MEDIUM" },
@@ -115,7 +119,7 @@ describe("requirements", () => {
   });
 
   it("restores an archived Requirement", async () => {
-    const { owner, project, testModule } = await setup("requirement-owner3@example.com", "PRJ-REQ-3");
+    const { owner, project, testModule } = await setup();
     const requirement = await createRequirement(
       project.id,
       { name: "Req A", moduleId: testModule.id, priority: "MEDIUM" },
@@ -128,7 +132,7 @@ describe("requirements", () => {
   });
 
   it("still refuses to archive a Requirement in use, unaffected by adding delete", async () => {
-    const { owner, project, testModule } = await setup("requirement-owner4@example.com", "PRJ-REQ-4");
+    const { owner, project, testModule } = await setup();
     const requirement = await createRequirement(
       project.id,
       { name: "Req A", moduleId: testModule.id, priority: "MEDIUM" },
@@ -150,8 +154,8 @@ describe("requirements", () => {
   });
 
   it("refuses to re-file a Requirement under another project's Module", async () => {
-    const { owner, project, testModule } = await setup("requirement-owner9@example.com", "PRJ-REQ-9");
-    const elsewhere = await setup("requirement-owner10@example.com", "PRJ-REQ-10");
+    const { owner, project, testModule } = await setup();
+    const elsewhere = await setup();
 
     const requirement = await createRequirement(
       project.id,

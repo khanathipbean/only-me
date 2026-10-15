@@ -21,12 +21,16 @@ import {
   restoreNote,
   updateNote,
 } from "@/lib/notes";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function setup(ownerEmail: string, code: string) {
-  const owner = await createUser(ownerEmail);
+/* Takes no names: these tests wanted a project and an owner, not a
+ * particular project and a particular owner. The numbers they spelled out by
+ * hand existed only to keep one test apart from another, and kept failing to. */
+async function setup() {
+  const code = uniqueCode("prj-note");
+  const owner = await createUser(uniqueEmail("notes-owner"));
   mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
   const project = await (
     await createProjectRoute(
@@ -47,7 +51,7 @@ describe("notes", () => {
   });
 
   it("keeps the body exactly as typed", async () => {
-    const { owner, project, testModule } = await setup("note-owner1@example.com", "PRJ-NOTE-1");
+    const { owner, project, testModule } = await setup();
 
     // Line breaks, hand-written numbering, and characters a Markdown parser
     // would eat. Nothing here is formatting — it is what someone typed.
@@ -63,8 +67,8 @@ describe("notes", () => {
   });
 
   it("refuses a note with no title, and one filed under another Project's Module", async () => {
-    const a = await setup("note-owner2@example.com", "PRJ-NOTE-2");
-    const b = await setup("note-owner3@example.com", "PRJ-NOTE-3");
+    const a = await setup();
+    const b = await setup();
 
     await expect(
       createNote(a.project.id, { moduleId: a.testModule.id, title: "   ", body: "x" }, a.owner.id),
@@ -81,7 +85,7 @@ describe("notes", () => {
   });
 
   it("searches the body, not only the title", async () => {
-    const { owner, project, testModule } = await setup("note-owner4@example.com", "PRJ-NOTE-4");
+    const { owner, project, testModule } = await setup();
     await createNote(
       project.id,
       {
@@ -105,7 +109,7 @@ describe("notes", () => {
   });
 
   it("orders by the date given, falling back to when the row was written", async () => {
-    const { owner, project, testModule } = await setup("note-owner5@example.com", "PRJ-NOTE-5");
+    const { owner, project, testModule } = await setup();
 
     // Written first but about the earlier day; the later meeting is written
     // up second. Ordered by `createdAt` these come out backwards.
@@ -138,7 +142,7 @@ describe("notes", () => {
   });
 
   it("hides an archived note from the list and brings it back on restore", async () => {
-    const { owner, project, testModule } = await setup("note-owner6@example.com", "PRJ-NOTE-6");
+    const { owner, project, testModule } = await setup();
     const note = await createNote(
       project.id,
       { moduleId: testModule.id, title: "Retro", body: "" },
@@ -161,7 +165,7 @@ describe("notes", () => {
   });
 
   it("stops a Module being archived while a note is still filed under it", async () => {
-    const { owner, project, testModule } = await setup("note-owner7@example.com", "PRJ-NOTE-7");
+    const { owner, project, testModule } = await setup();
     const note = await createNote(
       project.id,
       { moduleId: testModule.id, title: "Kickoff", body: "" },
@@ -178,7 +182,7 @@ describe("notes", () => {
   });
 
   it("re-spells a Feature to the spelling the Module already uses", async () => {
-    const { owner, project, testModule } = await setup("note-owner9@example.com", "PRJ-NOTE-9");
+    const { owner, project, testModule } = await setup();
 
     // A Requirement gets there first and sets the spelling.
     await createRequirement(
@@ -201,7 +205,7 @@ describe("notes", () => {
   });
 
   it("offers a Feature a Note introduced to the next thing filed in that Module", async () => {
-    const { owner, project, testModule } = await setup("note-owner10@example.com", "PRJ-NOTE-10");
+    const { owner, project, testModule } = await setup();
 
     await createNote(
       project.id,
@@ -223,7 +227,7 @@ describe("notes", () => {
   });
 
   it("filters the list by Feature", async () => {
-    const { owner, project, testModule } = await setup("note-owner11@example.com", "PRJ-NOTE-11");
+    const { owner, project, testModule } = await setup();
     await createNote(
       project.id,
       { moduleId: testModule.id, feature: "Templates", title: "About templates", body: "" },
@@ -242,7 +246,7 @@ describe("notes", () => {
   });
 
   it("records what changed on an edit, without copying the body into the trail", async () => {
-    const { owner, project, testModule } = await setup("note-owner8@example.com", "PRJ-NOTE-8");
+    const { owner, project, testModule } = await setup();
     const note = await createNote(
       project.id,
       { moduleId: testModule.id, title: "Draft title", body: "first" },
@@ -265,7 +269,7 @@ describe("notes", () => {
     expect((await prisma.note.findUniqueOrThrow({ where: { id: note.id } })).body).toBe("second");
   });
   it("takes a note about the Project with no Module, and still refuses another Project's", async () => {
-    const { owner, project, testModule } = await setup("note-owner13@example.com", "PRJ-NOTE-13");
+    const { owner, project, testModule } = await setup();
 
     /* The case the Module used to be required for: a note about the Project
      * rather than one part of it. Requiring one only had people file these
@@ -314,7 +318,7 @@ describe("notes", () => {
     /* The check that must not have been relaxed with it: a Module id posted
      * from a form still has to belong to this Project, or a member of one
      * Project could file a note where members of another would read it. */
-    const other = await setup("note-owner14@example.com", "PRJ-NOTE-14");
+    const other = await setup();
     await expect(
       createNote(
         project.id,

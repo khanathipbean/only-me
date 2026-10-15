@@ -9,7 +9,7 @@ import { POST as createProjectRoute } from "@/app/api/projects/route";
 import { PATCH as patchProjectRoute } from "@/app/api/projects/[id]/route";
 import * as auditLogRoute from "@/app/api/projects/[id]/audit-log/route";
 import { parseUtcDateTimeLocal } from "@/lib/audit-log";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const { GET: getAuditLog } = auditLogRoute;
 
@@ -21,13 +21,17 @@ describe("audit log", () => {
   });
 
   it("records a create entry and an update entry, filterable by action, entityType, and actorId", async () => {
-    const owner = await createUser("al-owner1@example.com");
+    const owner = await createUser(uniqueEmail("al-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
+    /* The same code on both calls on purpose: the PATCH below renames the
+     * project without changing its code, which is what the audit entry has to
+     * record. */
+    const code = uniqueCode("prj-al");
     const project = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AL-1",
+          code,
           name: "Audited Project",
           status: "DRAFT",
         }),
@@ -36,7 +40,7 @@ describe("audit log", () => {
 
     await patchProjectRoute(
       jsonRequest(`http://test/api/projects/${project.id}`, "PATCH", {
-        code: "PRJ-AL-1",
+        code,
         name: "Renamed",
         status: "ACTIVE",
       }),
@@ -112,13 +116,13 @@ describe("audit log", () => {
   });
 
   it("filters by a partial, case-insensitive actor name", async () => {
-    const owner = await createUser("al-byname@example.com");
+    const owner = await createUser(uniqueEmail("al-byname"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const project = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AL-NAME",
+          code: uniqueCode("prj-al"),
           name: "Named Actor Project",
           status: "DRAFT",
         }),
@@ -154,14 +158,14 @@ describe("audit log", () => {
   });
 
   it("does not leak another project's entries when a legitimate member passes a cross-project actorId filter", async () => {
-    const ownerA = await createUser("al-ownerC@example.com");
-    const ownerB = await createUser("al-ownerD@example.com");
+    const ownerA = await createUser(uniqueEmail("al-ownerC"));
+    const ownerB = await createUser(uniqueEmail("al-ownerD"));
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
     const projectA = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AL-5A",
+          code: uniqueCode("prj-al"),
           name: "Project A",
           status: "DRAFT",
         }),
@@ -172,7 +176,7 @@ describe("audit log", () => {
     const projectB = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AL-5B",
+          code: uniqueCode("prj-al"),
           name: "Project B",
           status: "DRAFT",
         }),
@@ -209,13 +213,13 @@ describe("audit log", () => {
   });
 
   it("filters by time range", async () => {
-    const owner = await createUser("al-owner2@example.com");
+    const owner = await createUser(uniqueEmail("al-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const project = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AL-2",
+          code: uniqueCode("prj-al"),
           name: "Time Ranged Project",
           status: "DRAFT",
         }),
@@ -246,14 +250,14 @@ describe("audit log", () => {
   });
 
   it("isolates the audit log per project and rejects a non-member with 403", async () => {
-    const ownerA = await createUser("al-ownerA@example.com");
-    const ownerB = await createUser("al-ownerB@example.com");
+    const ownerA = await createUser(uniqueEmail("al-ownerA"));
+    const ownerB = await createUser(uniqueEmail("al-ownerB"));
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
     const projectA = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AL-3A",
+          code: uniqueCode("prj-al"),
           name: "Project A",
           status: "DRAFT",
         }),
@@ -263,7 +267,7 @@ describe("audit log", () => {
     mockAuth.mockResolvedValue(sessionFor(ownerB.id) as never);
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-AL-3B",
+        code: uniqueCode("prj-al"),
         name: "Project B",
         status: "DRAFT",
       }),
@@ -278,14 +282,14 @@ describe("audit log", () => {
   });
 
   it("stores and returns occurredAt as UTC", async () => {
-    const owner = await createUser("al-owner3@example.com");
+    const owner = await createUser(uniqueEmail("al-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const before = new Date();
     const project = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AL-4",
+          code: uniqueCode("prj-al"),
           name: "UTC Project",
           status: "DRAFT",
         }),

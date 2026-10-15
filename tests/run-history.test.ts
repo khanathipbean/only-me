@@ -21,8 +21,14 @@ import {
   type RunHistoryEntry,
 } from "@/lib/run-history";
 import type { TestResult } from "@/generated/prisma/client";
+import { uniqueCode } from "./support/fixtures";
 
-async function seed(code: string) {
+/* Names itself. The code used to be spelled out at each call site purely to
+ * keep one test's project apart from another's, and `owner.name` is set from
+ * it — which is why two assertions below read the owner's name off the thing
+ * `seed` returns rather than repeating a string that has to match. */
+async function seed() {
+  const code = uniqueCode("prj-hist");
   const owner = await prisma.user.create({
     data: { email: `${code.toLowerCase()}@example.com`, passwordHash: "x", name: code },
   });
@@ -56,7 +62,7 @@ async function seed(code: string) {
 
 describe("a Test Case's run history", () => {
   it("reads oldest round first, with what was written down when it failed", async () => {
-    const { owner, project, testCase } = await seed("PRJ-HIST-1");
+    const { owner, project, testCase } = await seed();
 
     /* Created in order, because rounds are ordered by `createdAt` — the only
      * ordering every round has, since `startsOn` is optional. */
@@ -84,7 +90,7 @@ describe("a Test Case's run history", () => {
     expect(history.map((entry) => entry.testResult)).toEqual(["PASSED", "FAILED", "NOT_RUN"]);
 
     expect(history[1]).toMatchObject({ phase: "Phase 1.2", notes: "Domain did not appear" });
-    expect(history[1].ranBy).toBe("PRJ-HIST-1");
+    expect(history[1].ranBy).toBe(owner.name);
     expect(history[1].ranAt).toBeInstanceOf(Date);
 
     // In the round and never recorded, which is not "not reached yet".
@@ -94,7 +100,7 @@ describe("a Test Case's run history", () => {
   });
 
   it("leaves out archived rounds, which still own their rows", async () => {
-    const { owner, project, testCase } = await seed("PRJ-HIST-2");
+    const { owner, project, testCase } = await seed();
 
     const live = await createRun(project.id, { name: "Live" }, owner.id);
     const archived = await createRun(project.id, { name: "Archived" }, owner.id);
@@ -116,8 +122,8 @@ describe("a Test Case's run history", () => {
   });
 
   it("answers for many cases in one go, and says nothing for one with no rounds", async () => {
-    const { owner, project, testCase } = await seed("PRJ-HIST-3");
-    const untouched = await seed("PRJ-HIST-4");
+    const { owner, project, testCase } = await seed();
+    const untouched = await seed();
 
     const run = await createRun(project.id, { name: "Only round" }, owner.id);
     await addCasesToRun(run.id, [testCase.id], owner.id);
@@ -131,7 +137,7 @@ describe("a Test Case's run history", () => {
   });
 
   it("keeps every answer recorded in a round, not only the last one", async () => {
-    const { owner, project, testCase } = await seed("PRJ-HIST-7");
+    const { owner, project, testCase } = await seed();
 
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [testCase.id], owner.id);
@@ -157,14 +163,14 @@ describe("a Test Case's run history", () => {
     expect(round.attempts.map((attempt) => attempt.testResult)).toEqual(["FAILED", "PASSED"]);
     // Oldest first, and the note stays on the attempt it was written for.
     expect(round.attempts[0].notes).toBe("Domain did not appear");
-    expect(round.attempts[0].recordedBy).toBe("PRJ-HIST-7");
+    expect(round.attempts[0].recordedBy).toBe(owner.name);
     expect(round.attempts[1].notes).toBeNull();
 
     expect(classifyPattern(history)).toBe("reworked");
   });
 
   it("keeps a result recorded outside any round, and dates the group by the day", async () => {
-    const { owner, testCase } = await seed("PRJ-HIST-8");
+    const { owner, testCase } = await seed();
 
     /* Recorded straight on the case, with no round open and none ever
      * created. This used to leave nothing behind at all: the case's own
@@ -192,7 +198,7 @@ describe("a Test Case's run history", () => {
   });
 
   it("does not record an answer when only the note was edited", async () => {
-    const { owner, testCase } = await seed("PRJ-HIST-9");
+    const { owner, testCase } = await seed();
 
     await updateTestResultAndNotes(testCase.id, { notes: "a thought" }, owner.id);
 
@@ -202,7 +208,7 @@ describe("a Test Case's run history", () => {
   });
 
   it("puts a round and a loose group in one timeline", async () => {
-    const { owner, project, testCase } = await seed("PRJ-HIST-10");
+    const { owner, project, testCase } = await seed();
 
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [testCase.id], owner.id);
@@ -228,7 +234,7 @@ describe("a Test Case's run history", () => {
 
 describe("the Runs count on the Test Cases list", () => {
   it("counts rounds that hold the case, not rounds that ran it", async () => {
-    const { owner, project, testCase } = await seed("PRJ-HIST-5");
+    const { owner, project, testCase } = await seed();
     const group = (await prisma.testCase.findUniqueOrThrow({ where: { id: testCase.id } }))
       .testGroupId;
 
@@ -260,7 +266,7 @@ describe("the Runs count on the Test Cases list", () => {
   });
 
   it("does not credit a case for rounds that have been archived", async () => {
-    const { owner, project, testCase } = await seed("PRJ-HIST-6");
+    const { owner, project, testCase } = await seed();
     const group = (await prisma.testCase.findUniqueOrThrow({ where: { id: testCase.id } }))
       .testGroupId;
 
@@ -486,7 +492,7 @@ describe("the shape a case's results make", () => {
 
 describe("the Problem cases report", () => {
   it("groups a project's cases by shape, and leaves out the ones with nothing to show", async () => {
-    const { owner, project, testCase: regressed } = await seed("PRJ-PROB-1");
+    const { owner, project, testCase: regressed } = await seed();
     const group = (await prisma.testCase.findUniqueOrThrow({ where: { id: regressed.id } }))
       .testGroupId;
 
@@ -552,7 +558,7 @@ describe("the Problem cases report", () => {
      * nothing else, so a case marked FAILED on its own page showed as failing
      * on the Dashboard, dragged its Requirement to In Progress, and was
      * absent from the one page whose job is saying what is going wrong. */
-    const { owner, project, testCase } = await seed("PRJ-PROB-3");
+    const { owner, project, testCase } = await seed();
 
     await updateTestResultAndNotes(
       testCase.id,
@@ -571,7 +577,7 @@ describe("the Problem cases report", () => {
     /* A phase belongs to a round, so an answer given outside one has no phase
      * to match. Letting it in would file it under a phase it was never part
      * of; the filter means "what happened in this phase". */
-    const { owner, project, testCase } = await seed("PRJ-PROB-4");
+    const { owner, project, testCase } = await seed();
 
     const run = await createRun(project.id, { name: "Sprint 1", phase: "P1" }, owner.id);
     await addCasesToRun(run.id, [testCase.id], owner.id);
@@ -592,7 +598,7 @@ describe("the Problem cases report", () => {
   });
 
   it("keeps the cases that have only ever passed, so a case can be judged too", async () => {
-    const { owner, project, testCase } = await seed("PRJ-PROB-5");
+    const { owner, project, testCase } = await seed();
 
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [testCase.id], owner.id);
@@ -605,7 +611,7 @@ describe("the Problem cases report", () => {
   it("still leaves out a case nobody has answered for", async () => {
     /* Scheduled into a round and never reached. With no pass and no fail
      * there is no shape, and the Runs column is where those are found. */
-    const { owner, project, testCase } = await seed("PRJ-PROB-6");
+    const { owner, project, testCase } = await seed();
     const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
     await addCasesToRun(run.id, [testCase.id], owner.id);
 
@@ -613,7 +619,7 @@ describe("the Problem cases report", () => {
   });
 
   it("puts the case that fails most at the top of its pattern", async () => {
-    const { owner, project, group } = await seed("PRJ-PROB-7");
+    const { owner, project, group } = await seed();
     const once = await createTestCase(
       group.id,
       {
@@ -651,7 +657,7 @@ describe("the Problem cases report", () => {
   });
 
   it("narrows to cases whose name matches, whatever shape they are", async () => {
-    const { owner, project, group } = await seed("PRJ-PROB-10");
+    const { owner, project, group } = await seed();
     const wanted = await createTestCase(
       group.id,
       {
@@ -687,8 +693,8 @@ describe("the Problem cases report", () => {
     /* The loose events are read by their own query rather than through a
      * round, so the project filter on them is written by hand and is the one
      * thing standing between two customers' reports. */
-    const mine = await seed("PRJ-PROB-8");
-    const theirs = await seed("PRJ-PROB-9");
+    const mine = await seed();
+    const theirs = await seed();
 
     await updateTestResultAndNotes(theirs.testCase.id, { testResult: "FAILED" }, theirs.owner.id);
     await updateTestResultAndNotes(mine.testCase.id, { testResult: "FAILED" }, mine.owner.id);
@@ -702,7 +708,7 @@ describe("the Problem cases report", () => {
   });
 
   it("narrows to one phase, which can change what shape a case has", async () => {
-    const { owner, project, testCase } = await seed("PRJ-PROB-2");
+    const { owner, project, testCase } = await seed();
 
     const old = await createRun(project.id, { name: "Old", phase: "P1" }, owner.id);
     const recent = await createRun(project.id, { name: "Recent", phase: "P2" }, owner.id);

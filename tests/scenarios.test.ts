@@ -18,11 +18,12 @@ import {
 import { POST as duplicateScenarioRoute } from "@/app/api/scenarios/[id]/duplicate/route";
 import { POST as archiveScenarioRoute } from "@/app/api/scenarios/[id]/archive/route";
 import { POST as restoreScenarioRoute } from "@/app/api/scenarios/[id]/restore/route";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function createProjectAs(userId: string, code: string) {
+async function createProjectAs(userId: string) {
+  const code = uniqueCode("prj-scn");
   mockAuth.mockResolvedValue(sessionFor(userId) as never);
   const response = await createProjectRoute(
     jsonRequest("http://test/api/projects", "POST", {
@@ -40,8 +41,8 @@ describe("scenario routes", () => {
   });
 
   it("creates a scenario scoped to its project", async () => {
-    const owner = await createUser("s-owner1@example.com");
-    const project = await createProjectAs(owner.id, "PRJ-SCN-1");
+    const owner = await createUser(uniqueEmail("s-owner"));
+    const project = await createProjectAs(owner.id);
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const response = await createScenarioRoute(
@@ -67,8 +68,8 @@ describe("scenario routes", () => {
   });
 
   it("rejects a scenario missing name or expectedResult", async () => {
-    const owner = await createUser("s-owner2@example.com");
-    const project = await createProjectAs(owner.id, "PRJ-SCN-2");
+    const owner = await createUser(uniqueEmail("s-owner"));
+    const project = await createProjectAs(owner.id);
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const missingName = await createScenarioRoute(
@@ -93,8 +94,8 @@ describe("scenario routes", () => {
   });
 
   it("duplicates a scenario copying fields but not creating any children", async () => {
-    const owner = await createUser("s-owner3@example.com");
-    const project = await createProjectAs(owner.id, "PRJ-SCN-3");
+    const owner = await createUser(uniqueEmail("s-owner"));
+    const project = await createProjectAs(owner.id);
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const created = await (
@@ -130,8 +131,8 @@ describe("scenario routes", () => {
   });
 
   it("archives, restores, and deletes-with-confirm a scenario", async () => {
-    const owner = await createUser("s-owner4@example.com");
-    const project = await createProjectAs(owner.id, "PRJ-SCN-4");
+    const owner = await createUser(uniqueEmail("s-owner"));
+    const project = await createProjectAs(owner.id);
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const created = await (
@@ -184,9 +185,9 @@ describe("scenario routes", () => {
   });
 
   it("returns 403 for a non-member on every scenario route", async () => {
-    const owner = await createUser("s-owner5@example.com");
-    const outsider = await createUser("s-outsider1@example.com");
-    const project = await createProjectAs(owner.id, "PRJ-SCN-5");
+    const owner = await createUser(uniqueEmail("s-owner"));
+    const outsider = await createUser(uniqueEmail("s-outsider"));
+    const project = await createProjectAs(owner.id);
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const created = await (
@@ -258,10 +259,10 @@ describe("scenario routes", () => {
   });
 
   it("returns 403 for a scenario when the caller belongs to a different project", async () => {
-    const ownerA = await createUser("s-ownerA@example.com");
-    const ownerB = await createUser("s-ownerB@example.com");
-    const projectA = await createProjectAs(ownerA.id, "PRJ-SCN-A");
-    await createProjectAs(ownerB.id, "PRJ-SCN-B");
+    const ownerA = await createUser(uniqueEmail("s-ownerA"));
+    const ownerB = await createUser(uniqueEmail("s-ownerB"));
+    const projectA = await createProjectAs(ownerA.id);
+    await createProjectAs(ownerB.id);
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
     const scenario = await (
@@ -286,9 +287,9 @@ describe("scenario routes", () => {
   });
 
   it("refuses to re-file a Scenario under another project's Requirement", async () => {
-    const owner = await createUser("s-owner-move@example.com");
-    const project = await createProjectAs(owner.id, "PRJ-SCN-MOVE-A");
-    const elsewhere = await createProjectAs(owner.id, "PRJ-SCN-MOVE-B");
+    const owner = await createUser(uniqueEmail("s-owner-move"));
+    const project = await createProjectAs(owner.id);
+    const elsewhere = await createProjectAs(owner.id);
     const requirementId = await findOrCreateUnassignedRequirement(project.id, owner.id);
     const elsewhereRequirementId = await findOrCreateUnassignedRequirement(
       elsewhere.id,

@@ -16,12 +16,16 @@ import {
   restoreModule,
 } from "@/lib/modules";
 import { createRequirement } from "@/lib/requirements";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function setup(ownerEmail: string, code: string) {
-  const owner = await createUser(ownerEmail);
+/* Takes no names: every test here wanted a project and an owner, not a
+ * particular project and a particular owner, and the numbers they were
+ * spelling out by hand were only ever there to keep two tests apart. */
+async function setup() {
+  const code = uniqueCode("prj-mod");
+  const owner = await createUser(uniqueEmail("module-owner"));
   mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
   const project = await (
     await createProjectRoute(
@@ -37,7 +41,7 @@ describe("modules", () => {
   });
 
   it("deletes a Module for real, requiring confirm: true, and leaves the audit entry", async () => {
-    const { owner, project } = await setup("module-owner1@example.com", "PRJ-MOD-1");
+    const { owner, project } = await setup();
     const testModule = await createModule(project.id, "Checkout", owner.id);
 
     await expect(deleteModule(testModule.id, owner.id, false)).rejects.toThrow(ConfirmRequiredError);
@@ -59,7 +63,7 @@ describe("modules", () => {
   });
 
   it("takes a Module's whole subtree with it", async () => {
-    const { owner, project } = await setup("module-owner2@example.com", "PRJ-MOD-2");
+    const { owner, project } = await setup();
     const testModule = await createModule(project.id, "Checkout", owner.id);
     const requirement = await createRequirement(
       project.id,
@@ -74,7 +78,7 @@ describe("modules", () => {
   });
 
   it("refuses to delete a Module that still holds files", async () => {
-    const { owner, project } = await setup("module-owner3@example.com", "PRJ-MOD-3");
+    const { owner, project } = await setup();
     const testModule = await createModule(project.id, "Checkout", owner.id);
 
     // A file filed under a Module is not a descendant of it: deleting the
@@ -97,7 +101,7 @@ describe("modules", () => {
   });
 
   it("restores an archived Module", async () => {
-    const { owner, project } = await setup("module-owner3b@example.com", "PRJ-MOD-3B");
+    const { owner, project } = await setup();
     const testModule = await createModule(project.id, "Checkout", owner.id);
     await archiveModule(testModule.id, owner.id);
 
@@ -106,7 +110,7 @@ describe("modules", () => {
   });
 
   it("still refuses to archive a Module in use, unaffected by adding delete", async () => {
-    const { owner, project } = await setup("module-owner4@example.com", "PRJ-MOD-4");
+    const { owner, project } = await setup();
     const testModule = await createModule(project.id, "Checkout", owner.id);
     await createRequirement(
       project.id,

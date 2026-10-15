@@ -16,15 +16,16 @@ import {
   UserInUseError,
   deleteUser,
 } from "@/lib/members";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
 /** Creates a project (the creator is granted QA_LEAD, not ADMIN — see
  * projects.ts) and promotes the creator to ADMIN, since the Members route is
  * gated by "ADMIN on at least one Project", not a per-project role. */
-async function setupAsAdmin(adminEmail: string, code: string) {
-  const admin = await createUser(adminEmail);
+async function setupAsAdmin() {
+  const code = uniqueCode("prj-mem");
+  const admin = await createUser(uniqueEmail("member-admin"));
   mockAuth.mockResolvedValue(sessionFor(admin.id) as never);
 
   const project = await (
@@ -47,12 +48,13 @@ describe("member routes", () => {
   });
 
   it("creates a user scoped only to the chosen projects, confined by the existing membership-based queries", async () => {
-    const { project } = await setupAsAdmin("member-admin1@example.com", "PRJ-MEM-1");
+    const { project } = await setupAsAdmin();
+    const testerEmail = uniqueEmail("new-tester");
 
     const response = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [{ projectId: project.id, role: "TESTER" }],
-        email: "new-tester1@example.com",
+        email: testerEmail,
         name: "New Tester",
         password: "supersecret1",
       }),
@@ -60,7 +62,7 @@ describe("member routes", () => {
     expect(response.status).toBe(201);
     const member = await response.json();
     expect(member.access).toEqual([{ projectId: project.id, role: "TESTER" }]);
-    expect(member.email).toBe("new-tester1@example.com");
+    expect(member.email).toBe(testerEmail);
 
     // The new account exists, has a password, and — critically — sees only
     // the Project it was created into, with no extra code needed.
@@ -72,10 +74,10 @@ describe("member routes", () => {
   });
 
   it("creates a user with access to more than one project at once", async () => {
-    const { project: projectA } = await setupAsAdmin("member-admin-multi@example.com", "PRJ-MEM-MULTI-A");
+    const { project: projectA } = await setupAsAdmin();
     const projectB = await (
       await createProjectRoute(
-        jsonRequest("http://test/api/projects", "POST", { code: "PRJ-MEM-MULTI-B", name: "B", status: "DRAFT" }),
+        jsonRequest("http://test/api/projects", "POST", { code: uniqueCode("prj-mem-multi"), name: "B", status: "DRAFT" }),
       )
     ).json();
 
@@ -85,7 +87,7 @@ describe("member routes", () => {
           { projectId: projectA.id, role: "TESTER" },
           { projectId: projectB.id, role: "QA_LEAD" },
         ],
-        email: "multi-project@example.com",
+        email: uniqueEmail("multi-project"),
         name: "Multi Project",
         password: "supersecret1",
       }),
@@ -106,12 +108,12 @@ describe("member routes", () => {
     // The whole reason this route isn't scoped by a project in the URL: a
     // fresh Project's creator only starts as QA_LEAD (see createProject), so
     // nobody could ever reach a per-project-gated Members page for it.
-    const { admin } = await setupAsAdmin("member-admin-bootstrap@example.com", "PRJ-MEM-BOOT-A");
+    const { admin } = await setupAsAdmin();
 
     const otherProject = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-MEM-BOOT-B",
+          code: uniqueCode("prj-mem-boot"),
           name: "Brand New Project",
           status: "DRAFT",
         }),
@@ -125,7 +127,7 @@ describe("member routes", () => {
     const response = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [{ projectId: otherProject.id, role: "QA_LEAD" }],
-        email: "bootstrap-member@example.com",
+        email: uniqueEmail("bootstrap-member"),
         name: "Bootstrap Member",
         password: "supersecret1",
       }),
@@ -134,13 +136,15 @@ describe("member routes", () => {
   });
 
   it("rejects a duplicate email", async () => {
-    const { project } = await setupAsAdmin("member-admin2@example.com", "PRJ-MEM-2");
-    await createUser("dup1@example.com");
+    const { project } = await setupAsAdmin();
+    /* The same address twice on purpose: the second call is the duplicate. */
+    const taken = uniqueEmail("dup");
+    await createUser(taken);
 
     const response = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [{ projectId: project.id, role: "TESTER" }],
-        email: "dup1@example.com",
+        email: taken,
         name: "Someone Else",
         password: "supersecret1",
       }),
@@ -149,12 +153,12 @@ describe("member routes", () => {
   });
 
   it("rejects a password shorter than the minimum", async () => {
-    const { project } = await setupAsAdmin("member-admin3@example.com", "PRJ-MEM-3");
+    const { project } = await setupAsAdmin();
 
     const response = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [{ projectId: project.id, role: "TESTER" }],
-        email: "short-pw@example.com",
+        email: uniqueEmail("short-pw"),
         name: "Short Password",
         password: "short",
       }),
@@ -163,12 +167,12 @@ describe("member routes", () => {
   });
 
   it("rejects an empty project selection", async () => {
-    await setupAsAdmin("member-admin11@example.com", "PRJ-MEM-11");
+    await setupAsAdmin();
 
     const response = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [],
-        email: "no-projects@example.com",
+        email: uniqueEmail("no-projects"),
         name: "No Projects",
         password: "supersecret1",
       }),
@@ -177,12 +181,12 @@ describe("member routes", () => {
   });
 
   it("rejects an unknown project id", async () => {
-    await setupAsAdmin("member-admin6@example.com", "PRJ-MEM-6");
+    await setupAsAdmin();
 
     const response = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [{ projectId: "does-not-exist", role: "TESTER" }],
-        email: "no-project@example.com",
+        email: uniqueEmail("no-project"),
         name: "No Project",
         password: "supersecret1",
       }),
@@ -191,8 +195,8 @@ describe("member routes", () => {
   });
 
   it("returns 403 for someone who isn't ADMIN anywhere, on list and create", async () => {
-    const { project } = await setupAsAdmin("member-admin4@example.com", "PRJ-MEM-4");
-    const tester = await createUser("member-tester1@example.com");
+    const { project } = await setupAsAdmin();
+    const tester = await createUser(uniqueEmail("member-tester"));
     await prisma.projectMember.create({
       data: { projectId: project.id, userId: tester.id, role: "TESTER" },
     });
@@ -205,7 +209,7 @@ describe("member routes", () => {
     const create = await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [{ projectId: project.id, role: "TESTER" }],
-        email: "should-not-exist@example.com",
+        email: uniqueEmail("should-not-exist"),
         name: "Nope",
         password: "supersecret1",
       }),
@@ -214,18 +218,19 @@ describe("member routes", () => {
   });
 
   it("lists members across every project, optionally filtered to one", async () => {
-    const { project } = await setupAsAdmin("member-admin5@example.com", "PRJ-MEM-5");
+    const { admin, project } = await setupAsAdmin();
+    const secondMemberEmail = uniqueEmail("second-member");
 
     const otherProject = await (
       await createProjectRoute(
-        jsonRequest("http://test/api/projects", "POST", { code: "PRJ-MEM-5B", name: "Second", status: "DRAFT" }),
+        jsonRequest("http://test/api/projects", "POST", { code: uniqueCode("prj-mem"), name: "Second", status: "DRAFT" }),
       )
     ).json();
 
     await createMemberRoute(
       jsonRequest("http://test/api/members", "POST", {
         access: [{ projectId: project.id, role: "VIEWER" }],
-        email: "second-member@example.com",
+        email: secondMemberEmail,
         name: "Second Member",
         password: "supersecret1",
       }),
@@ -239,18 +244,18 @@ describe("member routes", () => {
     ).json();
     expect(scoped.every((m: { projectId: string }) => m.projectId === project.id)).toBe(true);
     expect(scoped.map((m: { user: { email: string } }) => m.user.email)).toEqual([
-      "member-admin5@example.com",
-      "second-member@example.com",
+      admin.email,
+      secondMemberEmail,
     ]);
 
     void otherProject;
   });
 
   it("adds, removes, and changes role for a member's access in one call", async () => {
-    const { project: projectA } = await setupAsAdmin("member-admin7@example.com", "PRJ-MEM-7A");
+    const { project: projectA } = await setupAsAdmin();
     const projectB = await (
       await createProjectRoute(
-        jsonRequest("http://test/api/projects", "POST", { code: "PRJ-MEM-7B", name: "B", status: "DRAFT" }),
+        jsonRequest("http://test/api/projects", "POST", { code: uniqueCode("prj-mem"), name: "B", status: "DRAFT" }),
       )
     ).json();
 
@@ -258,7 +263,7 @@ describe("member routes", () => {
       await createMemberRoute(
         jsonRequest("http://test/api/members", "POST", {
           access: [{ projectId: projectA.id, role: "TESTER" }],
-          email: "multi-access@example.com",
+          email: uniqueEmail("multi-access"),
           name: "Multi Access",
           password: "supersecret1",
         }),
@@ -296,7 +301,7 @@ describe("member routes", () => {
   });
 
   it("refuses to demote the last ADMIN in the system", async () => {
-    const { admin, project } = await setupAsAdmin("member-admin12@example.com", "PRJ-MEM-12");
+    const { admin, project } = await setupAsAdmin();
 
     // Every other test in this file leaves its own ADMIN rows behind (no
     // per-test reset), so this one clears them first — otherwise "last
@@ -321,8 +326,8 @@ describe("member routes", () => {
   });
 
   it("allows demoting an ADMIN when another one remains elsewhere", async () => {
-    const { admin, project } = await setupAsAdmin("member-admin10@example.com", "PRJ-MEM-10");
-    const otherAdmin = await createUser("member-admin10b@example.com");
+    const { admin, project } = await setupAsAdmin();
+    const otherAdmin = await createUser(uniqueEmail("member-admin10b"));
     await prisma.projectMember.create({
       data: { projectId: project.id, userId: otherAdmin.id, role: "ADMIN" },
     });
@@ -337,8 +342,8 @@ describe("member routes", () => {
   });
 
   it("returns 403 updating access when the caller isn't ADMIN anywhere", async () => {
-    const { project } = await setupAsAdmin("member-admin8@example.com", "PRJ-MEM-8");
-    const tester = await createUser("member-tester2@example.com");
+    const { project } = await setupAsAdmin();
+    const tester = await createUser(uniqueEmail("member-tester"));
     await prisma.projectMember.create({ data: { projectId: project.id, userId: tester.id, role: "TESTER" } });
 
     mockAuth.mockResolvedValue(sessionFor(tester.id) as never);
@@ -352,8 +357,8 @@ describe("member routes", () => {
   });
 
   it("deletes a user with no activity, taking every membership with it", async () => {
-    const { admin, project } = await setupAsAdmin("member-admin13@example.com", "PRJ-MEM-13");
-    const target = await createUser("member-to-delete1@example.com");
+    const { admin, project } = await setupAsAdmin();
+    const target = await createUser(uniqueEmail("member-to-delete"));
     await prisma.projectMember.create({
       data: { projectId: project.id, userId: target.id, role: "TESTER" },
     });
@@ -365,13 +370,13 @@ describe("member routes", () => {
   });
 
   it("refuses to delete your own account", async () => {
-    const { admin } = await setupAsAdmin("member-admin14@example.com", "PRJ-MEM-14");
+    const { admin } = await setupAsAdmin();
     await expect(deleteUser(admin.id, admin.id)).rejects.toBeInstanceOf(CannotDeleteSelfError);
   });
 
   it("refuses to delete the last ADMIN in the system", async () => {
-    const { admin, project } = await setupAsAdmin("member-admin15@example.com", "PRJ-MEM-15");
-    const actor = await createUser("member-actor15@example.com");
+    const { admin, project } = await setupAsAdmin();
+    const actor = await createUser(uniqueEmail("member-actor"));
     await prisma.projectMember.create({
       data: { projectId: project.id, userId: actor.id, role: "TESTER" },
     });
@@ -387,8 +392,8 @@ describe("member routes", () => {
   });
 
   it("deletes a user who has audit history, leaving the log intact with a null actor", async () => {
-    const { admin, project } = await setupAsAdmin("member-admin16@example.com", "PRJ-MEM-16");
-    const target = await createUser("member-to-delete2@example.com");
+    const { admin, project } = await setupAsAdmin();
+    const target = await createUser(uniqueEmail("member-to-delete"));
     await prisma.projectMember.create({
       data: { projectId: project.id, userId: target.id, role: "TESTER" },
     });
@@ -414,8 +419,8 @@ describe("member routes", () => {
   });
 
   it("deletes a user's own notifications along with them, but keeps ones they only triggered (actor set null)", async () => {
-    const { admin, project } = await setupAsAdmin("member-admin17@example.com", "PRJ-MEM-17");
-    const target = await createUser("member-to-delete3@example.com");
+    const { admin, project } = await setupAsAdmin();
+    const target = await createUser(uniqueEmail("member-to-delete"));
     await prisma.projectMember.create({
       data: { projectId: project.id, userId: target.id, role: "TESTER" },
     });
@@ -450,13 +455,13 @@ describe("member routes", () => {
   });
 
   it("refuses to delete a user who owns a Project, leaving them untouched", async () => {
-    const { admin } = await setupAsAdmin("member-admin18@example.com", "PRJ-MEM-18");
-    const owner = await createUser("member-project-owner@example.com");
+    const { admin } = await setupAsAdmin();
+    const owner = await createUser(uniqueEmail("member-project-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
     const ownedProject = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-MEM-18B",
+          code: uniqueCode("prj-mem"),
           name: "Owned",
           status: "DRAFT",
         }),

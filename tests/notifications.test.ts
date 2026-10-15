@@ -37,14 +37,15 @@ vi.mock("@/lib/storage", () => ({
 import { auth } from "@/auth";
 import { POST as confirmImportRoute } from "@/app/api/projects/[id]/import/confirm/route";
 import { saveProjectFile } from "@/lib/project-files";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
 /** A project with a second member besides the owner — every trigger notifies
  *  "the project" minus whoever acted, so a fan-out test needs someone left to
  *  receive it. */
-async function seedProject(code: string) {
+async function seedProject() {
+  const code = uniqueCode("prj-notif");
   const owner = await createUser(`${code}-owner@example.com`);
   const other = await createUser(`${code}-other@example.com`);
   const project = await createProject({ code, name: `Project ${code}`, status: "DRAFT" }, owner.id);
@@ -58,7 +59,7 @@ describe("notifications", () => {
   });
 
   it("fans out to every project member except the excluded user", async () => {
-    const { owner, other, project } = await seedProject("PRJ-NOTIF-1");
+    const { owner, other, project } = await seedProject();
 
     await notifyProject({
       projectId: project.id,
@@ -78,7 +79,7 @@ describe("notifications", () => {
   });
 
   it("tracks unread count and scopes mark-read to the recipient", async () => {
-    const { owner, other, project } = await seedProject("PRJ-NOTIF-2");
+    const { owner, other, project } = await seedProject();
 
     await notifyProject({
       projectId: project.id,
@@ -106,7 +107,7 @@ describe("notifications", () => {
   });
 
   it("notifies on file upload, naming the file and module", async () => {
-    const { owner, other, project } = await seedProject("PRJ-NOTIF-3");
+    const { owner, other, project } = await seedProject();
     const mod = await createModule(project.id, "Policy", owner.id);
 
     const file = new File(["hello"], "report.pdf", { type: "application/pdf" });
@@ -120,7 +121,7 @@ describe("notifications", () => {
   });
 
   it("notifies on Test Run close with the right pass/fail count, and on each failure while it's open", async () => {
-    const { owner, other, project } = await seedProject("PRJ-NOTIF-4");
+    const { owner, other, project } = await seedProject();
     const requirementId = await findOrCreateUnassignedRequirement(project.id, owner.id);
     const scenario = await createScenario(
       project.id,
@@ -162,7 +163,7 @@ describe("notifications", () => {
   });
 
   it("notifies on archive/restore of Project, Module, and Requirement — but not Scenario", async () => {
-    const { owner, other, project } = await seedProject("PRJ-NOTIF-5");
+    const { owner, other, project } = await seedProject();
     const mod = await createModule(project.id, "Governance", owner.id);
     const requirement = await createRequirement(
       project.id,
@@ -196,11 +197,11 @@ describe("notifications", () => {
   });
 
   it("notifies existing members when someone new is added to the project", async () => {
-    const { owner, other, project } = await seedProject("PRJ-NOTIF-6");
+    const { owner, other, project } = await seedProject();
 
     await createUserWithAccess(
       [{ projectId: project.id, role: "TESTER" }],
-      { email: "newbie@example.com", name: "Newbie", password: "password123" },
+      { email: uniqueEmail("newbie"), name: "Newbie", password: "password123" },
       owner.id,
     );
 
@@ -213,7 +214,7 @@ describe("notifications", () => {
   });
 
   it("notifies on a completed import, naming what it created", async () => {
-    const { owner, other, project } = await seedProject("PRJ-NOTIF-7");
+    const { owner, other, project } = await seedProject();
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     await confirmImportRoute(
@@ -223,7 +224,7 @@ describe("notifications", () => {
             rowNumber: 1,
             data: {
               rowNumber: 1,
-              projectCode: "PRJ-NOTIF-7",
+              projectCode: project.code,
               scenarioName: "Login Flow",
               testGroupName: "Functional",
               testCaseName: "Valid login",

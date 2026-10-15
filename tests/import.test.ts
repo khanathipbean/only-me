@@ -14,7 +14,7 @@ import { POST as confirmImportRoute } from "@/app/api/projects/[id]/import/confi
 import { IMPORT_COLUMNS } from "@/lib/import/parse";
 import { UNASSIGNED_NAME } from "@/lib/requirements";
 import { getProjectHierarchyRows } from "@/lib/export";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
@@ -24,7 +24,12 @@ function csvRequest(url: string, csvContent: string, fileName = "import.csv") {
   return new NextRequest(url, { method: "POST", body: formData });
 }
 
-async function createProject(code: string) {
+/* Names itself, and hands the name back on the project it returns. Every row
+ * an import test builds has to name the project it targets, so the code is a
+ * join key here, not decoration — the call sites read it off `project.code`
+ * instead of repeating a literal that has to match. */
+async function createProject() {
+  const code = uniqueCode("prj-imp");
   return (
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
@@ -53,7 +58,7 @@ describe("import", () => {
   });
 
   it("template download returns the expected columns", async () => {
-    const user = await createUser("imp-owner1@example.com");
+    const user = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(user.id) as never);
 
     const response = await getTemplate();
@@ -66,9 +71,9 @@ describe("import", () => {
   });
 
   it("rejects an oversized or wrong-type file before parsing", async () => {
-    const owner = await createUser("imp-owner2@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-2");
+    const project = await createProject();
     const params = Promise.resolve({ id: project.id });
 
     const wrongType = await validateImportRoute(
@@ -86,14 +91,14 @@ describe("import", () => {
   });
 
   it("reports invalid rows with row/field/reason without blocking valid rows, and writes nothing", async () => {
-    const owner = await createUser("imp-owner3@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-3");
+    const project = await createProject();
 
     const csv = [
       CSV_HEADER,
       csvRow({
-        "Project Code": "PRJ-IMP-3",
+        "Project Code": project.code,
         "Scenario Name": "Login Flow",
         "Test Group Name": "Functional",
         "Test Case Name": "Valid login",
@@ -102,7 +107,7 @@ describe("import", () => {
         Priority: "HIGH",
       }),
       csvRow({
-        "Project Code": "PRJ-IMP-3",
+        "Project Code": project.code,
         "Test Group Name": "Functional",
         "Test Case Name": "Missing scenario name",
         "Test Steps": "Some step",
@@ -134,14 +139,14 @@ describe("import", () => {
   });
 
   it("flags a duplicate when a Test Case with the same name already exists under the matched Test Group", async () => {
-    const owner = await createUser("imp-owner4@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-4");
+    const project = await createProject();
 
     const csv = [
       CSV_HEADER,
       csvRow({
-        "Project Code": "PRJ-IMP-4",
+        "Project Code": project.code,
         "Scenario Name": "Login Flow",
         "Test Group Name": "Functional",
         "Test Case Name": "Valid login",
@@ -159,7 +164,7 @@ describe("import", () => {
             rowNumber: 1,
             data: {
               rowNumber: 1,
-              projectCode: "PRJ-IMP-4",
+              projectCode: project.code,
               scenarioName: "Login Flow",
               testGroupName: "Functional",
               testCaseName: "Valid login",
@@ -185,13 +190,13 @@ describe("import", () => {
   });
 
   it("confirm produces accurate summary counts and records resolution choices in ImportLog", async () => {
-    const owner = await createUser("imp-owner5@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-5");
+    const project = await createProject();
 
     const rowData = (name: string) => ({
       rowNumber: 1,
-      projectCode: "PRJ-IMP-5",
+      projectCode: project.code,
       scenarioName: "Scenario",
       testGroupName: "Group",
       testCaseName: name,
@@ -242,13 +247,13 @@ describe("import", () => {
   });
 
   it("is atomic: a row that still fails validation at confirm time leaves no partial rows written", async () => {
-    const owner = await createUser("imp-owner6@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-6");
+    const project = await createProject();
 
     const goodRow = {
       rowNumber: 1,
-      projectCode: "PRJ-IMP-6",
+      projectCode: project.code,
       scenarioName: "Scenario",
       testGroupName: "Group",
       testCaseName: "Good case",
@@ -279,10 +284,10 @@ describe("import", () => {
   });
 
   it("returns 403 for a non-member on validate and confirm", async () => {
-    const owner = await createUser("imp-owner7@example.com");
-    const outsider = await createUser("imp-outsider1@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
+    const outsider = await createUser(uniqueEmail("imp-outsider"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-7");
+    const project = await createProject();
 
     mockAuth.mockResolvedValue(sessionFor(outsider.id) as never);
     const params = Promise.resolve({ id: project.id });
@@ -301,13 +306,13 @@ describe("import", () => {
   });
 
   it("succeeds when a row's data is fixed (edited inline) before confirm, even though it originally failed validation", async () => {
-    const owner = await createUser("imp-owner8@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-8");
+    const project = await createProject();
 
     const brokenRow = {
       rowNumber: 1,
-      projectCode: "PRJ-IMP-8",
+      projectCode: project.code,
       scenarioName: "",
       testGroupName: "Group",
       testCaseName: "Case",
@@ -338,13 +343,13 @@ describe("import", () => {
   });
 
   it("sets Scenario/Test Group narrative fields from the new columns only when the row creates them", async () => {
-    const owner = await createUser("imp-owner10@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-10");
+    const project = await createProject();
 
     const rowData = (testCaseName: string, overrides: Record<string, string> = {}) => ({
       rowNumber: 1,
-      projectCode: "PRJ-IMP-10",
+      projectCode: project.code,
       scenarioName: "Scenario",
       testGroupName: "Group",
       testCaseName,
@@ -412,13 +417,13 @@ describe("import", () => {
   });
 
   it("falls back to the row's own Expected Result for a new Scenario when Scenario Expected Result is blank", async () => {
-    const owner = await createUser("imp-owner11@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-11");
+    const project = await createProject();
 
     const rowData = {
       rowNumber: 1,
-      projectCode: "PRJ-IMP-11",
+      projectCode: project.code,
       scenarioName: "Scenario",
       testGroupName: "Group",
       testCaseName: "Case",
@@ -448,13 +453,13 @@ describe("import", () => {
   });
 
   it("writes an AuditLog entry when a duplicate row is explicitly skipped", async () => {
-    const owner = await createUser("imp-owner9@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-9");
+    const project = await createProject();
 
     const rowData = {
       rowNumber: 1,
-      projectCode: "PRJ-IMP-9",
+      projectCode: project.code,
       scenarioName: "Scenario",
       testGroupName: "Group",
       testCaseName: "Existing case",
@@ -486,13 +491,13 @@ describe("import", () => {
   });
 
   it("creates the named Module and Requirement from the sheet, and files the Scenario under them", async () => {
-    const owner = await createUser("imp-owner12@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-12");
+    const project = await createProject();
 
     const rowData = {
       rowNumber: 1,
-      projectCode: "PRJ-IMP-12",
+      projectCode: project.code,
       moduleName: "Authentication",
       requirementName: "REQ-001 Users can sign in",
       scenarioName: "Scenario",
@@ -528,13 +533,13 @@ describe("import", () => {
   });
 
   it("falls back to an Unassigned Module and Requirement when both columns are blank", async () => {
-    const owner = await createUser("imp-owner13@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-13");
+    const project = await createProject();
 
     const rowData = {
       rowNumber: 1,
-      projectCode: "PRJ-IMP-13",
+      projectCode: project.code,
       scenarioName: "Scenario",
       testGroupName: "Group",
       testCaseName: "Case",
@@ -568,13 +573,13 @@ describe("import", () => {
   });
 
   it("makes one Test Step per line of the Test Steps cell", async () => {
-    const owner = await createUser("imp-owner15@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-15");
+    const project = await createProject();
 
     const rowData = {
       rowNumber: 1,
-      projectCode: "PRJ-IMP-15",
+      projectCode: project.code,
       moduleName: "Governance",
       requirementName: "REQ-SEMANTIC-001",
       scenarioName: "Scenario",
@@ -620,9 +625,9 @@ describe("import", () => {
   });
 
   it("still makes a single step from a single-line cell", async () => {
-    const owner = await createUser("imp-owner16@example.com");
+    const owner = await createUser(uniqueEmail("imp-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-16");
+    const project = await createProject();
 
     await confirmImportRoute(
       jsonRequest(`http://test/api/projects/${project.id}/import/confirm`, "POST", {
@@ -631,7 +636,7 @@ describe("import", () => {
             rowNumber: 1,
             data: {
               rowNumber: 1,
-              projectCode: "PRJ-IMP-16",
+              projectCode: project.code,
               moduleName: "",
               requirementName: "",
               scenarioName: "Scenario",
@@ -693,14 +698,14 @@ describe("import", () => {
   }
 
   it("sets a new Requirement's Code, Description and Feature from the sheet", async () => {
-    const owner = await createUser("imp-req1@example.com");
+    const owner = await createUser(uniqueEmail("imp-req"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-R1");
+    const project = await createProject();
 
     await confirmRow(
       project.id,
       requirementRow({
-        projectCode: "PRJ-IMP-R1",
+        projectCode: project.code,
         requirementCode: "REQ-DSD-001",
         requirementDescription: "The user reaches the dashboard and picks a Domain.",
         requirementFeature: "Sharing Dashboard",
@@ -718,18 +723,18 @@ describe("import", () => {
   });
 
   it("updates those fields on a Requirement that already exists, and records what changed", async () => {
-    const owner = await createUser("imp-req2@example.com");
+    const owner = await createUser(uniqueEmail("imp-req"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-R2");
+    const project = await createProject();
 
     await confirmRow(
       project.id,
-      requirementRow({ projectCode: "PRJ-IMP-R2", requirementCode: "REQ-001" }),
+      requirementRow({ projectCode: project.code, requirementCode: "REQ-001" }),
     );
     await confirmRow(
       project.id,
       requirementRow({
-        projectCode: "PRJ-IMP-R2",
+        projectCode: project.code,
         requirementCode: "REQ-DSD-001",
         requirementDescription: "Corrected in the sheet.",
       }),
@@ -757,14 +762,14 @@ describe("import", () => {
   });
 
   it("leaves a stored value alone when the sheet's cell is blank", async () => {
-    const owner = await createUser("imp-req3@example.com");
+    const owner = await createUser(uniqueEmail("imp-req"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-R3");
+    const project = await createProject();
 
     await confirmRow(
       project.id,
       requirementRow({
-        projectCode: "PRJ-IMP-R3",
+        projectCode: project.code,
         requirementCode: "REQ-DSD-001",
         requirementDescription: "Written the first time.",
         requirementFeature: "Sharing Dashboard",
@@ -772,7 +777,7 @@ describe("import", () => {
     );
 
     // An older sheet, from before these columns existed: every one blank.
-    await confirmRow(project.id, requirementRow({ projectCode: "PRJ-IMP-R3" }));
+    await confirmRow(project.id, requirementRow({ projectCode: project.code }));
 
     const requirement = await prisma.requirement.findFirstOrThrow({
       where: { projectId: project.id, name: "Users can reach the dashboard" },
@@ -785,12 +790,12 @@ describe("import", () => {
   });
 
   it("writes no audit entry when the sheet repeats what is already stored", async () => {
-    const owner = await createUser("imp-req4@example.com");
+    const owner = await createUser(uniqueEmail("imp-req"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-R4");
+    const project = await createProject();
 
     const row = requirementRow({
-      projectCode: "PRJ-IMP-R4",
+      projectCode: project.code,
       requirementCode: "REQ-DSD-001",
       requirementDescription: "Unchanged.",
     });
@@ -807,21 +812,21 @@ describe("import", () => {
   });
 
   it("round-trips all three through export and back", async () => {
-    const owner = await createUser("imp-req5@example.com");
+    const owner = await createUser(uniqueEmail("imp-req"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const project = await createProject("PRJ-IMP-R5");
+    const project = await createProject();
 
     await confirmRow(
       project.id,
       requirementRow({
-        projectCode: "PRJ-IMP-R5",
+        projectCode: project.code,
         requirementCode: "REQ-DSD-001",
         requirementDescription: "Survives the round trip.",
         requirementFeature: "Sharing Dashboard",
       }),
     );
 
-    const rows = await getProjectHierarchyRows(project.id, "PRJ-IMP-R5");
+    const rows = await getProjectHierarchyRows(project.id, project.code);
     expect(rows).toHaveLength(1);
 
     const byColumn = Object.fromEntries(IMPORT_COLUMNS.map((column, i) => [column, rows[0][i]]));

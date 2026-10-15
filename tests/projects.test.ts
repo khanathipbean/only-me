@@ -10,7 +10,7 @@ import { GET as listProjects, POST as createProjectRoute } from "@/app/api/proje
 import { GET as getProject, PATCH as patchProject } from "@/app/api/projects/[id]/route";
 import { POST as archiveProjectRoute } from "@/app/api/projects/[id]/archive/route";
 import { POST as restoreProjectRoute } from "@/app/api/projects/[id]/restore/route";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
@@ -20,12 +20,13 @@ describe("project routes", () => {
   });
 
   it("creates a project and grants the creator QA_LEAD membership", async () => {
-    const owner = await createUser("owner1@example.com");
+    const owner = await createUser(uniqueEmail("owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
+    const code = uniqueCode("prj");
     const response = await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-1",
+        code,
         name: "Project One",
         status: "DRAFT",
       }),
@@ -33,7 +34,7 @@ describe("project routes", () => {
 
     expect(response.status).toBe(201);
     const body = await response.json();
-    expect(body.code).toBe("PRJ-1");
+    expect(body.code).toBe(code);
 
     const membership = await prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId: body.id, userId: owner.id } },
@@ -42,12 +43,15 @@ describe("project routes", () => {
   });
 
   it("rejects a duplicate project code", async () => {
-    const owner = await createUser("owner2@example.com");
+    const owner = await createUser(uniqueEmail("owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
+    /* Both calls send the same code on purpose: the second one is the
+     * duplicate this test is about. */
+    const code = uniqueCode("prj-dup");
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-DUP",
+        code,
         name: "First",
         status: "DRAFT",
       }),
@@ -55,7 +59,7 @@ describe("project routes", () => {
 
     const response = await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-DUP",
+        code,
         name: "Second",
         status: "DRAFT",
       }),
@@ -65,23 +69,23 @@ describe("project routes", () => {
   });
 
   it("rejects missing required fields", async () => {
-    const owner = await createUser("owner3@example.com");
+    const owner = await createUser(uniqueEmail("owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const response = await createProjectRoute(
-      jsonRequest("http://test/api/projects", "POST", { code: "PRJ-MISSING" }),
+      jsonRequest("http://test/api/projects", "POST", { code: uniqueCode("prj-missing") }),
     );
 
     expect(response.status).toBe(400);
   });
 
   it("rejects endDate before startDate", async () => {
-    const owner = await createUser("owner4@example.com");
+    const owner = await createUser(uniqueEmail("owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const response = await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-DATES",
+        code: uniqueCode("prj"),
         name: "Bad Dates",
         status: "DRAFT",
         startDate: "2026-02-01",
@@ -93,13 +97,13 @@ describe("project routes", () => {
   });
 
   it("lists only projects the caller is a member of, respecting search and filter", async () => {
-    const member = await createUser("member1@example.com");
-    const outsider = await createUser("outsider1@example.com");
+    const member = await createUser(uniqueEmail("member"));
+    const outsider = await createUser(uniqueEmail("outsider"));
     mockAuth.mockResolvedValue(sessionFor(member.id) as never);
 
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-SEARCH",
+        code: uniqueCode("prj"),
         name: "Findable Project",
         status: "ACTIVE",
       }),
@@ -124,19 +128,20 @@ describe("project routes", () => {
   });
 
   it("filters by status", async () => {
-    const member = await createUser("member2@example.com");
+    const member = await createUser(uniqueEmail("member"));
     mockAuth.mockResolvedValue(sessionFor(member.id) as never);
 
+    const activeCode = uniqueCode("prj-active");
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-DRAFT",
+        code: uniqueCode("prj-draft"),
         name: "Draft Project",
         status: "DRAFT",
       }),
     );
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
-        code: "PRJ-ACTIVE",
+        code: activeCode,
         name: "Active Project",
         status: "ACTIVE",
       }),
@@ -145,18 +150,18 @@ describe("project routes", () => {
     const active = await (
       await listProjects(jsonRequest("http://test/api/projects?status=ACTIVE", "GET"))
     ).json();
-    expect(active.map((p: { code: string }) => p.code)).toEqual(["PRJ-ACTIVE"]);
+    expect(active.map((p: { code: string }) => p.code)).toEqual([activeCode]);
   });
 
   it("returns 403 for a non-member on detail, update, archive, and restore", async () => {
-    const owner = await createUser("owner5@example.com");
-    const outsider = await createUser("outsider2@example.com");
+    const owner = await createUser(uniqueEmail("owner"));
+    const outsider = await createUser(uniqueEmail("outsider"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const created = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-403",
+          code: uniqueCode("prj"),
           name: "Restricted",
           status: "DRAFT",
         }),
@@ -189,13 +194,14 @@ describe("project routes", () => {
   });
 
   it("update writes an audit log entry", async () => {
-    const owner = await createUser("owner6@example.com");
+    const owner = await createUser(uniqueEmail("owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
+    const code = uniqueCode("prj-audit");
     const created = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-AUDIT",
+          code,
           name: "Before",
           status: "DRAFT",
         }),
@@ -205,7 +211,7 @@ describe("project routes", () => {
     const params = Promise.resolve({ id: created.id });
     await patchProject(
       jsonRequest(`http://test/api/projects/${created.id}`, "PATCH", {
-        code: "PRJ-AUDIT",
+        code,
         name: "After",
         status: "ACTIVE",
       }),
@@ -219,13 +225,13 @@ describe("project routes", () => {
   });
 
   it("archive hides a project from the default list and restore reverses it", async () => {
-    const owner = await createUser("owner7@example.com");
+    const owner = await createUser(uniqueEmail("owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
     const created = await (
       await createProjectRoute(
         jsonRequest("http://test/api/projects", "POST", {
-          code: "PRJ-ARCHIVE",
+          code: uniqueCode("prj"),
           name: "Archivable",
           status: "DRAFT",
         }),

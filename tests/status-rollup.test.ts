@@ -15,6 +15,7 @@ import {
 import { addCasesToRun, createRun, setRunCaseResult } from "@/lib/test-runs";
 import { rollUpFrom, rollUpStatus, statusFromResult } from "@/lib/status-rollup";
 import type { WorkflowStatus } from "@/generated/prisma/client";
+import { uniqueCode, uniqueEmail } from "./support/fixtures";
 
 describe("the status a result implies", () => {
   it("reads a pass as finished and anything else as still going", () => {
@@ -66,7 +67,8 @@ describe("the rollup rule", () => {
 });
 
 describe("rolling a status up the tree", () => {
-  async function seed(code: string) {
+  async function seed() {
+    const code = uniqueCode("prj-roll");
     const owner = await prisma.user.create({
       data: { email: `${code.toLowerCase()}@example.com`, passwordHash: "x", name: code },
     });
@@ -106,7 +108,7 @@ describe("rolling a status up the tree", () => {
   }
 
   it("carries a result up the chain as a status", async () => {
-    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-8");
+    const { owner, requirement, scenario, group } = await seed();
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
     const only = await addCase(group.id, "The only case", owner.id);
 
@@ -136,7 +138,7 @@ describe("rolling a status up the tree", () => {
   it("carries a result recorded in a round up the chain too", async () => {
     /* The round is where results are actually recorded, so a rule that only
      * worked on the Test Case page would be a rule that never ran. */
-    const { owner, project, requirement, scenario, group } = await seed("PRJ-ROLL-10");
+    const { owner, project, requirement, scenario, group } = await seed();
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
     const only = await addCase(group.id, "The only case", owner.id);
 
@@ -159,7 +161,7 @@ describe("rolling a status up the tree", () => {
   });
 
   it("leaves a hand-set status alone while no round has reached the case", async () => {
-    const { owner, group } = await seed("PRJ-ROLL-9");
+    const { owner, group } = await seed();
     const only = await addCase(group.id, "Written, not run", owner.id);
     await updateTestCaseStatus(only.id, "READY", owner.id);
 
@@ -175,7 +177,7 @@ describe("rolling a status up the tree", () => {
      * through the full edit, so it would be the one path that quietly left
      * the three levels above it stale — the exact symptom the roll-up was
      * built to end. */
-    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-7");
+    const { owner, requirement, scenario, group } = await seed();
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
 
     const only = await addCase(group.id, "The only case", owner.id);
@@ -200,8 +202,8 @@ describe("rolling a status up the tree", () => {
      * `projectId` while sitting under another's heading — it belongs to one
      * and is listed under the other. The edit path has always refused it;
      * creating did not. */
-    const mine = await seed("PRJ-ROLL-11");
-    const theirs = await seed("PRJ-ROLL-12");
+    const mine = await seed();
+    const theirs = await seed();
 
     await expect(
       createScenario(
@@ -220,7 +222,7 @@ describe("rolling a status up the tree", () => {
   });
 
   it("carries one Test Case's status all the way to the Requirement", async () => {
-    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-1");
+    const { owner, requirement, scenario, group } = await seed();
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
 
     const only = await addCase(group.id, "The only case", owner.id);
@@ -236,7 +238,7 @@ describe("rolling a status up the tree", () => {
   });
 
   it("stops at IN_PROGRESS while the children disagree", async () => {
-    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-2");
+    const { owner, requirement, scenario, group } = await seed();
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
 
     const done = await addCase(group.id, "Finished", owner.id);
@@ -252,7 +254,7 @@ describe("rolling a status up the tree", () => {
   });
 
   it("ignores archived children, so archiving the last stray one settles the parent", async () => {
-    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-3");
+    const { owner, requirement, scenario, group } = await seed();
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
 
     const done = await addCase(group.id, "Finished", owner.id);
@@ -275,7 +277,7 @@ describe("rolling a status up the tree", () => {
   });
 
   it("leaves a row with no live children exactly as it was", async () => {
-    const { requirement, scenario, group } = await seed("PRJ-ROLL-4");
+    const { requirement, scenario, group } = await seed();
     const ids = { requirement: requirement.id, scenario: scenario.id, group: group.id };
 
     await prisma.testGroup.update({ where: { id: group.id }, data: { status: "READY" } });
@@ -297,7 +299,7 @@ describe("rolling a status up the tree", () => {
   });
 
   it("does not rewrite a level that already says what its children say", async () => {
-    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-5");
+    const { owner, requirement, scenario, group } = await seed();
 
     const only = await addCase(group.id, "The only case", owner.id);
     await prisma.testCase.update({ where: { id: only.id }, data: { status: "COMPLETED" } });
@@ -316,7 +318,7 @@ describe("rolling a status up the tree", () => {
   });
 
   it("repairs a stale level above one that already agrees with its children", async () => {
-    const { owner, requirement, scenario, group } = await seed("PRJ-ROLL-6");
+    const { owner, requirement, scenario, group } = await seed();
 
     const only = await addCase(group.id, "The only case", owner.id);
     await prisma.testCase.update({ where: { id: only.id }, data: { status: "COMPLETED" } });
@@ -342,7 +344,8 @@ describe("rolling a status up the tree", () => {
  * nothing else will ever notice.
  */
 describe("the write paths that have to recompute", () => {
-  async function seed(code: string) {
+  async function seed() {
+    const code = uniqueCode("prj-roll");
     const owner = await prisma.user.create({
       data: { email: `${code.toLowerCase()}@example.com`, passwordHash: "x", name: code },
     });
@@ -383,7 +386,7 @@ describe("the write paths that have to recompute", () => {
     (await prisma.requirement.findUniqueOrThrow({ where: { id } })).status;
 
   it("recomputes on create, update and archive of a Test Case", async () => {
-    const { owner, scenario, requirement } = await seed("PRJ-WIRE-1");
+    const { owner, scenario, requirement } = await seed();
     const group = await createTestGroup(scenario.id, { name: "Grp" }, owner.id);
 
     const done = await addCase(group.id, "Finished", owner.id, "COMPLETED");
@@ -413,7 +416,7 @@ describe("the write paths that have to recompute", () => {
   });
 
   it("recomputes BOTH ends when a Test Case moves", async () => {
-    const { owner, scenario } = await seed("PRJ-WIRE-2");
+    const { owner, scenario } = await seed();
     const from = await createTestGroup(scenario.id, { name: "From" }, owner.id);
     const to = await createTestGroup(scenario.id, { name: "To" }, owner.id);
 
@@ -432,7 +435,7 @@ describe("the write paths that have to recompute", () => {
   });
 
   it("recomputes the Scenario when a Test Group is added or archived", async () => {
-    const { owner, scenario, requirement } = await seed("PRJ-WIRE-3");
+    const { owner, scenario, requirement } = await seed();
     const first = await createTestGroup(scenario.id, { name: "First" }, owner.id);
     await addCase(first.id, "Done", owner.id, "COMPLETED");
     expect(await statusOfRequirement(requirement.id)).toBe("COMPLETED");
@@ -454,11 +457,12 @@ describe("the write paths that have to recompute", () => {
  */
 describe("an update that sends no status", () => {
   it("keeps what the row already had, at all three levels", async () => {
+    const code = uniqueCode("prj-keep");
     const owner = await prisma.user.create({
-      data: { email: "prj-keep@example.com", passwordHash: "x", name: "keep" },
+      data: { email: uniqueEmail("prj-keep"), passwordHash: "x", name: "keep" },
     });
     const project = await prisma.project.create({
-      data: { code: "PRJ-KEEP", name: "PRJ-KEEP", status: "ACTIVE", ownerId: owner.id },
+      data: { code, name: code, status: "ACTIVE", ownerId: owner.id },
     });
     const mod = await createModule(project.id, "Policy", owner.id);
     const requirement = await createRequirement(

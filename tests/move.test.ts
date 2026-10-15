@@ -27,11 +27,12 @@ import { POST as moveTestCaseRoute } from "@/app/api/test-cases/[id]/move/route"
 
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { deleteScenario } from "@/lib/scenarios";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function createProject(code: string) {
+async function createProject() {
+  const code = uniqueCode("prj-mv");
   return (
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", {
@@ -91,11 +92,11 @@ describe("move operations", () => {
   });
 
   it("moves a Scenario to a different Project, carrying its Test Groups and Test Cases", async () => {
-    const owner = await createUser("mv-owner1@example.com");
+    const owner = await createUser(uniqueEmail("mv-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
-    const sourceProject = await createProject("PRJ-MV-1A");
-    const targetProject = await createProject("PRJ-MV-1B");
+    const sourceProject = await createProject();
+    const targetProject = await createProject();
     const scenario = await createScenario(sourceProject.id, "Movable scenario");
     const testGroup = await createTestGroup(scenario.id, "TG");
     await createTestCase(testGroup.id, "TC");
@@ -134,15 +135,15 @@ describe("move operations", () => {
   });
 
   it("requires editor membership on both the source and target Project to move a Scenario", async () => {
-    const ownerA = await createUser("mv-ownerA@example.com");
-    const ownerB = await createUser("mv-ownerB@example.com");
+    const ownerA = await createUser(uniqueEmail("mv-ownerA"));
+    const ownerB = await createUser(uniqueEmail("mv-ownerB"));
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
-    const projectA = await createProject("PRJ-MV-2A");
+    const projectA = await createProject();
     const scenario = await createScenario(projectA.id, "Scenario in A");
 
     mockAuth.mockResolvedValue(sessionFor(ownerB.id) as never);
-    const projectB = await createProject("PRJ-MV-2B");
+    const projectB = await createProject();
 
     // ownerA has no membership on projectB, so moving into it must be rejected.
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
@@ -156,10 +157,10 @@ describe("move operations", () => {
   });
 
   it("moves a Test Group to a different Scenario, carrying its Test Cases and returning accurate descendant counts", async () => {
-    const owner = await createUser("mv-owner3@example.com");
+    const owner = await createUser(uniqueEmail("mv-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
-    const project = await createProject("PRJ-MV-3");
+    const project = await createProject();
     const scenarioA = await createScenario(project.id, "Scenario A");
     const scenarioB = await createScenario(project.id, "Scenario B");
     const testGroup = await createTestGroup(scenarioA.id, "Movable group");
@@ -199,10 +200,10 @@ describe("move operations", () => {
   });
 
   it("moves a Test Case to a different Test Group", async () => {
-    const owner = await createUser("mv-owner4@example.com");
+    const owner = await createUser(uniqueEmail("mv-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
-    const project = await createProject("PRJ-MV-4");
+    const project = await createProject();
     const scenario = await createScenario(project.id, "Scenario");
     const groupA = await createTestGroup(scenario.id, "Group A");
     const groupB = await createTestGroup(scenario.id, "Group B");
@@ -232,10 +233,10 @@ describe("move operations", () => {
   });
 
   it("refuses to archive a Scenario that still carries live Test Groups", async () => {
-    const owner = await createUser("mv-owner5@example.com");
+    const owner = await createUser(uniqueEmail("mv-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
-    const project = await createProject("PRJ-MV-5");
+    const project = await createProject();
     const scenario = await createScenario(project.id, "Scenario with children");
     const testGroup = await createTestGroup(scenario.id, "Group");
     await createTestCase(testGroup.id, "TC1");
@@ -276,16 +277,16 @@ describe("move operations", () => {
   });
 
   it("requires editor membership on both projects to move a Test Group into a different project's Scenario", async () => {
-    const ownerA = await createUser("mv-ownerC@example.com");
-    const ownerB = await createUser("mv-ownerD@example.com");
+    const ownerA = await createUser(uniqueEmail("mv-ownerC"));
+    const ownerB = await createUser(uniqueEmail("mv-ownerD"));
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
-    const projectA = await createProject("PRJ-MV-6A");
+    const projectA = await createProject();
     const scenarioA = await createScenario(projectA.id, "Scenario in A");
     const testGroup = await createTestGroup(scenarioA.id, "Group in A");
 
     mockAuth.mockResolvedValue(sessionFor(ownerB.id) as never);
-    const projectB = await createProject("PRJ-MV-6B");
+    const projectB = await createProject();
     const scenarioB = await createScenario(projectB.id, "Scenario in B");
 
     // ownerA has no membership on projectB, so moving the Test Group into
@@ -301,17 +302,17 @@ describe("move operations", () => {
   });
 
   it("requires editor membership on both projects to move a Test Case into a different project's Test Group", async () => {
-    const ownerA = await createUser("mv-ownerE@example.com");
-    const ownerB = await createUser("mv-ownerF@example.com");
+    const ownerA = await createUser(uniqueEmail("mv-ownerE"));
+    const ownerB = await createUser(uniqueEmail("mv-ownerF"));
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
-    const projectA = await createProject("PRJ-MV-7A");
+    const projectA = await createProject();
     const scenarioA = await createScenario(projectA.id, "Scenario in A");
     const groupA = await createTestGroup(scenarioA.id, "Group in A");
     const testCase = await createTestCase(groupA.id, "Case in A");
 
     mockAuth.mockResolvedValue(sessionFor(ownerB.id) as never);
-    const projectB = await createProject("PRJ-MV-7B");
+    const projectB = await createProject();
     const scenarioB = await createScenario(projectB.id, "Scenario in B");
     const groupB = await createTestGroup(scenarioB.id, "Group in B");
 
@@ -326,11 +327,11 @@ describe("move operations", () => {
   });
 
   it("rejects moving into an archived target Project/Scenario/Test Group", async () => {
-    const owner = await createUser("mv-owner6@example.com");
+    const owner = await createUser(uniqueEmail("mv-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
-    const sourceProject = await createProject("PRJ-MV-8A");
-    const archivedTargetProject = await createProject("PRJ-MV-8B");
+    const sourceProject = await createProject();
+    const archivedTargetProject = await createProject();
 
     await archiveProjectRoute(
       jsonRequest(`http://test/api/projects/${archivedTargetProject.id}/archive`, "POST"),
@@ -348,10 +349,10 @@ describe("move operations", () => {
   });
 
   it("deleting a Scenario really removes its whole subtree", async () => {
-    const owner = await createUser("mv-purge@example.com");
+    const owner = await createUser(uniqueEmail("mv-purge"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
 
-    const project = await createProject("PRJ-MV-PURGE");
+    const project = await createProject();
     const scenario = await createScenario(project.id, "Doomed scenario");
     const testGroup = await createTestGroup(scenario.id, "Doomed group");
     const testCase = await createTestCase(testGroup.id, "Doomed case");

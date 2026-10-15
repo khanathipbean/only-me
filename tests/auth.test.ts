@@ -2,12 +2,17 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { authenticateWithPassword, hashPassword } from "@/lib/auth-credentials";
 import { isAuthorized } from "@/auth.config";
+import { uniqueEmail } from "./support/fixtures";
 
 describe("authenticateWithPassword", () => {
+  /* The address is the subject here, not scenery: these tests sign in with it.
+   * One name, created once and used by every test below. */
+  const signsIn = uniqueEmail("qa-lead");
+
   beforeAll(async () => {
     await prisma.user.create({
       data: {
-        email: "qa-lead@example.com",
+        email: signsIn,
         passwordHash: await hashPassword("correct-horse-battery-staple"),
         name: "QA Lead",
       },
@@ -16,17 +21,17 @@ describe("authenticateWithPassword", () => {
 
   it("returns the user for a valid email and password", async () => {
     const user = await authenticateWithPassword({
-      email: "qa-lead@example.com",
+      email: signsIn,
       password: "correct-horse-battery-staple",
     });
 
     expect(user).not.toBeNull();
-    expect(user?.email).toBe("qa-lead@example.com");
+    expect(user?.email).toBe(signsIn);
   });
 
   it("returns null for a wrong password", async () => {
     const user = await authenticateWithPassword({
-      email: "qa-lead@example.com",
+      email: signsIn,
       password: "wrong-password",
     });
 
@@ -35,7 +40,7 @@ describe("authenticateWithPassword", () => {
 
   it("returns null for an unknown email", async () => {
     const user = await authenticateWithPassword({
-      email: "nobody@example.com",
+      email: uniqueEmail("nobody"),
       password: "anything",
     });
 
@@ -71,9 +76,10 @@ describe("who can change a password", () => {
 
   it("sets a password for a user, which replaces the old one", async () => {
     const { setPasswordForUser } = await import("@/lib/users");
+    const lockedOut = uniqueEmail("locked-out");
     const user = await prisma.user.create({
       data: {
-        email: "locked-out@example.com",
+        email: lockedOut,
         passwordHash: await hashPassword("the-old-one"),
         name: "Locked Out",
       },
@@ -83,14 +89,14 @@ describe("who can change a password", () => {
 
     expect(
       await authenticateWithPassword({
-        email: "locked-out@example.com",
+        email: lockedOut,
         password: "a-brand-new-one",
       }),
     ).toMatchObject({ id: user.id });
     // And the old one stops working, or nothing was really replaced.
     expect(
       await authenticateWithPassword({
-        email: "locked-out@example.com",
+        email: lockedOut,
         password: "the-old-one",
       }),
     ).toBeNull();
@@ -100,7 +106,7 @@ describe("who can change a password", () => {
     const { setPasswordForUser, ProfileValidationError } = await import("@/lib/users");
     const user = await prisma.user.create({
       data: {
-        email: "short-password@example.com",
+        email: uniqueEmail("short-password"),
         passwordHash: await hashPassword("the-old-one"),
         name: "Short",
       },

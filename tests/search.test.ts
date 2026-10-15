@@ -15,11 +15,12 @@ vi.mock("@/auth", () => ({
 import { auth } from "@/auth";
 import { POST as createProjectRoute } from "@/app/api/projects/route";
 import { GET as searchRoute } from "@/app/api/search/route";
-import { createUser, jsonRequest, sessionFor } from "./support/fixtures";
+import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
 
-async function seedHierarchy(ownerId: string, code: string) {
+async function seedHierarchy(ownerId: string) {
+  const code = uniqueCode("prj-srch");
   const project = await (
     await createProjectRoute(
       jsonRequest("http://test/api/projects", "POST", { code, name: `Findable Project ${code}`, status: "DRAFT" }),
@@ -56,25 +57,25 @@ describe("global search", () => {
   });
 
   it("finds a Project by name and by code", async () => {
-    const owner = await createUser("search-owner1@example.com");
+    const owner = await createUser(uniqueEmail("search-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-1");
+    const { project } = await seedHierarchy(owner.id);
 
-    const byName = await searchAll(owner.id, "Findable Project PRJ-SRCH-1");
+    const byName = await searchAll(owner.id, project.name);
     expect(byName.some((r) => r.type === "Project" && r.id === project.id)).toBe(true);
 
-    const byCode = await searchAll(owner.id, "PRJ-SRCH-1");
+    const byCode = await searchAll(owner.id, project.code);
     const projectResult = byCode.find((r) => r.type === "Project" && r.id === project.id);
     expect(projectResult).toBeDefined();
     expect(projectResult?.href).toBe(`/projects/${project.id}`);
   });
 
   it("finds a Scenario by name and by id, with correct type/project/position", async () => {
-    const owner = await createUser("search-owner2@example.com");
+    const owner = await createUser(uniqueEmail("search-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project, requirement, scenario } = await seedHierarchy(owner.id, "PRJ-SRCH-2");
+    const { project, requirement, scenario } = await seedHierarchy(owner.id);
 
-    const byName = await searchAll(owner.id, "Login Scenario PRJ-SRCH-2");
+    const byName = await searchAll(owner.id, scenario.name);
     const result = byName.find((r) => r.type === "Scenario" && r.id === scenario.id);
     expect(result).toBeDefined();
     expect(result?.projectName).toBe(project.name);
@@ -87,11 +88,11 @@ describe("global search", () => {
   });
 
   it("finds a Test Group by name, with position naming its Scenario", async () => {
-    const owner = await createUser("search-owner3@example.com");
+    const owner = await createUser(uniqueEmail("search-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { requirement, scenario, testGroup } = await seedHierarchy(owner.id, "PRJ-SRCH-3");
+    const { requirement, scenario, testGroup } = await seedHierarchy(owner.id);
 
-    const results = await searchAll(owner.id, "Navigation Group PRJ-SRCH-3");
+    const results = await searchAll(owner.id, testGroup.name);
     const result = results.find((r) => r.type === "TestGroup" && r.id === testGroup.id);
     expect(result).toBeDefined();
     // Position names the chain above it, which now starts at the Requirement.
@@ -99,11 +100,11 @@ describe("global search", () => {
   });
 
   it("finds a Test Case by name and by id, with position naming its Scenario and Test Group", async () => {
-    const owner = await createUser("search-owner4@example.com");
+    const owner = await createUser(uniqueEmail("search-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { scenario, testGroup, testCase } = await seedHierarchy(owner.id, "PRJ-SRCH-4");
+    const { scenario, testGroup, testCase } = await seedHierarchy(owner.id);
 
-    const byName = await searchAll(owner.id, "TC Login PRJ-SRCH-4");
+    const byName = await searchAll(owner.id, testCase.name);
     const result = byName.find((r) => r.type === "TestCase" && r.id === testCase.id);
     expect(result).toBeDefined();
     expect(result?.position).toBe(`${scenario.name} > ${testGroup.name}`);
@@ -113,13 +114,16 @@ describe("global search", () => {
   });
 
   it("does not leak another Project's entities to a caller who isn't a member", async () => {
-    const ownerA = await createUser("search-ownerA@example.com");
-    const ownerB = await createUser("search-ownerB@example.com");
+    const ownerA = await createUser(uniqueEmail("search-ownerA"));
+    const ownerB = await createUser(uniqueEmail("search-ownerB"));
 
     mockAuth.mockResolvedValue(sessionFor(ownerA.id) as never);
-    const { testCase } = await seedHierarchy(ownerA.id, "PRJ-SRCH-5A");
+    const { testCase } = await seedHierarchy(ownerA.id);
 
-    const results = await searchAll(ownerB.id, "TC Login PRJ-SRCH-5A");
+    /* ownerB searches for the exact name of a Test Case that really exists.
+     * The hard-coded string this replaced named a Test Case nobody had made,
+     * so the empty result proved only that search can miss. */
+    const results = await searchAll(ownerB.id, testCase.name);
     expect(results).toHaveLength(0);
 
     const byId = await searchAll(ownerB.id, testCase.id);
@@ -127,9 +131,9 @@ describe("global search", () => {
   });
 
   it("finds a Note by a word that appears only in its body", async () => {
-    const owner = await createUser("search-note1@example.com");
+    const owner = await createUser(uniqueEmail("search-note"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-N1");
+    const { project } = await seedHierarchy(owner.id);
     const testModule = await createModule(project.id, "Policy Search", owner.id);
     await createNote(
       project.id,
@@ -155,10 +159,10 @@ describe("global search", () => {
   });
 
   it("does not leak a Note from a Project the caller is not a member of", async () => {
-    const owner = await createUser("search-note2@example.com");
-    const outsider = await createUser("search-note3@example.com");
+    const owner = await createUser(uniqueEmail("search-note"));
+    const outsider = await createUser(uniqueEmail("search-note"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-N2");
+    const { project } = await seedHierarchy(owner.id);
     const testModule = await createModule(project.id, "Private Module", owner.id);
     await createNote(
       project.id,
@@ -171,9 +175,9 @@ describe("global search", () => {
   });
 
   it("leaves an archived Note out of the results", async () => {
-    const owner = await createUser("search-note4@example.com");
+    const owner = await createUser(uniqueEmail("search-note"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-N3");
+    const { project } = await seedHierarchy(owner.id);
     const testModule = await createModule(project.id, "Archive Module", owner.id);
     const note = await createNote(
       project.id,
@@ -187,24 +191,24 @@ describe("global search", () => {
   });
 
   it("returns no results for a blank query and does not error", async () => {
-    const owner = await createUser("search-owner6@example.com");
+    const owner = await createUser(uniqueEmail("search-owner"));
     expect(await searchAll(owner.id, "")).toEqual([]);
     expect(await searchAll(owner.id, "   ")).toEqual([]);
   });
 
   it("GET /api/search requires authentication and searches only the caller's memberships", async () => {
-    const owner = await createUser("search-owner7@example.com");
+    const owner = await createUser(uniqueEmail("search-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const { project } = await seedHierarchy(owner.id, "PRJ-SRCH-7");
+    const { project } = await seedHierarchy(owner.id);
 
     const unauthenticated = await (async () => {
       mockAuth.mockResolvedValue(null as never);
-      return searchRoute(jsonRequest(`http://test/api/search?q=PRJ-SRCH-7`, "GET"));
+      return searchRoute(jsonRequest(`http://test/api/search?q=${project.code}`, "GET"));
     })();
     expect(unauthenticated.status).toBe(401);
 
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
-    const response = await searchRoute(jsonRequest(`http://test/api/search?q=PRJ-SRCH-7`, "GET"));
+    const response = await searchRoute(jsonRequest(`http://test/api/search?q=${project.code}`, "GET"));
     const body = await response.json();
     expect(body.results.some((r: { type: string; id: string }) => r.type === "Project" && r.id === project.id)).toBe(
       true,
