@@ -45,6 +45,7 @@ import {
 } from "@/lib/ui";
 import type { ProjectStatus } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { listHrefWithFilters } from "@/lib/hrefs";
 
 export const metadata = { title: "Projects" };
 
@@ -101,13 +102,13 @@ export default async function ProjectsPage({
 
   /* Plain strings only: a server action may close over serialisable values —
    * see the identical note on the Modules page, which this mirrors. */
-  const listQueryString = new URLSearchParams(
-    Object.entries({ search, status, archived, overdue }).filter(
-      (entry): entry is [string, string] => Boolean(entry[1]),
-    ),
-  ).toString();
   const listPath = "/projects";
-  const listHref = listQueryString ? `${listPath}?${listQueryString}` : listPath;
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
+    search,
+    status,
+    archived,
+    overdue,
+  });
 
   async function create(formData: FormData) {
     "use server";

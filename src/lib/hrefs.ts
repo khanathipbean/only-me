@@ -14,6 +14,38 @@ export type HierarchyIds = {
   testCaseId?: string;
 };
 
+/**
+ * A list page's own address, with the filters the reader currently has set.
+ *
+ * Every list page needs this and every one of them had written it out: build
+ * a query string from whichever of its filters are set, then append it to the
+ * path unless it is empty. Nine copies of eight lines, which is nine places to
+ * fix when an action forgets to carry the reader's filters back — the bug that
+ * sent somebody on page three of a filtered run back to page one of an
+ * unfiltered one.
+ *
+ * `query` comes back too, because the pages that redirect on a validation
+ * error reopen the same list with one extra parameter on it and need the rest
+ * of the string to add to.
+ *
+ * Safe for a server action to use what this returns, which is the reason the
+ * pages compute it in the component body: an action may close over strings,
+ * and closing over a *function* instead made React give up encoding the
+ * action altogether and render `action="javascript:throw …"`. This one is
+ * imported rather than captured, so nothing closes over it.
+ */
+export function listHrefWithFilters(
+  path: string,
+  filters: Record<string, string | number | undefined>,
+) {
+  const query = new URLSearchParams(
+    Object.entries(filters)
+      .filter(([, value]) => Boolean(value))
+      .map(([key, value]) => [key, String(value)]),
+  ).toString();
+  return { query, href: query ? `${path}?${query}` : path };
+}
+
 function projectHref(projectId: string) {
   return `/projects/${projectId}`;
 }

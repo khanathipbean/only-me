@@ -32,6 +32,7 @@ import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { TrashIcon } from "@/components/icons";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { listHrefWithFilters } from "@/lib/hrefs";
 import {
   inputClass,
   labelClass,
@@ -89,13 +90,13 @@ export default async function ModulesPage({
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
-  const listQueryString = new URLSearchParams(
-    Object.entries({ search, archived, page, pageSize }).filter(
-      (entry): entry is [string, string] => Boolean(entry[1]),
-    ),
-  ).toString();
   const listPath = `/projects/${projectId}/modules`;
-  const listHref = listQueryString ? `${listPath}?${listQueryString}` : listPath;
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
+    search,
+    archived,
+    page,
+    pageSize,
+  });
 
   async function create(formData: FormData) {
     "use server";

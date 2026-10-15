@@ -49,6 +49,7 @@ import {
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { listHrefWithFilters } from "@/lib/hrefs";
 
 export async function generateMetadata({
   params,
@@ -166,19 +167,22 @@ export default async function ScenariosPage({
 
   /** The list URL with the active filters/sort kept, so an inline save (or a
    * failed one) returns to the same view the user was looking at. */
-  const listQuery = new URLSearchParams(
-    Object.entries({ search, status, priority, sortBy, sortOrder, archived, page, pageSize }).filter(
-      (entry): entry is [string, string] => Boolean(entry[1]),
-    ),
-  );
   const listPath = `/projects/${projectId}/modules/${moduleId}/requirements/${requirementId}/scenarios`;
-  const listHref = listQuery.size > 0 ? `${listPath}?${listQuery}` : listPath;
-
   /** Plain strings, because a server action may only close over serialisable
    * values. Capturing a helper *function* here made React give up encoding
    * these actions and render `action="javascript:throw …"` — the form then
-   * only works once JS has loaded, with no no-JS fallback at all. */
-  const listQueryString = listQuery.toString();
+   * only works once JS has loaded, with no no-JS fallback at all. The helper
+   * below is imported rather than captured, and what it returns is strings. */
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
+    search,
+    status,
+    priority,
+    sortBy,
+    sortOrder,
+    archived,
+    page,
+    pageSize,
+  });
 
 
   function impact(scenarioId: string) {

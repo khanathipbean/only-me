@@ -24,7 +24,7 @@ import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testGroupsListBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
-import { testGroupsListHref } from "@/lib/hrefs";
+import { listHrefWithFilters, testGroupsListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -138,13 +138,14 @@ export default async function TestGroupsPage({
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
-  const listQueryString = new URLSearchParams(
-    Object.entries({ search, status, archived, page, pageSize }).filter(
-      (entry): entry is [string, string] => Boolean(entry[1]),
-    ),
-  ).toString();
   const listPath = testGroupsListHref({ projectId, moduleId, requirementId, scenarioId });
-  const listHref = listQueryString ? `${listPath}?${listQueryString}` : listPath;
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
+    search,
+    status,
+    archived,
+    page,
+    pageSize,
+  });
 
   function impact(testGroupId: string) {
     const counts = descendantCounts.get(testGroupId) ?? { testCases: 0 };

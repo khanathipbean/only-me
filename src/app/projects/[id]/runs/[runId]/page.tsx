@@ -49,7 +49,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { DetailField, DetailFields } from "@/components/ui/DetailFields";
-import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
+import { Badge, priorityTone, testResultFieldClass, testResultTone } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/Button";
 import { TrashIcon } from "@/components/icons";
 import { isTestRunOverdue } from "@/lib/deadlines";
@@ -72,6 +72,7 @@ import {
 } from "@/lib/ui";
 import type { TestResult } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { listHrefWithFilters } from "@/lib/hrefs";
 
 export async function generateMetadata({
   params,
@@ -82,30 +83,6 @@ export async function generateMetadata({
   const [project, run] = await Promise.all([getProjectById(id), getRunById(runId)]);
   return { title: run ? `${run.name} · ${project?.name ?? "Test Run"}` : "Test Run" };
 }
-
-/**
- * How a row's control is tinted, by the result the round has recorded.
- *
- * The column used to be badges, which a reader could scan down to see how far
- * the round had got. Making every row an editable dropdown took the colour
- * with it, and a page of identical grey controls says nothing about which
- * cases have been tested.
- *
- * Applied to the trigger rather than the wrapper, which is where `className`
- * lands — hence the arbitrary variant. The tint follows what is saved, so a
- * value picked and not yet saved shows its new word in the old colour; that
- * is the honest reading, and pressing Save settles it.
- */
-const RESULT_TINT: Record<string, string> = {
-  PASSED:
-    "[&_button]:border-emerald-500/40 [&_button]:text-emerald-700 dark:[&_button]:text-emerald-400",
-  FAILED: "[&_button]:border-red-500/40 [&_button]:text-red-700 dark:[&_button]:text-red-400",
-  BLOCKED:
-    "[&_button]:border-amber-500/40 [&_button]:text-amber-700 dark:[&_button]:text-amber-400",
-  SKIPPED:
-    "[&_button]:border-purple-500/40 [&_button]:text-purple-700 dark:[&_button]:text-purple-400",
-  NOT_RUN: "[&_button]:text-muted",
-};
 
 export default async function TestRunPage({
   params,
@@ -200,11 +177,12 @@ export default async function TestRunPage({
    * case. Only the list's own view state is carried; the picker's fields and
    * the one-shot `error`/`toast` are left behind on purpose.
    */
-  const listQuery = new URLSearchParams(
-    Object.entries({ result, caseSearch, page, pageSize }).filter(([, value]) => Boolean(value)) as
-      Array<[string, string]>,
-  ).toString();
-  const listHref = listQuery ? `${basePath}?${listQuery}` : basePath;
+  const { href: listHref } = listHrefWithFilters(basePath, {
+    result,
+    caseSearch,
+    page,
+    pageSize,
+  });
   /* Grouped by Scenario then Test Group: the chain above a case is what tells
    * two cases of the same name apart, and repeating four levels on every row
    * would bury the case itself.
@@ -941,7 +919,7 @@ export default async function TestRunPage({
                                       defaultValue={row.testResult}
                                       options={TEST_RESULT_OPTIONS}
                                       ariaLabel={`Result for ${row.testCase.name}`}
-                                      className={`max-w-36 ${RESULT_TINT[row.testResult] ?? ""}`}
+                                      className={`max-w-36 ${testResultFieldClass(row.testResult)}`}
                                     />
                                     {/* Back beside the result it records. It
                                         sat in the Notes cell while the two

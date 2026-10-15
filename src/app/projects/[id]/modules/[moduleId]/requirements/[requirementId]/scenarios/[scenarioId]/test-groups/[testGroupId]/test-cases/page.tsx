@@ -24,7 +24,7 @@ import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testCasesListBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
-import { testCasesListHref } from "@/lib/hrefs";
+import { listHrefWithFilters, testCasesListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
 import { ASSIGNEE_ENABLED } from "@/lib/features";
@@ -142,12 +142,14 @@ export default async function TestCasesPage({
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
-  const listQueryString = new URLSearchParams(
-    Object.entries({ search, priority, testResult, status, page, pageSize }).filter(
-      (entry): entry is [string, string] => Boolean(entry[1]),
-    ),
-  ).toString();
-  const listHref = listQueryString ? `${basePath}?${listQueryString}` : basePath;
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(basePath, {
+    search,
+    priority,
+    testResult,
+    status,
+    page,
+    pageSize,
+  });
 
   /** Bound per row: an inline Edit modal on a list needs one action per Test
    * Case, unlike the detail page where a single closed-over id suffices. */

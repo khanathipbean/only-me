@@ -77,6 +77,52 @@ export function Badge({
   );
 }
 
+/**
+ * An outlined control carrying a value, rather than a pill labelling one: the
+ * Select on a run row, tinted by the result it holds. The arbitrary variant is
+ * because `className` lands on the Select's wrapper and the colour belongs on
+ * the button it draws inside.
+ *
+ * Gray stays quiet on purpose — no border tint, muted text. It means nobody
+ * has answered yet, and a row of untinted controls is what lets the answered
+ * ones stand out at all.
+ */
+const TONE_FIELD_CLASS = {
+  gray: "[&_button]:text-muted",
+  blue: "[&_button]:border-blue-500/40 [&_button]:text-blue-700 dark:[&_button]:text-blue-300",
+  green:
+    "[&_button]:border-emerald-500/40 [&_button]:text-emerald-700 dark:[&_button]:text-emerald-300",
+  red: "[&_button]:border-red-500/40 [&_button]:text-red-700 dark:[&_button]:text-red-300",
+  amber: "[&_button]:border-amber-500/40 [&_button]:text-amber-700 dark:[&_button]:text-amber-300",
+  purple:
+    "[&_button]:border-purple-500/40 [&_button]:text-purple-700 dark:[&_button]:text-purple-300",
+  indigo:
+    "[&_button]:border-indigo-500/40 [&_button]:text-indigo-700 dark:[&_button]:text-indigo-300",
+  cyan: "[&_button]:border-cyan-500/40 [&_button]:text-cyan-700 dark:[&_button]:text-cyan-300",
+} as const satisfies Record<Tone, string>;
+
+export function toneFieldClass(tone: Tone): string {
+  return TONE_FIELD_CLASS[tone];
+}
+
+/**
+ * Every way a Test Result is drawn now goes through the one tone below.
+ *
+ * It used to be three independent tables — this one, a ternary in the Problem
+ * Cases strip, and another on the run page — so adding a result meant finding
+ * all three, and nothing said so. They had already drifted: a skipped answer
+ * was slate as a square and purple as a badge, which is worse than a
+ * mismatch. Slate is what "nobody answered" looks like, and skipping is an
+ * answer somebody gave.
+ */
+export function testResultBarClass(value: string): string {
+  return toneBarClass(testResultTone(value));
+}
+
+export function testResultFieldClass(value: string): string {
+  return toneFieldClass(testResultTone(value));
+}
+
 export function testResultTone(value: string): Tone {
   switch (value) {
     case "PASSED":

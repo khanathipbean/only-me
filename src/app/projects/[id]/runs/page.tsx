@@ -31,6 +31,7 @@ import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { listHrefWithFilters } from "@/lib/hrefs";
 import {
   inputClass,
   labelClass,
@@ -104,13 +105,15 @@ export default async function TestRunsPage({
 
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all. */
-  const listQueryString = new URLSearchParams(
-    Object.entries({ search, status, archived, overdue, page, pageSize }).filter(
-      (entry): entry is [string, string] => Boolean(entry[1]),
-    ),
-  ).toString();
   const listPath = `/projects/${projectId}/runs`;
-  const listHref = listQueryString ? `${listPath}?${listQueryString}` : listPath;
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
+    search,
+    status,
+    archived,
+    overdue,
+    page,
+    pageSize,
+  });
 
   async function create(formData: FormData) {
     "use server";

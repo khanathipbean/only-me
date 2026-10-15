@@ -19,7 +19,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { Pagination } from "@/components/ui/Pagination";
 import { Select } from "@/components/ui/Select";
-import { Badge } from "@/components/ui/Badge";
+import { Badge, testResultBarClass } from "@/components/ui/Badge";
 import { nameOr, problemCasesBreadcrumb } from "@/lib/breadcrumb";
 import { formatDate } from "@/lib/dates";
 import {
@@ -146,14 +146,7 @@ function ResultStrip({
   return (
     <span className="flex flex-wrap items-center gap-1">
       {marks.map((mark, index) => {
-        const colour =
-          mark.testResult === "PASSED"
-            ? "bg-emerald-500"
-            : mark.testResult === "FAILED"
-              ? "bg-red-500"
-              : mark.testResult === "BLOCKED"
-                ? "bg-amber-500"
-                : "bg-slate-400 dark:bg-slate-600";
+        const colour = testResultBarClass(mark.testResult);
         const latest = index === marks.length - 1;
         /* A group recorded outside a round is named by its day, so repeating
            the date after the result said it twice. */

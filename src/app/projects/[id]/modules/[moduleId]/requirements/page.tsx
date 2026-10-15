@@ -50,6 +50,7 @@ import {
 } from "@/lib/ui";
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { listHrefWithFilters } from "@/lib/hrefs";
 
 export async function generateMetadata({
   params,
@@ -118,13 +119,16 @@ export default async function RequirementsPage({
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
-  const listQueryString = new URLSearchParams(
-    Object.entries({ search, feature, status, priority, archived, page, pageSize }).filter(
-      (entry): entry is [string, string] => Boolean(entry[1]),
-    ),
-  ).toString();
   const listPath = `/projects/${projectId}/modules/${moduleId}/requirements`;
-  const listHref = listQueryString ? `${listPath}?${listQueryString}` : listPath;
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
+    search,
+    feature,
+    status,
+    priority,
+    archived,
+    page,
+    pageSize,
+  });
 
   async function create(formData: FormData) {
     "use server";
