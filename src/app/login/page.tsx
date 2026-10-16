@@ -6,6 +6,7 @@ import { signIn } from "@/auth";
 import { SubmitButton } from "@/components/SubmitButton";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { LOCK_MINUTES, readLockState } from "@/lib/login-throttle";
 
 /**
  * The out-of-focus words drifting behind the brand panel. Purely decorative —
@@ -62,22 +63,33 @@ export const metadata = { title: "Log in" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; minutes?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, minutes } = await searchParams;
 
   async function login(formData: FormData) {
     "use server";
     invalidateRouteCache();
 
+    const email = String(formData.get("email") ?? "");
+
     try {
       await signIn("credentials", {
-        email: formData.get("email"),
+        email,
         password: formData.get("password"),
         redirectTo: "/projects",
       });
     } catch (err) {
       if (err instanceof AuthError) {
+        /* Why the lock state is read again here rather than carried out of
+           the error: NextAuth wraps whatever `authorize` did, and unpicking
+           that wrapping would tie this page to the internals of a beta. The
+           rule is enforced in `authenticateWithPassword` either way — this
+           read only decides which sentence to show. */
+        const lock = await readLockState(email);
+        if (lock.locked) {
+          redirect(`/login?error=TooManyAttempts&minutes=${lock.minutesLeft}`);
+        }
         redirect("/login?error=CredentialsSignin");
       }
       throw err;
@@ -137,7 +149,9 @@ export default async function LoginPage({
                 role="alert"
                 className="mt-6 rounded-md border border-red-400/30 bg-red-500/15 px-3 py-2 text-sm text-red-200"
               >
-                Invalid email or password.
+                {error === "TooManyAttempts"
+                  ? `Too many attempts. Try again in ${minutes ?? LOCK_MINUTES} minutes.`
+                  : "Invalid email or password."}
               </p>
             )}
 

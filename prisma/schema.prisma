@@ -563,3 +563,25 @@ model Requirement {
   @@index([projectId, moduleId])
   @@index([moduleId, feature])
 }
+
+/// One row per email address anyone has typed into the login form and got
+/// wrong, whether or not an account owns that address — counting only real
+/// accounts would turn "locked" into confirmation that the address exists.
+///
+/// In Postgres rather than in memory because Netlify runs this as serverless
+/// functions: two requests can land on two instances, and an instance is
+/// discarded whenever the platform likes. An in-memory counter resets itself
+/// for free, which is the same as not having one.
+model LoginThrottle {
+  /// Lower-cased, so changing the capitalisation does not buy a fresh count.
+  email String @id
+
+  failures Int @default(0)
+  /// Starts the window the failures are counted in; failures older than the
+  /// window are forgotten rather than carried forward forever.
+  firstFailureAt DateTime @default(now())
+  /// Set once the count is reached. Null means the address is not locked.
+  lockedUntil DateTime?
+
+  updatedAt DateTime @updatedAt
+}

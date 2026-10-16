@@ -3,6 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { authenticateWithPassword, hashPassword } from "@/lib/auth-credentials";
 import { isAuthorized } from "@/auth.config";
 import { uniqueEmail } from "./support/fixtures";
+import {
+  LOCK_MINUTES,
+  MAX_FAILURES,
+  WINDOW_MINUTES,
+  readLockState,
+  recordFailure,
+} from "@/lib/login-throttle";
 
 describe("authenticateWithPassword", () => {
   /* The address is the subject here, not scenery: these tests sign in with it.
@@ -122,5 +129,109 @@ describe("who can change a password", () => {
     await expect(setPasswordForUser("missing-id", "a-long-enough-one")).rejects.toBeInstanceOf(
       ProfileValidationError,
     );
+  });
+});
+
+/**
+ * Before this, the form took passwords as fast as the server could answer
+ * them. bcrypt makes each guess slow; it does not make the number of guesses
+ * finite, and nothing else was counting.
+ */
+describe("how many wrong passwords an address gets", () => {
+  const RIGHT = "correct-horse-battery-staple";
+
+  async function makeUser() {
+    const email = uniqueEmail("throttled");
+    await prisma.user.create({
+      data: { email, passwordHash: await hashPassword(RIGHT), name: "Throttled" },
+    });
+    return email;
+  }
+
+  it("lets the right password through after four wrong ones", async () => {
+    const email = await makeUser();
+
+    for (let attempt = 0; attempt < MAX_FAILURES - 1; attempt += 1) {
+      expect(await authenticateWithPassword({ email, password: "wrong" })).toBeNull();
+    }
+
+    expect(await authenticateWithPassword({ email, password: RIGHT })).not.toBeNull();
+  });
+
+  it("refuses the right password once the limit is reached", async () => {
+    const email = await makeUser();
+
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      expect(await authenticateWithPassword({ email, password: "wrong" })).toBeNull();
+    }
+
+    /* The point of the whole feature. A limit that still admitted the correct
+     * password would only inconvenience somebody who had already guessed it. */
+    expect(await authenticateWithPassword({ email, password: RIGHT })).toBeNull();
+    expect((await readLockState(email)).locked).toBe(true);
+  });
+
+  it("forgets the failures as soon as the right password arrives", async () => {
+    const email = await makeUser();
+
+    await authenticateWithPassword({ email, password: "wrong" });
+    await authenticateWithPassword({ email, password: "wrong" });
+    await authenticateWithPassword({ email, password: RIGHT });
+
+    // Four more must not reach the limit, or the earlier two were still counted.
+    for (let attempt = 0; attempt < MAX_FAILURES - 1; attempt += 1) {
+      await authenticateWithPassword({ email, password: "wrong" });
+    }
+    expect(await authenticateWithPassword({ email, password: RIGHT })).not.toBeNull();
+  });
+
+  it("lets the address back in once the lock has expired", async () => {
+    const email = await makeUser();
+
+    /* The failures happened long enough ago that the lock they set has
+     * already run out by the time this test asks. Dated in the past rather
+     * than read at a pretend future moment, because `authenticateWithPassword`
+     * reads the real clock and would still have seen a live lock. */
+    const longAgo = new Date(Date.now() - (LOCK_MINUTES + 1) * 60_000);
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      await recordFailure(email, longAgo);
+    }
+    expect((await readLockState(email, longAgo)).locked).toBe(true);
+
+    expect((await readLockState(email)).locked).toBe(false);
+    expect(await authenticateWithPassword({ email, password: RIGHT })).not.toBeNull();
+  });
+
+  it("does not carry failures across the window", async () => {
+    const email = await makeUser();
+    const start = new Date();
+
+    // Four now, and a fifth long enough afterwards to start a fresh window:
+    // five typos spread over a year must not lock anybody out.
+    for (let attempt = 0; attempt < MAX_FAILURES - 1; attempt += 1) {
+      await recordFailure(email, start);
+    }
+    const later = new Date(start.getTime() + (WINDOW_MINUTES + 1) * 60_000);
+    expect((await recordFailure(email, later)).locked).toBe(false);
+  });
+
+  it("counts an address nobody owns, so a lock never proves an account exists", async () => {
+    const strangerEmail = uniqueEmail("no-such-account");
+
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      expect(await authenticateWithPassword({ email: strangerEmail, password: "x" })).toBeNull();
+    }
+
+    expect((await readLockState(strangerEmail)).locked).toBe(true);
+  });
+
+  it("treats the address as one address however it is capitalised", async () => {
+    const email = await makeUser();
+
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      await recordFailure(attempt % 2 === 0 ? email.toUpperCase() : email);
+    }
+
+    expect((await readLockState(email)).locked).toBe(true);
   });
 });
