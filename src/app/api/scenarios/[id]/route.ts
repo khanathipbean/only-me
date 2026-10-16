@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import {
+  ChoiceError,
+  PRIORITY_VALUES,
+  WORKFLOW_STATUS_VALUES,
+  readChoice,
+  readChoiceIfPresent,
+} from "@/lib/enums";
 import { withEntityProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
 import {
@@ -32,8 +39,8 @@ export const PATCH = withEntityProjectRole(
           testData: body.testData,
           steps: body.steps,
           expectedResult: body.expectedResult,
-          priority: body.priority,
-          status: body.status,
+          priority: readChoice(body.priority, PRIORITY_VALUES, "Priority"),
+          status: readChoiceIfPresent(body.status, WORKFLOW_STATUS_VALUES, "Status"),
           tags: body.tags,
           ownerId: body.ownerId,
         },
@@ -41,7 +48,7 @@ export const PATCH = withEntityProjectRole(
       );
       return NextResponse.json(scenario);
     } catch (error) {
-      if (error instanceof ValidationError) {
+      if (error instanceof ValidationError || error instanceof ChoiceError) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
       throw error;

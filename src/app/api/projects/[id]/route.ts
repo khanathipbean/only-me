@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ChoiceError, PROJECT_STATUS_VALUES, readChoice } from "@/lib/enums";
 import { withProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
 import {
@@ -26,7 +27,7 @@ export const PATCH = withProjectRole(EDITOR_ROLES, async (request, { projectId, 
         code: body.code,
         name: body.name,
         description: body.description,
-        status: body.status,
+        status: readChoice(body.status, PROJECT_STATUS_VALUES, "Status"),
         startDate: body.startDate ? new Date(body.startDate) : null,
         endDate: body.endDate ? new Date(body.endDate) : null,
       },
@@ -35,7 +36,7 @@ export const PATCH = withProjectRole(EDITOR_ROLES, async (request, { projectId, 
 
     return NextResponse.json(project);
   } catch (error) {
-    if (error instanceof ValidationError) {
+    if (error instanceof ValidationError || error instanceof ChoiceError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof DuplicateCodeError) {

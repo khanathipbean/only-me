@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { errorHref } from "@/lib/hrefs";
 import { auth } from "@/auth";
 import { requireAdminAnywhereOrNotFound } from "@/lib/rbac";
 import { DuplicateCodeError, ValidationError, createProject } from "@/lib/projects";
@@ -8,6 +9,7 @@ import { ProjectForm } from "@/components/forms/ProjectForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { pageClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { ChoiceError, PROJECT_STATUS_VALUES, readChoice } from "@/lib/enums";
 
 export const metadata = { title: "New Project" };
 
@@ -45,15 +47,15 @@ export default async function NewProjectPage({
           code: formData.get("code") as string,
           name: formData.get("name") as string,
           description: (formData.get("description") as string) || null,
-          status: formData.get("status") as never,
+          status: readChoice(formData.get("status"), PROJECT_STATUS_VALUES, "Status"),
           startDate: startDate ? new Date(startDate) : null,
           endDate: endDate ? new Date(endDate) : null,
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof ValidationError || err instanceof DuplicateCodeError) {
-        redirect(`/projects/new?error=${encodeURIComponent(err.message)}`);
+      if (err instanceof ValidationError || err instanceof DuplicateCodeError || err instanceof ChoiceError) {
+        redirect(errorHref("/projects/new", "", err.message));
       }
       throw err;
     }

@@ -6,7 +6,7 @@ import {
   createProject,
   listProjectsForUser,
 } from "@/lib/projects";
-import type { ProjectStatus } from "@/generated/prisma/client";
+import { ChoiceError, PROJECT_STATUS_VALUES, readChoice, readFilterChoice } from "@/lib/enums";
 
 export async function GET(request: NextRequest) {
   const { userId, unauthorized } = await requireApiSession();
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const projects = await listProjectsForUser(userId!, {
     search: searchParams.get("search") ?? undefined,
-    status: (searchParams.get("status") as ProjectStatus | null) ?? undefined,
+    status: readFilterChoice(searchParams.get("status"), PROJECT_STATUS_VALUES),
   });
 
   return NextResponse.json(projects);
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         code: body.code,
         name: body.name,
         description: body.description,
-        status: body.status,
+        status: readChoice(body.status, PROJECT_STATUS_VALUES, "Status"),
         startDate: body.startDate ? new Date(body.startDate) : null,
         endDate: body.endDate ? new Date(body.endDate) : null,
       },
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
-    if (error instanceof ValidationError) {
+    if (error instanceof ValidationError || error instanceof ChoiceError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error instanceof DuplicateCodeError) {

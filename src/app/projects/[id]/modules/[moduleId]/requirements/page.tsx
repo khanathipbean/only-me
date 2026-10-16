@@ -35,7 +35,14 @@ import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { TrashIcon } from "@/components/icons";
-import { PRIORITY_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import {
+  ChoiceError,
+  PRIORITY_OPTIONS,
+  PRIORITY_VALUES,
+  WORKFLOW_STATUS_OPTIONS,
+  WORKFLOW_STATUS_VALUES,
+  readChoice,
+} from "@/lib/enums";
 import {
   inputClass,
   labelClass,
@@ -144,13 +151,13 @@ export default async function RequirementsPage({
           description: formData.get("description") as string,
           moduleId: formData.get("moduleId") as string,
           feature: formData.get("feature") as string,
-          priority: formData.get("priority") as never,
-          status: formData.get("status") as never,
+          priority: readChoice(formData.get("priority"), PRIORITY_VALUES, "Priority"),
+          status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof RequirementValidationError) {
+      if (err instanceof RequirementValidationError || err instanceof ChoiceError) {
         const query = new URLSearchParams(listQueryString);
         query.set("error", err.message);
         redirect(`${listPath}?${query}`);
@@ -177,13 +184,13 @@ export default async function RequirementsPage({
               description: formData.get("description") as string,
               moduleId: formData.get("moduleId") as string,
               feature: formData.get("feature") as string,
-              priority: formData.get("priority") as never,
-              status: formData.get("status") as never,
+              priority: readChoice(formData.get("priority"), PRIORITY_VALUES, "Priority"),
+              status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
             },
             session!.user.id,
           );
         } catch (err) {
-          if (err instanceof RequirementValidationError) {
+          if (err instanceof RequirementValidationError || err instanceof ChoiceError) {
             const query = new URLSearchParams(listQueryString);
             query.set("error", err.message);
             query.set("editId", requirementId);
@@ -223,7 +230,7 @@ export default async function RequirementsPage({
         try {
           await archiveRequirement(requirementId, session!.user.id);
         } catch (err) {
-          if (err instanceof RequirementValidationError) {
+          if (err instanceof RequirementValidationError || err instanceof ChoiceError) {
             const query = new URLSearchParams(listQueryString);
             query.set("error", err.message);
             redirect(`${listPath}?${query}`);
@@ -250,7 +257,7 @@ export default async function RequirementsPage({
         try {
           await deleteRequirement(requirementId, session!.user.id, true);
         } catch (err) {
-          if (err instanceof RequirementValidationError) {
+          if (err instanceof RequirementValidationError || err instanceof ChoiceError) {
             const query = new URLSearchParams(listQueryString);
             query.set("error", err.message);
             redirect(`${listPath}?${query}`);

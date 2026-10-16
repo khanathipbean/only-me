@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { errorHref } from "@/lib/hrefs";
 import { auth } from "@/auth";
 import { toDateInputValue } from "@/lib/dates";
 import { EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
@@ -13,6 +14,7 @@ import { ProjectForm } from "@/components/forms/ProjectForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { pageClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { ChoiceError, PROJECT_STATUS_VALUES, readChoice } from "@/lib/enums";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -55,15 +57,15 @@ export default async function EditProjectPage({
           code: formData.get("code") as string,
           name: formData.get("name") as string,
           description: (formData.get("description") as string) || null,
-          status: formData.get("status") as never,
+          status: readChoice(formData.get("status"), PROJECT_STATUS_VALUES, "Status"),
           startDate: startDate ? new Date(startDate) : null,
           endDate: endDate ? new Date(endDate) : null,
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof ValidationError || err instanceof DuplicateCodeError) {
-        redirect(`/projects/${id}/edit?error=${encodeURIComponent(err.message)}`);
+      if (err instanceof ValidationError || err instanceof DuplicateCodeError || err instanceof ChoiceError) {
+        redirect(errorHref(`/projects/${id}/edit`, "", err.message));
       }
       throw err;
     }

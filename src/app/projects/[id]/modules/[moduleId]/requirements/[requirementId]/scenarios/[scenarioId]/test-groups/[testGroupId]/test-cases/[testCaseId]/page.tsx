@@ -1,4 +1,13 @@
-import { TEST_RESULT_OPTIONS } from "@/lib/enums";
+import {
+  ChoiceError,
+  PRIORITY_VALUES,
+  TEST_RESULT_OPTIONS,
+  TEST_RESULT_VALUES,
+  TEST_TYPE_VALUES,
+  WORKFLOW_STATUS_VALUES,
+  readChoice,
+  readOptionalChoice,
+} from "@/lib/enums";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import {
@@ -52,6 +61,7 @@ import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/compo
 import { EditIcon, TrashIcon } from "@/components/icons";
 import { labelClass, mutedTextClass, pageClass, textareaClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { errorHref } from "@/lib/hrefs";
 
 export async function generateMetadata({
   params,
@@ -136,16 +146,16 @@ export default async function TestCaseDetailPage({
           preconditions: (formData.get("preconditions") as string) || null,
           testData: (formData.get("testData") as string) || null,
           expectedResult: formData.get("expectedResult") as string,
-          priority: formData.get("priority") as never,
-          testType: ((formData.get("testType") as string) || null) as never,
-          status: formData.get("status") as never,
+          priority: readChoice(formData.get("priority"), PRIORITY_VALUES, "Priority"),
+          testType: readOptionalChoice(formData.get("testType"), TEST_TYPE_VALUES, "Test Type"),
+          status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
           steps: parseStepsJson(formData.get("stepsJson") as string),
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof ValidationError) {
-        redirect(`${basePath}/${testCaseId}?error=${encodeURIComponent(err.message)}`);
+      if (err instanceof ValidationError || err instanceof ChoiceError) {
+        redirect(errorHref(`${basePath}/${testCaseId}`, "", err.message));
       }
       throw err;
     }
@@ -161,7 +171,7 @@ export default async function TestCaseDetailPage({
     await updateTestResultAndNotes(
       testCaseId,
       {
-        testResult: formData.get("testResult") as never,
+        testResult: readChoice(formData.get("testResult"), TEST_RESULT_VALUES, "Test Result"),
         notes: (formData.get("notes") as string) || null,
       },
       session!.user.id,
@@ -177,7 +187,7 @@ export default async function TestCaseDetailPage({
     const file = formData.get("file");
     if (!(file instanceof File)) {
       redirect(
-        `${basePath}/${testCaseId}?attachmentError=${encodeURIComponent("Choose a file first")}`,
+        errorHref(`${basePath}/${testCaseId}`, "", "Choose a file first", {}, "attachmentError"),
       );
     }
     try {
@@ -185,9 +195,9 @@ export default async function TestCaseDetailPage({
     } catch (err) {
       // An empty or oversized file used to be dropped in silence, and the
       // page still said "Attachment uploaded".
-      if (err instanceof AttachmentValidationError) {
+      if (err instanceof AttachmentValidationError || err instanceof ChoiceError) {
         redirect(
-          `${basePath}/${testCaseId}?attachmentError=${encodeURIComponent(err.message)}`,
+          errorHref(`${basePath}/${testCaseId}`, "", err.message, {}, "attachmentError"),
         );
       }
       throw err;
@@ -220,7 +230,7 @@ export default async function TestCaseDetailPage({
     const targetTestGroup = targetTestGroupId ? await getTestGroupWithProjectId(targetTestGroupId) : null;
     if (!targetTestGroup || targetTestGroup.deletedAt) {
       redirect(
-        `${basePath}/${testCaseId}?moveError=${encodeURIComponent("Target Test Group not found or archived")}`,
+        errorHref(`${basePath}/${testCaseId}`, "", "Target Test Group not found or archived", {}, "moveError"),
       );
     }
     await requireProjectRoleOrNotFound(session!.user.id, targetTestGroup.projectId, EDITOR_ROLES);

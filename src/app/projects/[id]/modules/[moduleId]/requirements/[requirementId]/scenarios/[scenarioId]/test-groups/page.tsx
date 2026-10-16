@@ -24,7 +24,7 @@ import { notFound, redirect } from "next/navigation";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { nameOr, testGroupsListBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
-import { listHrefWithFilters, testGroupsListHref } from "@/lib/hrefs";
+import { errorHref, listHrefWithFilters, testGroupsListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
 import { getRequirementById } from "@/lib/requirements";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -43,7 +43,12 @@ import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
 import { EntityManageSection } from "@/components/EntityManageSection";
-import { WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import {
+  ChoiceError,
+  WORKFLOW_STATUS_OPTIONS,
+  WORKFLOW_STATUS_VALUES,
+  readChoice,
+} from "@/lib/enums";
 import {
   inputClass,
   labelClass,
@@ -166,7 +171,13 @@ export default async function TestGroupsPage({
         const target = targetScenarioId ? await getScenarioById(targetScenarioId) : null;
         if (!target || target.deletedAt) {
           redirect(
-            `${listPath}?moveError=${encodeURIComponent("Target Scenario not found or archived")}&editId=${testGroupId}`,
+            errorHref(
+              listPath,
+              listQueryString,
+              "Target Scenario not found or archived",
+              { editId: testGroupId },
+              "moveError",
+            ),
           );
         }
         await requireProjectRoleOrNotFound(actorId, target.projectId, EDITOR_ROLES);
@@ -203,8 +214,8 @@ export default async function TestGroupsPage({
         } catch (err) {
           // Refused for still carrying live Test Cases — shown against the
           // list, since there is no row dialog to land back in.
-          if (err instanceof ValidationError) {
-            redirect(`${listPath}?archiveError=${encodeURIComponent(err.message)}`);
+          if (err instanceof ValidationError || err instanceof ChoiceError) {
+            redirect(errorHref(listPath, listQueryString, err.message, {}, "archiveError"));
           }
           throw err;
         }
@@ -248,12 +259,12 @@ export default async function TestGroupsPage({
             name: formData.get("name") as string,
             description: (formData.get("description") as string) || null,
             testObjective: (formData.get("testObjective") as string) || null,
-            status: formData.get("status") as never,
+            status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
           },
           session!.user.id,
         );
       } catch (err) {
-        if (err instanceof ValidationError) {
+        if (err instanceof ValidationError || err instanceof ChoiceError) {
           const query = new URLSearchParams(listQueryString);
           query.set("error", err.message);
           query.set("editId", testGroupId);
@@ -280,12 +291,12 @@ export default async function TestGroupsPage({
           name: formData.get("name") as string,
           description: (formData.get("description") as string) || null,
           testObjective: (formData.get("testObjective") as string) || null,
-          status: formData.get("status") as never,
+          status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof ValidationError) {
+      if (err instanceof ValidationError || err instanceof ChoiceError) {
         const query = new URLSearchParams(listQueryString);
         query.set("error", err.message);
         redirect(`${listPath}?${query}`);

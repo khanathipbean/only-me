@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ChoiceError, WORKFLOW_STATUS_VALUES, readChoiceIfPresent } from "@/lib/enums";
 import { withEntityProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
 import { getScenarioById } from "@/lib/scenarios";
@@ -30,14 +31,14 @@ export const POST = withEntityProjectRole(
           name: body.name,
           description: body.description,
           testObjective: body.testObjective,
-          status: body.status,
+          status: readChoiceIfPresent(body.status, WORKFLOW_STATUS_VALUES, "Status"),
           ownerId: body.ownerId,
         },
         userId,
       );
       return NextResponse.json(testGroup, { status: 201 });
     } catch (error) {
-      if (error instanceof ValidationError) {
+      if (error instanceof ValidationError || error instanceof ChoiceError) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
       throw error;

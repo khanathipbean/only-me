@@ -45,7 +45,8 @@ import {
 } from "@/lib/ui";
 import type { ProjectStatus } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
-import { listHrefWithFilters } from "@/lib/hrefs";
+import { errorHref, listHrefWithFilters } from "@/lib/hrefs";
+import { ChoiceError, PROJECT_STATUS_VALUES, readChoice } from "@/lib/enums";
 
 export const metadata = { title: "Projects" };
 
@@ -116,7 +117,7 @@ export default async function ProjectsPage({
 
     const session = await auth();
     if (!(await isAdminAnywhere(session!.user.id))) {
-      redirect(`/projects?error=${encodeURIComponent("Only an Admin can create new projects")}`);
+      redirect(errorHref(listPath, listQueryString, "Only an Admin can create new projects"));
     }
 
     const startDate = formData.get("startDate") as string;
@@ -129,15 +130,15 @@ export default async function ProjectsPage({
           code: formData.get("code") as string,
           name: formData.get("name") as string,
           description: (formData.get("description") as string) || null,
-          status: formData.get("status") as never,
+          status: readChoice(formData.get("status"), PROJECT_STATUS_VALUES, "Status"),
           startDate: startDate ? new Date(startDate) : null,
           endDate: endDate ? new Date(endDate) : null,
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof ValidationError || err instanceof DuplicateCodeError) {
-        redirect(`/projects?error=${encodeURIComponent(err.message)}`);
+      if (err instanceof ValidationError || err instanceof DuplicateCodeError || err instanceof ChoiceError) {
+        redirect(errorHref(listPath, listQueryString, err.message));
       }
       throw err;
     }
@@ -165,18 +166,15 @@ export default async function ProjectsPage({
               code: formData.get("code") as string,
               name: formData.get("name") as string,
               description: (formData.get("description") as string) || null,
-              status: formData.get("status") as never,
+              status: readChoice(formData.get("status"), PROJECT_STATUS_VALUES, "Status"),
               startDate: startDate ? new Date(startDate) : null,
               endDate: endDate ? new Date(endDate) : null,
             },
             session!.user.id,
           );
         } catch (err) {
-          if (err instanceof ValidationError || err instanceof DuplicateCodeError) {
-            const query = new URLSearchParams(listQueryString);
-            query.set("projectId", id);
-            query.set("error", err.message);
-            redirect(`${listPath}?${query}`);
+          if (err instanceof ValidationError || err instanceof DuplicateCodeError || err instanceof ChoiceError) {
+            redirect(errorHref(listPath, listQueryString, err.message, { projectId: id }));
           }
           throw err;
         }

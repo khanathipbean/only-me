@@ -261,3 +261,63 @@ describe("project routes", () => {
     expect(afterRestore).toHaveLength(1);
   });
 });
+
+/**
+ * `status` and the other enum fields used to be handed to Prisma exactly as
+ * they arrived. Prisma threw its own invocation error, the route's catch knew
+ * only about `ValidationError`, and a mistyped value came back as a five
+ * hundred — through a plain POST, with no interface involved.
+ */
+describe("a value the column cannot hold", () => {
+  it("is a bad request, not a crash", async () => {
+    const owner = await createUser(uniqueEmail("enum-owner"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+
+    const response = await createProjectRoute(
+      jsonRequest("http://test/api/projects", "POST", {
+        code: uniqueCode("prj-enum"),
+        name: "Bad status",
+        status: "NOT_A_REAL_STATUS",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/DRAFT, ACTIVE, COMPLETED/);
+  });
+
+  it("says which field it was, so the message is worth reading", async () => {
+    const owner = await createUser(uniqueEmail("enum-owner"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+
+    const response = await createProjectRoute(
+      jsonRequest("http://test/api/projects", "POST", {
+        code: uniqueCode("prj-enum"),
+        name: "Bad status",
+        status: 42,
+      }),
+    );
+
+    expect((await response.json()).error).toMatch(/^Status must be/);
+  });
+
+  it("ignores a filter value nothing could match, rather than refusing to answer", async () => {
+    const owner = await createUser(uniqueEmail("enum-filter"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    await createProjectRoute(
+      jsonRequest("http://test/api/projects", "POST", {
+        code: uniqueCode("prj-filter"),
+        name: "Findable",
+        status: "ACTIVE",
+      }),
+    );
+
+    /* Narrowing a list is a request, not an instruction: ?status=NONSENSE
+     * asks for something that cannot exist, and the list is the honest
+     * answer. Cast straight into the `where` clause it was a 500. */
+    const response = await listProjects(
+      jsonRequest("http://test/api/projects?status=NONSENSE", "GET"),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).length).toBeGreaterThan(0);
+  });
+});

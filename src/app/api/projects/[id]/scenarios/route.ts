@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  ChoiceError,
+  PRIORITY_VALUES,
+  WORKFLOW_STATUS_VALUES,
+  readChoice,
+  readChoiceIfPresent,
+  readFilterChoice,
+} from "@/lib/enums";
 import { withProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
 import {
@@ -7,7 +15,6 @@ import {
   isScenarioSortField,
   listScenariosForProject,
 } from "@/lib/scenarios";
-import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 
 export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId }) => {
   const { searchParams } = new URL(request.url);
@@ -15,8 +22,8 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
   const sortOrder = searchParams.get("sortOrder");
   const scenarios = await listScenariosForProject(projectId, {
     search: searchParams.get("search") ?? undefined,
-    status: (searchParams.get("status") as WorkflowStatus | null) ?? undefined,
-    priority: (searchParams.get("priority") as Priority | null) ?? undefined,
+    status: readFilterChoice(searchParams.get("status"), WORKFLOW_STATUS_VALUES),
+    priority: readFilterChoice(searchParams.get("priority"), PRIORITY_VALUES),
     sortBy: isScenarioSortField(sortBy) ? sortBy : undefined,
     sortOrder: sortOrder === "asc" ? "asc" : undefined,
   });
@@ -37,8 +44,8 @@ export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, u
         testData: body.testData,
         steps: body.steps,
         expectedResult: body.expectedResult,
-        priority: body.priority,
-        status: body.status,
+        priority: readChoice(body.priority, PRIORITY_VALUES, "Priority"),
+        status: readChoiceIfPresent(body.status, WORKFLOW_STATUS_VALUES, "Status"),
         tags: body.tags,
         ownerId: body.ownerId,
       },
@@ -46,7 +53,7 @@ export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, u
     );
     return NextResponse.json(scenario, { status: 201 });
   } catch (error) {
-    if (error instanceof ValidationError) {
+    if (error instanceof ValidationError || error instanceof ChoiceError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     throw error;

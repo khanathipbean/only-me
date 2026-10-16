@@ -50,6 +50,7 @@ import {
 import type { Priority, WorkflowStatus } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
 import { listHrefWithFilters } from "@/lib/hrefs";
+import { ChoiceError, PRIORITY_VALUES, WORKFLOW_STATUS_VALUES, readChoice } from "@/lib/enums";
 
 export async function generateMetadata({
   params,
@@ -242,7 +243,7 @@ export default async function ScenariosPage({
         } catch (err) {
           // Refused for still carrying live Test Groups. There is no row
           // dialog to land back in, so it is shown against the list.
-          if (err instanceof ValidationError) {
+          if (err instanceof ValidationError || err instanceof ChoiceError) {
             const query = new URLSearchParams(listQueryString);
             query.set("archiveError", err.message);
             redirect(`${listPath}?${query}`);
@@ -298,14 +299,14 @@ export default async function ScenariosPage({
             testData: (formData.get("testData") as string) || null,
             steps: (formData.get("steps") as string) || null,
             expectedResult: formData.get("expectedResult") as string,
-            priority: formData.get("priority") as never,
-            status: formData.get("status") as never,
+            priority: readChoice(formData.get("priority"), PRIORITY_VALUES, "Priority"),
+            status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
             tags,
           },
           session!.user.id,
         );
       } catch (err) {
-        if (err instanceof ValidationError) {
+        if (err instanceof ValidationError || err instanceof ChoiceError) {
           const query = new URLSearchParams(listQueryString);
           query.set("error", err.message);
           query.set("editId", scenarioId);
@@ -356,14 +357,14 @@ export default async function ScenariosPage({
           testData: (formData.get("testData") as string) || null,
           steps: (formData.get("steps") as string) || null,
           expectedResult: formData.get("expectedResult") as string,
-          priority: formData.get("priority") as never,
-          status: formData.get("status") as never,
+          priority: readChoice(formData.get("priority"), PRIORITY_VALUES, "Priority"),
+          status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
           tags,
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof ValidationError) {
+      if (err instanceof ValidationError || err instanceof ChoiceError) {
         const query = new URLSearchParams(listQueryString);
         query.set("error", err.message);
         redirect(`${listPath}?${query}`);

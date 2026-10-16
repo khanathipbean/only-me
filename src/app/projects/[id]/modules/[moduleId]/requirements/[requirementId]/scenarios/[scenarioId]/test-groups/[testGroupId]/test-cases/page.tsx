@@ -40,7 +40,17 @@ import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
 import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
-import { PRIORITY_OPTIONS, TEST_RESULT_OPTIONS, WORKFLOW_STATUS_OPTIONS } from "@/lib/enums";
+import {
+  ChoiceError,
+  PRIORITY_OPTIONS,
+  PRIORITY_VALUES,
+  TEST_RESULT_OPTIONS,
+  TEST_TYPE_VALUES,
+  WORKFLOW_STATUS_OPTIONS,
+  WORKFLOW_STATUS_VALUES,
+  readChoice,
+  readOptionalChoice,
+} from "@/lib/enums";
 import {
   inputClass,
   labelClass,
@@ -170,15 +180,15 @@ export default async function TestCasesPage({
             preconditions: (formData.get("preconditions") as string) || null,
             testData: (formData.get("testData") as string) || null,
             expectedResult: formData.get("expectedResult") as string,
-            priority: formData.get("priority") as never,
-            testType: ((formData.get("testType") as string) || null) as never,
-            status: formData.get("status") as never,
+            priority: readChoice(formData.get("priority"), PRIORITY_VALUES, "Priority"),
+            testType: readOptionalChoice(formData.get("testType"), TEST_TYPE_VALUES, "Test Type"),
+            status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
             steps: parseStepsJson(formData.get("stepsJson") as string),
           },
           session!.user.id,
         );
       } catch (err) {
-        if (err instanceof ValidationError) {
+        if (err instanceof ValidationError || err instanceof ChoiceError) {
           const query = new URLSearchParams(listQueryString);
           query.set("error", err.message);
           query.set("editId", testCaseId);
@@ -249,15 +259,15 @@ export default async function TestCasesPage({
           preconditions: (formData.get("preconditions") as string) || null,
           testData: (formData.get("testData") as string) || null,
           expectedResult: formData.get("expectedResult") as string,
-          priority: formData.get("priority") as never,
-          testType: ((formData.get("testType") as string) || null) as never,
-          status: formData.get("status") as never,
+          priority: readChoice(formData.get("priority"), PRIORITY_VALUES, "Priority"),
+          testType: readOptionalChoice(formData.get("testType"), TEST_TYPE_VALUES, "Test Type"),
+          status: readChoice(formData.get("status"), WORKFLOW_STATUS_VALUES, "Status"),
           steps: parseStepsJson(formData.get("stepsJson") as string),
         },
         session!.user.id,
       );
     } catch (err) {
-      if (err instanceof ValidationError) {
+      if (err instanceof ValidationError || err instanceof ChoiceError) {
         const query = new URLSearchParams(listQueryString);
         query.set("error", err.message);
         redirect(`${basePath}?${query}`);

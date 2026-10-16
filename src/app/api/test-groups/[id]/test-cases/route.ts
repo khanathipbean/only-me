@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import {
+  ChoiceError,
+  PRIORITY_VALUES,
+  TEST_TYPE_VALUES,
+  WORKFLOW_STATUS_VALUES,
+  readChoice,
+  readChoiceIfPresent,
+} from "@/lib/enums";
 import { withEntityProjectRole } from "@/lib/api-auth";
 import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
 import { getTestGroupWithProjectId } from "@/lib/test-groups";
@@ -32,16 +40,16 @@ export const POST = withEntityProjectRole(
           preconditions: body.preconditions,
           testData: body.testData,
           expectedResult: body.expectedResult,
-          priority: body.priority,
-          testType: body.testType,
-          status: body.status,
+          priority: readChoice(body.priority, PRIORITY_VALUES, "Priority"),
+          testType: readChoiceIfPresent(body.testType, TEST_TYPE_VALUES, "Test Type"),
+          status: readChoiceIfPresent(body.status, WORKFLOW_STATUS_VALUES, "Status"),
           steps: body.steps,
         },
         userId,
       );
       return NextResponse.json(testCase, { status: 201 });
     } catch (error) {
-      if (error instanceof ValidationError) {
+      if (error instanceof ValidationError || error instanceof ChoiceError) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
       throw error;
