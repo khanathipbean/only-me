@@ -227,6 +227,11 @@ export async function confirmImport(
        * Requirement details creates nothing, and reporting that as "No new
        * items were created" would read as if the file had been ignored. */
       const updatedCounts = { requirements: 0 };
+      /* Rows the import brought back out of the archive. Reported rather than
+       * done quietly: somebody archived these on purpose, and a file that
+       * un-archives them without saying so is a surprise waiting to be found
+       * weeks later. */
+      const restoredCounts = { modules: 0, requirements: 0, scenarios: 0, testGroups: 0 };
 
       // Modules ------------------------------------------------------------
       const moduleIdByName = new Map<string, string>();
@@ -249,6 +254,7 @@ export async function confirmImport(
             where: { id: { in: archived } },
             data: { deletedAt: null },
           });
+          restoredCounts.modules = archived.length;
         }
 
         const missing = [...wantedModules.keys()].filter((name) => !moduleIdByName.has(name));
@@ -285,10 +291,16 @@ export async function confirmImport(
       const wantedRequirements = firstSeen(work, requirementKey);
 
       if (wantedRequirements.size > 0) {
+        /* Archived ones included on purpose, the same as Modules above. The
+         * three levels below this used to filter them out, which meant the
+         * import could not see a Requirement that was already there and made
+         * a second one with the same name beside it — so a project somebody
+         * had tidied up grew duplicates on the next import, while the Module
+         * level quietly restored instead. One function, two answers to the
+         * same question; this is the one the Module comment argues for. */
         const existing = await tx.requirement.findMany({
           where: {
             projectId,
-            deletedAt: null,
             OR: [...wantedRequirements.values()].map((w) => ({
               moduleId: moduleIdByName.get(w.moduleName)!,
               name: w.requirementName,
@@ -304,8 +316,19 @@ export async function confirmImport(
             code: true,
             description: true,
             feature: true,
+            deletedAt: true,
           },
         });
+
+        const archivedRequirements = existing.filter((r) => r.deletedAt).map((r) => r.id);
+        if (archivedRequirements.length > 0) {
+          await tx.requirement.updateMany({
+            where: { id: { in: archivedRequirements } },
+            data: { deletedAt: null },
+          });
+          restoredCounts.requirements = archivedRequirements.length;
+        }
+
         const existingByKey = new Map<string, (typeof existing)[number]>();
         for (const requirement of existing) {
           const key = `${requirement.moduleId} ${requirement.name}`;
@@ -411,14 +434,24 @@ export async function confirmImport(
       const wantedScenarios = firstSeen(work, (w) => w.data.scenarioName);
 
       if (wantedScenarios.size > 0) {
+        // Archived ones included, same reasoning as the two levels above.
         const existing = await tx.scenario.findMany({
-          where: { projectId, deletedAt: null, name: { in: [...wantedScenarios.keys()] } },
-          select: { id: true, name: true },
+          where: { projectId, name: { in: [...wantedScenarios.keys()] } },
+          select: { id: true, name: true, deletedAt: true },
         });
         for (const scenario of existing) {
           if (!scenarioIdByName.has(scenario.name)) {
             scenarioIdByName.set(scenario.name, scenario.id);
           }
+        }
+
+        const archivedScenarios = existing.filter((sc) => sc.deletedAt).map((sc) => sc.id);
+        if (archivedScenarios.length > 0) {
+          await tx.scenario.updateMany({
+            where: { id: { in: archivedScenarios } },
+            data: { deletedAt: null },
+          });
+          restoredCounts.scenarios = archivedScenarios.length;
         }
 
         const missing = [...wantedScenarios.entries()].filter(
@@ -462,16 +495,25 @@ export async function confirmImport(
       const wantedTestGroups = firstSeen(work, testGroupKey);
 
       if (wantedTestGroups.size > 0) {
+        // Archived ones included, same reasoning as the levels above.
         const existing = await tx.testGroup.findMany({
           where: {
-            deletedAt: null,
             OR: [...wantedTestGroups.values()].map((w) => ({
               scenarioId: scenarioIdByName.get(w.data.scenarioName)!,
               name: w.data.testGroupName,
             })),
           },
-          select: { id: true, scenarioId: true, name: true },
+          select: { id: true, scenarioId: true, name: true, deletedAt: true },
         });
+
+        const archivedTestGroups = existing.filter((g) => g.deletedAt).map((g) => g.id);
+        if (archivedTestGroups.length > 0) {
+          await tx.testGroup.updateMany({
+            where: { id: { in: archivedTestGroups } },
+            data: { deletedAt: null },
+          });
+          restoredCounts.testGroups = archivedTestGroups.length;
+        }
         for (const group of existing) {
           const key = `${group.scenarioId} ${group.name}`;
           if (!testGroupIdByKey.has(key)) {
@@ -726,6 +768,7 @@ export async function confirmImport(
         skippedCount,
         createdCounts,
         updatedCounts,
+        restoredCounts,
         importLogId: importLog.id,
       };
     },

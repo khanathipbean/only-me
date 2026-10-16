@@ -29,15 +29,27 @@ function list(counts: Record<string, number>) {
  * already existed, which creates nothing: reporting only the created counts
  * would call that "No new items were created" and read as if the file had
  * been ignored. */
-function describeCounts(created: Record<string, number>, updated: Record<string, number>) {
+function describeCounts(
+  created: Record<string, number>,
+  updated: Record<string, number>,
+  restored: Record<string, number> = {},
+) {
   const sentences: string[] = [];
   const createdList = list(created);
   const updatedList = list(updated);
+  const restoredList = list(restored);
   if (createdList) {
     sentences.push(`Imported ${createdList}.`);
   }
   if (updatedList) {
     sentences.push(`Updated ${updatedList}.`);
+  }
+  /* Said out loud, because somebody archived these on purpose. The import
+   * reuses what is already there rather than making a second one with the
+   * same name beside it, which means bringing it back — and a file that does
+   * that silently is a surprise found weeks later. */
+  if (restoredList) {
+    sentences.push(`Brought ${restoredList} back out of the archive.`);
   }
   return sentences.length > 0 ? sentences.join(" ") : "No new items were created.";
 }
@@ -62,7 +74,7 @@ export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, u
       projectId,
       type: "IMPORT_COMPLETED",
       title: `Import completed for ${project.code}`,
-      body: describeCounts(summary.createdCounts, summary.updatedCounts),
+      body: describeCounts(summary.createdCounts, summary.updatedCounts, summary.restoredCounts),
       link: `/projects/${projectId}/audit-log`,
       actorId: userId,
       excludeUserId: userId,
