@@ -7,7 +7,9 @@ import {
   LOCK_MINUTES,
   MAX_FAILURES,
   WINDOW_MINUTES,
+  clearFailures,
   readLockState,
+  readLockStates,
   recordFailure,
 } from "@/lib/login-throttle";
 
@@ -233,5 +235,74 @@ describe("how many wrong passwords an address gets", () => {
     }
 
     expect((await readLockState(email)).locked).toBe(true);
+  });
+});
+
+/**
+ * What the Members page needs to show who is locked out and let them back in.
+ */
+describe("what an administrator can see and undo", () => {
+  it("reports every address asked about, locked or not, in one go", async () => {
+    const locked = uniqueEmail("admin-view-locked");
+    const fine = uniqueEmail("admin-view-fine");
+    const untouched = uniqueEmail("admin-view-untouched");
+
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      await recordFailure(locked);
+    }
+    await recordFailure(fine);
+
+    const states = await readLockStates([locked, fine, untouched]);
+
+    // Keyed by the address as it was passed in, so a caller can look its own
+    // rows up without having to know how the key is normalised.
+    expect(states.get(locked)?.locked).toBe(true);
+    expect(states.get(fine)?.locked).toBe(false);
+    // An address with no row at all still gets an answer, rather than the
+    // page having to tell `undefined` apart from "not locked".
+    expect(states.get(untouched)).toEqual({ locked: false });
+  });
+
+  it("matches the address however the caller capitalises it", async () => {
+    const email = uniqueEmail("admin-view-caps");
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      await recordFailure(email);
+    }
+
+    expect((await readLockStates([email.toUpperCase()])).get(email.toUpperCase())?.locked).toBe(
+      true,
+    );
+  });
+
+  it("lets somebody back in before the lock would have expired", async () => {
+    const email = uniqueEmail("unlocked-early");
+    await prisma.user.create({
+      data: { email, passwordHash: await hashPassword("correct-horse-battery-staple"), name: "Early" },
+    });
+
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      await authenticateWithPassword({ email, password: "wrong" });
+    }
+    expect(await authenticateWithPassword({ email, password: "correct-horse-battery-staple" })).toBeNull();
+
+    await clearFailures(email);
+
+    expect(
+      await authenticateWithPassword({ email, password: "correct-horse-battery-staple" }),
+    ).not.toBeNull();
+  });
+
+  it("gives the unlocked address its full set of attempts back", async () => {
+    const email = uniqueEmail("unlocked-fresh");
+    for (let attempt = 0; attempt < MAX_FAILURES; attempt += 1) {
+      await recordFailure(email);
+    }
+    await clearFailures(email);
+
+    // Four more must not lock it again, or the unlock only cleared the lock
+    // and left the count behind it.
+    for (let attempt = 0; attempt < MAX_FAILURES - 1; attempt += 1) {
+      expect((await recordFailure(email)).locked).toBe(false);
+    }
   });
 });

@@ -76,7 +76,38 @@ export async function recordFailure(email: string, now = new Date()): Promise<Lo
   return { locked: true, until, minutesLeft: minutesUntil(until, now) };
 }
 
-/** Forgets everything about an address — called when its password is right. */
+/**
+ * The lock state of several addresses at once, keyed by the address as it was
+ * passed in.
+ *
+ * One query rather than one per row: the Members page shows every account in
+ * the system, and asking per row would turn opening that page into as many
+ * round trips as there are people.
+ */
+export async function readLockStates(
+  emails: string[],
+  now = new Date(),
+): Promise<Map<string, LockState>> {
+  const rows = await prisma.loginThrottle.findMany({
+    where: { email: { in: emails.map(key) }, lockedUntil: { gt: now } },
+  });
+  const byKey = new Map(rows.map((row) => [row.email, row.lockedUntil!]));
+
+  return new Map(
+    emails.map((email) => {
+      const until = byKey.get(key(email));
+      return [
+        email,
+        until
+          ? { locked: true as const, until, minutesLeft: minutesUntil(until, now) }
+          : { locked: false as const },
+      ];
+    }),
+  );
+}
+
+/** Forgets everything about an address — called when its password is right,
+ *  and by an administrator letting somebody back in early. */
 export async function clearFailures(email: string) {
   await prisma.loginThrottle.deleteMany({ where: { email: key(email) } });
 }

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { E2E_VIEWER_EMAIL, E2E_VIEWER_PASSWORD } from "./support/credentials";
 
 /**
  * Drives the real form, because the message is the part the unit tests cannot
@@ -38,4 +39,55 @@ test("tells you to come back later after five wrong passwords", async ({ page })
 
   await expect(message).toContainText("Too many attempts");
   await expect(message).toContainText("minutes");
+});
+
+/**
+ * The other half: an administrator can see who is locked out and let them
+ * back in, because fifteen minutes is a long time to sit and wait when the
+ * person is right there.
+ *
+ * Uses the viewer account rather than the suite's admin: locking the admin
+ * out is how you find out, slowly, that every other spec signs in as it.
+ */
+test.describe("an administrator letting somebody back in", () => {
+  test.use({ storageState: "e2e/.auth/user.json" });
+
+  test("shows who is locked and unlocks them", async ({ page, browser }) => {
+    const stranded = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const theirBrowser = await stranded.newPage();
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await theirBrowser.goto("/login");
+      await theirBrowser.locator('input[name="email"]').fill(E2E_VIEWER_EMAIL);
+      await theirBrowser.locator('input[name="password"]').fill("not-their-password");
+      await theirBrowser.getByRole("button", { name: "Sign in" }).click();
+      await theirBrowser.waitForURL("**/login?error=*");
+    }
+
+    // The right password no longer works, which is the situation the button
+    // exists for.
+    await theirBrowser.goto("/login");
+    await theirBrowser.locator('input[name="email"]').fill(E2E_VIEWER_EMAIL);
+    await theirBrowser.locator('input[name="password"]').fill(E2E_VIEWER_PASSWORD);
+    await theirBrowser.getByRole("button", { name: "Sign in" }).click();
+    await expect(theirBrowser.getByRole("main").getByRole("alert")).toContainText(
+      "Too many attempts",
+    );
+
+    await page.goto("/members");
+    const row = page.getByRole("row").filter({ hasText: E2E_VIEWER_EMAIL });
+    await expect(row.getByText(/Locked/)).toBeVisible();
+
+    await row.getByRole("button", { name: /^Unlock/ }).click();
+    await expect(row.getByText(/Locked/)).toHaveCount(0);
+
+    // And the proof that the badge is not just hidden: they can sign in.
+    await theirBrowser.goto("/login");
+    await theirBrowser.locator('input[name="email"]').fill(E2E_VIEWER_EMAIL);
+    await theirBrowser.locator('input[name="password"]').fill(E2E_VIEWER_PASSWORD);
+    await theirBrowser.getByRole("button", { name: "Sign in" }).click();
+    await theirBrowser.waitForURL("**/projects");
+
+    await stranded.close();
+  });
 });

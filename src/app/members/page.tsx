@@ -26,7 +26,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { RequiredMark } from "@/components/forms/RequiredMark";
 import { Badge, type Tone } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
-import { EditIcon, TrashIcon } from "@/components/icons";
+import { EditIcon, TrashIcon, UnlockIcon } from "@/components/icons";
 import { MIN_PASSWORD_LENGTH, ProfileValidationError, setPasswordForUser } from "@/lib/users";
 import { ASSIGNABLE_PROJECT_ROLE_OPTIONS, PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import {
@@ -43,6 +43,7 @@ import {
 } from "@/lib/ui";
 import type { ProjectRole } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { clearFailures, readLockStates } from "@/lib/login-throttle";
 
 export const metadata = { title: "Members" };
 
@@ -134,6 +135,10 @@ export default async function MembersPage({
     listAllProjectsForPicker(),
   ]);
   const projectTone = projectToneMap(projects);
+  /* Who cannot get in right now. This page is where somebody looks the moment
+   * a colleague says they are locked out, so the answer is on it rather than
+   * one modal deeper. */
+  const lockStates = await readLockStates(members.map((member) => member.email));
 
   async function create(formData: FormData) {
     "use server";
@@ -208,6 +213,24 @@ export default async function MembersPage({
       }
 
       redirect(withToast("/members", "Password set — tell them to change it once they are in"));
+    };
+  }
+
+  /* Takes the address, not the user id: the limit counts addresses, including
+   * ones no account owns, so that is what a lock is held against. A plain
+   * string crosses into a server action safely — a function would not, and
+   * trying once cost this project a page that failed on every request while
+   * the build, the types and the tests all stayed green. */
+  function unlockAction(email: string) {
+    return async function unlock() {
+      "use server";
+      invalidateRouteCache();
+      const session = await auth();
+      await requireAdminAnywhereOrNotFound(session!.user.id);
+
+      await clearFailures(email);
+
+      redirect(withToast("/members", "Unlocked — they can sign in again now"));
     };
   }
 
@@ -319,10 +342,22 @@ export default async function MembersPage({
               </tr>
             </thead>
             <tbody>
-              {members.map((member) => (
+              {members.map((member) => {
+                const lock = lockStates.get(member.email);
+                return (
                 <tr key={member.userId} className={trHoverClass}>
                   <td className={`${tdClass} font-medium text-foreground`}>{member.name}</td>
-                  <td className={`${tdClass} text-muted`}>{member.email}</td>
+                  <td className={`${tdClass} text-muted`}>
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      {member.email}
+                      {/* Only while it is true, and it carries the number of
+                          minutes: "Locked" on its own leaves the reader
+                          wondering whether to wait or to do something. */}
+                      {lock?.locked && (
+                        <Badge tone="red">Locked · {lock.minutesLeft} min</Badge>
+                      )}
+                    </span>
+                  </td>
                   <td className={tdClass}>
                     <div className="flex flex-wrap gap-1.5">
                       {member.memberships.map((m) => (
@@ -333,6 +368,23 @@ export default async function MembersPage({
                     </div>
                   </td>
                   <td className={tdClass}>
+                    <span className="inline-flex items-center gap-1">
+                    {/* Beside the Edit button rather than inside it: the whole
+                        point is getting somebody back in quickly, and three
+                        clicks for a one-line fix is two too many. No
+                        confirmation either — letting a colleague in early is
+                        undone by the next five wrong passwords. */}
+                    {lock?.locked && (
+                      <form action={unlockAction(member.email)}>
+                        <IconButton
+                          type="submit"
+                          aria-label={`Unlock ${member.name}`}
+                          title={`Unlock ${member.name} — ${lock.minutesLeft} minutes left otherwise`}
+                        >
+                          <UnlockIcon />
+                        </IconButton>
+                      </form>
+                    )}
                     <Modal
                       triggerLabel="Edit access"
                       triggerVariant="ghost"
@@ -405,9 +457,11 @@ export default async function MembersPage({
                         </div>
                       </div>
                     </Modal>
+                    </span>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

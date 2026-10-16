@@ -27,6 +27,17 @@ export function EditIcon(props: IconProps) {
   );
 }
 
+/** An open padlock — the shackle swung clear of the body, which is what
+ *  separates it from a locked one at icon size. */
+export function UnlockIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </IconBase>
+  );
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <IconBase {...props}>
