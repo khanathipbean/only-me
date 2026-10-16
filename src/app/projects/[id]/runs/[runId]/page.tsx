@@ -757,6 +757,7 @@ export default async function TestRunPage({
               name="result"
               defaultValue={result ?? ""}
               options={[{ value: "", label: "Any result" }, ...TEST_RESULT_OPTIONS]}
+              ariaLabel="Result"
               className="max-w-40"
             />
           </label>

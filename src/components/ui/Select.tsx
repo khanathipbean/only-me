@@ -60,7 +60,16 @@ export function Select({
   name?: string;
   required?: boolean;
   disabled?: boolean;
-  ariaLabel?: string;
+  /**
+   * Required, not optional. A `<label>` wrapping this names nothing: the
+   * trigger is a button, and a label only associates with a native control.
+   * Sixty-three call sites passed one and the sixty-fourth did not — the
+   * Result filter on the Test Run page, which a screen reader announced as an
+   * unnamed combobox while every other filter beside it had a name. Making it
+   * required is the only version of this that the next call site cannot get
+   * wrong.
+   */
+  ariaLabel: string;
   /** Shown before the label, inside the trigger. Options stay plain text —
    *  an icon repeated down every row of the list is noise, not a signpost. */
   leadingIcon?: ReactNode;
