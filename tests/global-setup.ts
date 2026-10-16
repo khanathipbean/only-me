@@ -39,7 +39,11 @@ export default async function setup() {
 
   process.env.DATABASE_URL = DATABASE_URL;
 
-  execSync("npx prisma db push --accept-data-loss", {
+  /* `migrate deploy`, not `db push`. Both end up with the same tables, but
+   * this one builds them by running the migration files, so every test run is
+   * also a check that those files still produce the schema the code expects.
+   * A migration nobody replays is a migration nobody can trust. */
+  execSync("npx prisma migrate deploy", {
     env: { ...process.env, DATABASE_URL },
     stdio: "inherit",
   });
