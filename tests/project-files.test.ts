@@ -139,3 +139,59 @@ describe("project files by module", () => {
     expect(all.flatMap((group) => group.files)).toHaveLength(2);
   });
 });
+
+/**
+ * A file's stored content type is whatever the uploader said it was —
+ * `saveProjectFile` writes `file.type` straight through, and a multipart part
+ * can claim anything. So the question is not whether a lie can be stored (it
+ * can) but whether anything downstream acts on it.
+ *
+ * Three things stand between a lie and a script running on this origin, and
+ * all three are one line each — the kind that gets deleted by somebody who
+ * cannot see what they are holding up.
+ */
+describe("a file claiming to be something it is not", () => {
+  it("is only served inline when the claimed type cannot execute", () => {
+    // The allowlist is the first gate, and it works on the claim.
+    expect(canPreview("image/png")).toBe(true);
+    expect(canPreview("application/pdf")).toBe(true);
+
+    // An honest .html or .svg is forced to download, which is the easy half.
+    expect(canPreview("text/html")).toBe(false);
+    expect(canPreview("image/svg+xml")).toBe(false);
+    expect(canPreview("application/xhtml+xml")).toBe(false);
+    expect(canPreview("text/xml")).toBe(false);
+    expect(canPreview("application/javascript")).toBe(false);
+  });
+
+  it("keeps SVG out of the inline list, whatever it is called", () => {
+    /* SVG is an XML document that can carry script, so rendering one inline
+     * would run it on this app's origin with the session cookie in reach.
+     * Named here so a later "images should preview" change has to argue with
+     * a failing test rather than a comment. */
+    for (const claimed of ["image/svg+xml", "image/svg", "text/svg+xml"]) {
+      expect(canPreview(claimed), claimed).toBe(false);
+    }
+  });
+
+  it("never hands a claimed type to a mode the browser renders from our bytes", () => {
+    /* The two dangerous modes are `image` and `frame`: both make the browser
+     * interpret bytes this app served. A claimed `text/html` reaches neither,
+     * however the file is named.
+     *
+     * It does reach `text`, and that is safe rather than an oversight — the
+     * dialog puts the characters in a `<pre>`, which React escapes, so an
+     * HTML file is shown as its own source. `dangerouslySetInnerHTML` appears
+     * nowhere in this codebase; the day it does, in that dialog, this becomes
+     * stored XSS. */
+    expect(previewMode("text/html", "harmless.png")).toBe("text");
+    expect(previewMode("image/svg+xml", "harmless.png")).toBe("none");
+    for (const claimed of ["text/html", "image/svg+xml", "application/javascript"]) {
+      expect(["image", "frame"], claimed).not.toContain(previewMode(claimed, "x.png"));
+    }
+
+    // And the honest cases still work.
+    expect(previewMode("image/png", "shot.png")).toBe("image");
+    expect(previewMode("application/pdf", "doc.pdf")).toBe("frame");
+  });
+});
