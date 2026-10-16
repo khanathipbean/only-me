@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from "react";
 import { Button, IconButton, type ButtonVariant } from "@/components/ui/Button";
 import { ClearIcon } from "@/components/icons";
 import { dialogClass } from "@/lib/ui";
@@ -80,6 +80,12 @@ export function Dialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const backdrop = useBackdropDismiss(onClose);
+  /* A `<dialog>` takes no name from the heading inside it, so without this it
+   * opens as an unnamed region: a screen reader announces that a dialog
+   * appeared and nothing about which one. The heading is right there — this
+   * just points at it. Found because `getByRole("dialog", { name })` matched
+   * nothing in a browser test. */
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -98,12 +104,15 @@ export function Dialog({
       // step with what the browser already did. The backdrop does not — that
       // is what `dismissOnBackdrop` adds, for a dialog that only shows.
       onClose={onClose}
+      aria-labelledby={titleId}
       {...(dismissOnBackdrop ? backdrop : {})}
       className={`${dialogClass} ${DIALOG_WIDTH_CLASS[width]}`}
     >
       <div className="max-h-[85vh] overflow-y-auto p-6">
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-foreground">
+            {title}
+          </h2>
           <IconButton type="button" onClick={onClose} aria-label="Close" title="Close">
             <ClearIcon />
           </IconButton>
@@ -140,6 +149,8 @@ export function Modal({
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  /** Same reason as the dialog above: a `<dialog>` is nameless without it. */
+  const titleId = useId();
 
   useEffect(() => {
     if (openOnMount) {
@@ -165,10 +176,16 @@ export function Modal({
         </Button>
       )}
 
-      <dialog ref={dialogRef} className={`${dialogClass} ${DIALOG_WIDTH_CLASS[width]}`}>
+      <dialog
+        ref={dialogRef}
+        aria-labelledby={titleId}
+        className={`${dialogClass} ${DIALOG_WIDTH_CLASS[width]}`}
+      >
         <div className="max-h-[85vh] overflow-y-auto p-6">
           <div className="mb-4 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+            <h2 id={titleId} className="text-lg font-semibold text-foreground">
+              {title}
+            </h2>
             <IconButton
               type="button"
               onClick={() => dialogRef.current?.close()}

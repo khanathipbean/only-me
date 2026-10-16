@@ -16,9 +16,11 @@ test("a refused Project keeps the filters the list was showing", async ({ page }
 
   /* Scoped to the open dialog: every row carries its own Edit dialog with an
      identically named field, all of them in the DOM whether open or not. */
-  /* By the open attribute: this is a native <dialog> with no aria-label, so
-     it has no accessible name to ask for. */
-  const dialog = page.locator("dialog[open]");
+  /* By name, which is also the check that it has one: a native <dialog>
+     takes none from the heading inside it, so this used to match nothing and
+     the spec had to fall back to `dialog[open]`. A screen reader was in the
+     same position. */
+  const dialog = page.getByRole("dialog", { name: "New Project" });
   // A code that is certainly taken: the fixture project the suite seeds.
   await dialog.locator('input[name="code"]').fill("E2E-FIXTURE");
   await dialog.locator('input[name="name"]').fill("Duplicate on purpose");
