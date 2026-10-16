@@ -37,17 +37,26 @@ async function main() {
     await pg.start();
   }
 
-  try {
-    if (isWindows) {
-      await createDatabaseWindowsSafe(PORT, "devdb");
-    } else {
-      await pg.createDatabase("devdb");
+  /* Both databases, not just the one this script is named after. `e2edb` is
+   * where the browser tests are allowed to delete things, and it lives on
+   * this same server by design — but nothing created it, so it only existed
+   * on machines where somebody had made it by hand once. A fresh checkout
+   * could run the unit suite and not the browser one, and the reason was
+   * invisible. */
+  for (const name of ["devdb", "e2edb"]) {
+    try {
+      if (isWindows) {
+        await createDatabaseWindowsSafe(PORT, name);
+      } else {
+        await pg.createDatabase(name);
+      }
+    } catch {
+      // Already there from a previous run.
     }
-  } catch {
-    // Already exists from a previous run.
   }
 
   console.log(`Dev Postgres running at ${DEV_DATABASE_URL}`);
+  console.log(`Browser-test database alongside it: e2edb`);
 }
 
 main().catch((error) => {

@@ -1,0 +1,112 @@
+# Runs what a person would run before pushing, on every push and pull request.
+#
+# Until now nothing ran unless somebody remembered to. The suite has caught
+# real faults more than once — thirty-three tests went red the day the enum
+# readers were tightened the wrong way — but a test nobody runs is a comment.
+# Netlify builds and deploys whatever arrives, so without this the first sign
+# of a broken push is a broken site.
+name: CI
+
+on:
+  push:
+    branches: [master, dev, design]
+  pull_request:
+
+# A newer push makes an older run pointless; stop it rather than pay for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Types, lint, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # The Prisma client is generated, not committed, so nothing typechecks
+      # until it exists.
+      - run: npx prisma generate
+
+      - run: npx tsc --noEmit
+
+      - run: npm run lint
+
+      # `tests/global-setup.ts` starts its own throwaway Postgres, so there is
+      # no service container here and nothing to wait for.
+      - run: npm test
+
+      # Values that only have to exist: no page reads the database at build
+      # time, and this was checked rather than assumed.
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:1/none
+          AUTH_SECRET: ci-only-not-a-secret
+
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+
+    # A service container rather than the repo's own `npm run db:dev`. That
+    # script spawns `postgres` as a direct child and returns, which survives
+    # on a developer's machine but not reliably between steps here, where the
+    # runner may take the whole process group with the step that started it.
+    #
+    # Port 54330 and the name `e2edb` are not arbitrary: they are what
+    # `e2e/support/database.ts` already defaults to, and 127.0.0.1 is what
+    # `e2e/support/guard.ts` insists on before it will let the suite delete
+    # anything.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: e2edb
+        ports:
+          - 54330:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # `e2e/global-setup.ts` pushes the schema into that database and seeds
+      # it; `playwright.config.ts` starts the app on its own port, pointed at
+      # the same connection string.
+      - name: Run the browser tests
+        run: npx playwright test
+        env:
+          AUTH_SECRET: ci-only-not-a-secret
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
