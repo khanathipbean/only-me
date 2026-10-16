@@ -23,12 +23,18 @@ test("tells you to come back later after five wrong passwords", async ({ page })
     await page.locator('input[name="email"]').fill(stranger);
     await page.locator('input[name="password"]').fill("definitely-wrong");
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("**/login?error=*");
 
-    // The first four say nothing about a limit, or the limit would be
-    // announcing itself to anyone who typed their password wrong once.
+    /* Waits for the message, not for a URL. This used to wait on the glob
+       "**" + "/login?error=*", which quietly also required `error` to be the
+       first parameter — so the spec went red the day the page started
+       building that URL through a shared helper, although both spellings are
+       the same address. */
     if (attempt < 5) {
+      // The first four say nothing about a limit, or the limit would be
+      // announcing itself to anyone who typed their password wrong once.
       await expect(message).toHaveText("Invalid email or password.");
+    } else {
+      await expect(message).toBeVisible();
     }
   }
 
@@ -61,7 +67,7 @@ test.describe("an administrator letting somebody back in", () => {
       await theirBrowser.locator('input[name="email"]').fill(E2E_VIEWER_EMAIL);
       await theirBrowser.locator('input[name="password"]').fill("not-their-password");
       await theirBrowser.getByRole("button", { name: "Sign in" }).click();
-      await theirBrowser.waitForURL("**/login?error=*");
+      await expect(theirBrowser.getByRole("main").getByRole("alert")).toBeVisible();
     }
 
     // The right password no longer works, which is the situation the button

@@ -25,6 +25,7 @@ import { RequiredMark } from "@/components/forms/RequiredMark";
 import { TrashIcon } from "@/components/icons";
 import { inputClass, labelClass, mutedTextClass, pageClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { errorHref } from "@/lib/hrefs";
 
 export const metadata = { title: "Profile" };
 
@@ -48,7 +49,7 @@ export default async function ProfilePage({
       await updateDisplayName(session!.user.id, formData.get("name") as string);
     } catch (err) {
       if (err instanceof ProfileValidationError) {
-        redirect(`/profile?nameError=${encodeURIComponent(err.message)}`);
+        redirect(errorHref("/profile", "", err.message, {}, "nameError"));
       }
       throw err;
     }
@@ -61,13 +62,13 @@ export default async function ProfilePage({
     const session = await auth();
     const next = formData.get("newPassword") as string;
     if (next !== (formData.get("confirmPassword") as string)) {
-      redirect(`/profile?passwordError=${encodeURIComponent("The two new passwords don't match")}`);
+      redirect(errorHref("/profile", "", "The two new passwords don't match", {}, "passwordError"));
     }
     try {
       await changePassword(session!.user.id, formData.get("currentPassword") as string, next);
     } catch (err) {
       if (err instanceof ProfileValidationError) {
-        redirect(`/profile?passwordError=${encodeURIComponent(err.message)}`);
+        redirect(errorHref("/profile", "", err.message, {}, "passwordError"));
       }
       throw err;
     }
@@ -80,13 +81,13 @@ export default async function ProfilePage({
     const session = await auth();
     const file = formData.get("avatar");
     if (!(file instanceof File) || file.size === 0) {
-      redirect(`/profile?avatarError=${encodeURIComponent("Choose a picture first")}`);
+      redirect(errorHref("/profile", "", "Choose a picture first", {}, "avatarError"));
     }
     try {
       await updateAvatar(session!.user.id, file);
     } catch (err) {
       if (err instanceof ProfileValidationError) {
-        redirect(`/profile?avatarError=${encodeURIComponent(err.message)}`);
+        redirect(errorHref("/profile", "", err.message, {}, "avatarError"));
       }
       throw err;
     }

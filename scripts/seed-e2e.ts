@@ -28,6 +28,13 @@ const FIXTURE_PROJECT_CODE = "E2E-FIXTURE";
 const MISSING_FILE_KEY = "project-files/deliberately-absent";
 
 export async function seedBaseline() {
+  /* Nobody starts locked out. `db push` leaves the rows alone and this seed
+   * is otherwise idempotent, so a login-limit test that stops halfway through
+   * used to leave an account locked for the next fifteen minutes — which took
+   * down the permission specs too, since they sign in as the same account and
+   * have nothing to do with the limit. */
+  await prisma.loginThrottle.deleteMany();
+
   const user =
     (await prisma.user.findUnique({ where: { email: E2E_EMAIL } })) ??
     (await prisma.user.create({

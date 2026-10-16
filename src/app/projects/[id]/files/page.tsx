@@ -32,6 +32,7 @@ import { RequiredMark } from "@/components/forms/RequiredMark";
 import { TrashIcon } from "@/components/icons";
 import { inputClass, labelClass, mutedTextClass, pageClass } from "@/lib/ui";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { errorHref, listHrefWithFilters } from "@/lib/hrefs";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,6 +65,16 @@ export default async function ProjectFilesPage({
   ]);
   const totalFiles = groups.reduce((sum, group) => sum + group.files.length, 0);
 
+  /* Plain strings, because the actions below close over them. Every redirect
+   * on this page went to the bare path before, so filtering to one Module and
+   * then uploading a file put the reader back at the unfiltered list — on the
+   * way out of a failure and of a success alike. */
+  const listPath = `/projects/${projectId}/files`;
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
+    search,
+    moduleId,
+  });
+
   async function upload(formData: FormData) {
     "use server";
     invalidateRouteCache();
@@ -72,7 +83,7 @@ export default async function ProjectFilesPage({
 
     const file = formData.get("file");
     if (!(file instanceof File)) {
-      redirect(`/projects/${projectId}/files?error=${encodeURIComponent("Choose a file first")}`);
+      redirect(errorHref(listPath, listQueryString, "Choose a file first"));
     }
     try {
       await saveProjectFile(
@@ -83,11 +94,11 @@ export default async function ProjectFilesPage({
       );
     } catch (err) {
       if (err instanceof FileValidationError) {
-        redirect(`/projects/${projectId}/files?error=${encodeURIComponent(err.message)}`);
+        redirect(errorHref(listPath, listQueryString, err.message));
       }
       throw err;
     }
-    redirect(withToast(`/projects/${projectId}/files`, "File uploaded"));
+    redirect(withToast(listHref, "File uploaded"));
   }
 
   function removeAction(fileId: string) {
@@ -101,7 +112,7 @@ export default async function ProjectFilesPage({
       if (file && file.projectId === projectId) {
         await deleteProjectFile(fileId);
       }
-      redirect(withToast(`/projects/${projectId}/files`, "File deleted"));
+      redirect(withToast(listHref, "File deleted"));
     };
   }
 

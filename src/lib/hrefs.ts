@@ -46,6 +46,41 @@ export function listHrefWithFilters(
   return { query, href: query ? `${path}?${query}` : path };
 }
 
+/**
+ * The same list page, with the reader's filters, plus a message to show.
+ *
+ * Every page that validates a form needs this and every one of them wrote it
+ * out, which is how six of the ten ended up dropping the filters they were
+ * meant to carry — including one page where the row action got it right and
+ * the create action beside it did not.
+ *
+ * Takes `query` as the string `listHrefWithFilters` already returned rather
+ * than the filters themselves, because the caller is usually a server action:
+ * it may close over strings, and the one time something closed over a
+ * function instead React gave up encoding the action and rendered
+ * `action="javascript:throw …"` on every row of the page.
+ *
+ * `extra` is for the parameters that are not filters but still have to
+ * survive — which row to reopen, which of a page's several error slots this
+ * message belongs in.
+ */
+export function errorHref(
+  path: string,
+  query: string,
+  message: string,
+  extra: Record<string, string | undefined> = {},
+  errorParam = "error",
+) {
+  const params = new URLSearchParams(query);
+  for (const [name, value] of Object.entries(extra)) {
+    if (value) {
+      params.set(name, value);
+    }
+  }
+  params.set(errorParam, message);
+  return `${path}?${params.toString()}`;
+}
+
 function projectHref(projectId: string) {
   return `/projects/${projectId}`;
 }

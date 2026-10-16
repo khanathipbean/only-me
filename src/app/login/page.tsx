@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { invalidateRouteCache } from "@/lib/revalidate";
 import { LOCK_MINUTES, readLockState } from "@/lib/login-throttle";
+import { errorHref } from "@/lib/hrefs";
 
 /**
  * The out-of-focus words drifting behind the brand panel. Purely decorative —
@@ -88,9 +89,9 @@ export default async function LoginPage({
            read only decides which sentence to show. */
         const lock = await readLockState(email);
         if (lock.locked) {
-          redirect(`/login?error=TooManyAttempts&minutes=${lock.minutesLeft}`);
+          redirect(errorHref("/login", "", "TooManyAttempts", { minutes: String(lock.minutesLeft) }));
         }
-        redirect("/login?error=CredentialsSignin");
+        redirect(errorHref("/login", "", "CredentialsSignin"));
       }
       throw err;
     }

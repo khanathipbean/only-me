@@ -43,6 +43,7 @@ import {
 } from "@/lib/ui";
 import type { ProjectRole } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { errorHref } from "@/lib/hrefs";
 import { clearFailures, readLockStates } from "@/lib/login-throttle";
 
 export const metadata = { title: "Members" };
@@ -160,7 +161,7 @@ export default async function MembersPage({
       );
     } catch (err) {
       if (err instanceof ValidationError || err instanceof DuplicateEmailError) {
-        redirect(`/members?error=${encodeURIComponent(err.message)}`);
+        redirect(errorHref("/members", "", err.message));
       }
       throw err;
     }
@@ -181,9 +182,7 @@ export default async function MembersPage({
         await updateUserProjectAccess(targetUserId, access, session!.user.id);
       } catch (err) {
         if (err instanceof ValidationError) {
-          redirect(
-            `/members?userId=${targetUserId}&error=${encodeURIComponent(err.message)}`,
-          );
+          redirect(errorHref("/members", "", err.message, { userId: targetUserId }));
         }
         throw err;
       }
@@ -207,7 +206,7 @@ export default async function MembersPage({
         await setPasswordForUser(targetUserId, formData.get("password") as string);
       } catch (err) {
         if (err instanceof ProfileValidationError) {
-          redirect(`/members?userId=${targetUserId}&error=${encodeURIComponent(err.message)}`);
+          redirect(errorHref("/members", "", err.message, { userId: targetUserId }));
         }
         throw err;
       }
@@ -245,9 +244,7 @@ export default async function MembersPage({
         await deleteUser(targetUserId, session!.user.id);
       } catch (err) {
         if (err instanceof ValidationError) {
-          redirect(
-            `/members?userId=${targetUserId}&error=${encodeURIComponent(err.message)}`,
-          );
+          redirect(errorHref("/members", "", err.message, { userId: targetUserId }));
         }
         throw err;
       }

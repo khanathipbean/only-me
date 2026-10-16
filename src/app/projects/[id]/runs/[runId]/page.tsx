@@ -72,7 +72,7 @@ import {
 } from "@/lib/ui";
 import type { TestResult } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
-import { listHrefWithFilters } from "@/lib/hrefs";
+import { errorHref, listHrefWithFilters } from "@/lib/hrefs";
 
 export async function generateMetadata({
   params,
@@ -177,7 +177,7 @@ export default async function TestRunPage({
    * case. Only the list's own view state is carried; the picker's fields and
    * the one-shot `error`/`toast` are left behind on purpose.
    */
-  const { href: listHref } = listHrefWithFilters(basePath, {
+  const { query: listQueryString, href: listHref } = listHrefWithFilters(basePath, {
     result,
     caseSearch,
     page,
@@ -462,13 +462,13 @@ export default async function TestRunPage({
         await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
         const file = formData.get("file");
         if (!(file instanceof File)) {
-          redirect(`${basePath}?attachmentError=${encodeURIComponent("Choose a file first")}`);
+          redirect(errorHref(basePath, listQueryString, "Choose a file first", {}, "attachmentError"));
         }
         try {
           await saveRunCaseAttachment(runCaseId, file, session!.user.id);
         } catch (err) {
           if (err instanceof AttachmentValidationError || err instanceof TestRunValidationError) {
-            redirect(`${basePath}?attachmentError=${encodeURIComponent(err.message)}`);
+            redirect(errorHref(basePath, listQueryString, err.message, {}, "attachmentError"));
           }
           throw err;
         }
@@ -486,7 +486,7 @@ export default async function TestRunPage({
               await deleteAttachment(attachmentId);
             } catch (err) {
               if (err instanceof TestRunValidationError) {
-                redirect(`${basePath}?attachmentError=${encodeURIComponent(err.message)}`);
+                redirect(errorHref(basePath, listQueryString, err.message, {}, "attachmentError"));
               }
               throw err;
             }
