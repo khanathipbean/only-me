@@ -127,11 +127,15 @@ describe("import", () => {
     expect(preview.summary.valid).toBe(1);
     expect(preview.summary.invalid).toBe(1);
 
-    const invalidRow = preview.rows.find((r: { rowNumber: number }) => r.rowNumber === 2);
+    /* Lines 2 and 3 of the file, because line 1 is the header. These used to
+       be 1 and 2 — the position among the rows that parsed, which is not a
+       number the reader can act on and was off by the header plus any blank
+       line. */
+    const invalidRow = preview.rows.find((r: { rowNumber: number }) => r.rowNumber === 3);
     expect(invalidRow.valid).toBe(false);
     expect(invalidRow.errors[0]).toMatchObject({ field: "Scenario Name" });
 
-    const validRow = preview.rows.find((r: { rowNumber: number }) => r.rowNumber === 1);
+    const validRow = preview.rows.find((r: { rowNumber: number }) => r.rowNumber === 2);
     expect(validRow.valid).toBe(true);
 
     const scenarioCount = await prisma.scenario.count({ where: { projectId: project.id } });
@@ -833,5 +837,113 @@ describe("import", () => {
     expect(byColumn["Requirement Code"]).toBe("REQ-DSD-001");
     expect(byColumn["Requirement Description"]).toBe("Survives the round trip.");
     expect(byColumn["Requirement Feature"]).toBe("Sharing Dashboard");
+  });
+});
+
+/**
+ * Four levels of container, one question: what should an import do when the
+ * thing the sheet names is already there but archived?
+ *
+ * The Module level answered "reuse it, and bring it back" — its comment argues
+ * that filing rows under a hidden parent puts them somewhere no list shows.
+ * The three levels below answered "do not see it", and so made a second one
+ * with the same name beside the archived one. One function, two answers, and
+ * a project somebody had tidied up grew duplicates on the next import.
+ */
+describe("importing into something that was archived", () => {
+  beforeEach(() => {
+    mockAuth.mockReset();
+  });
+
+  function row(projectCode: string, testCaseName: string) {
+    return {
+      rowNumber: 1,
+      data: {
+        rowNumber: 1,
+        projectCode,
+        moduleName: "Policy",
+        requirementName: "Users can reach the dashboard",
+        scenarioName: "Login Flow",
+        testGroupName: "Functional",
+        testCaseName,
+        preconditions: "",
+        testSteps: "1. do it",
+        expectedResult: "ok",
+        priority: "HIGH",
+        scenarioDescription: "",
+        scenarioPreconditions: "",
+        scenarioExpectedResult: "",
+        testGroupObjective: "",
+        requirementCode: "",
+        requirementDescription: "",
+        requirementFeature: "",
+      },
+    };
+  }
+
+  async function confirm(projectId: string, rows: unknown[]) {
+    const response = await confirmImportRoute(
+      jsonRequest(`http://test/api/projects/${projectId}/import/confirm`, "POST", { rows }),
+      { params: Promise.resolve({ id: projectId }) },
+    );
+    return response.json();
+  }
+
+  async function signedInProject() {
+    const owner = await createUser(uniqueEmail("imp-arch"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    return createProject();
+  }
+
+  it("reuses all four levels rather than making a twin of each", async () => {
+    const project = await signedInProject();
+    await confirm(project.id, [row(project.code, "first case")]);
+
+    const archived = { deletedAt: new Date() };
+    await prisma.module.updateMany({ where: { projectId: project.id }, data: archived });
+    await prisma.requirement.updateMany({ where: { projectId: project.id }, data: archived });
+    await prisma.scenario.updateMany({ where: { projectId: project.id }, data: archived });
+    await prisma.testGroup.updateMany({
+      where: { scenario: { projectId: project.id } },
+      data: archived,
+    });
+
+    const summary = await confirm(project.id, [row(project.code, "second case")]);
+
+    const inProject = { projectId: project.id };
+    const levels = {
+      module: await prisma.module.findMany({ where: inProject }),
+      requirement: await prisma.requirement.findMany({ where: inProject }),
+      scenario: await prisma.scenario.findMany({ where: inProject }),
+      testGroup: await prisma.testGroup.findMany({
+        where: { scenario: { projectId: project.id } },
+      }),
+    };
+
+    // One of each, not two, and none of them still hidden.
+    for (const [label, rows] of Object.entries(levels)) {
+      expect(rows, label).toHaveLength(1);
+      expect(rows[0].deletedAt, label).toBeNull();
+    }
+
+    // And it says so, rather than resurrecting them quietly.
+    expect(summary.restoredCounts).toEqual({
+      modules: 1,
+      requirements: 1,
+      scenarios: 1,
+      testGroups: 1,
+    });
+  });
+
+  it("reports nothing restored when nothing was archived", async () => {
+    const project = await signedInProject();
+    const summary = await confirm(project.id, [row(project.code, "only case")]);
+
+    expect(summary.restoredCounts).toEqual({
+      modules: 0,
+      requirements: 0,
+      scenarios: 0,
+      testGroups: 0,
+    });
   });
 });

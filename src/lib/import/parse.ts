@@ -22,6 +22,11 @@ export const IMPORT_COLUMNS = [
 ] as const;
 
 export type ImportRow = {
+  /** The line this came from in the file the reader is looking at, counting
+   *  the header row and any blank lines. It used to be the position among the
+   *  rows that survived parsing, so a sheet with a header and one blank line
+   *  reported "Row 2" for what the reader would find on line 4 — and this
+   *  number is what every error message and the remove-row button point at. */
   rowNumber: number;
   projectCode: string;
   /** Optional: the Module and Requirement the Scenario is filed under. A
@@ -95,12 +100,14 @@ function toRow(rowNumber: number, record: Record<string, unknown>): ImportRow {
 }
 
 function parseCsvBuffer(buffer: Buffer): ImportRow[] {
-  const records: Record<string, unknown>[] = parseCsvSync(buffer, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-  });
-  return records.map((record, index) => toRow(index + 1, record));
+  /* `info: true` so each record carries the line it was read from. Without it
+   * all we have is the index among the records that survived, which is not
+   * the number the reader can act on. */
+  const records: Array<{ record: Record<string, unknown>; info: { lines: number } }> = parseCsvSync(
+    buffer,
+    { columns: true, skip_empty_lines: true, trim: true, info: true },
+  );
+  return records.map(({ record, info }) => toRow(info.lines, record));
 }
 
 async function parseXlsxBuffer(buffer: Buffer): Promise<ImportRow[]> {
@@ -128,7 +135,9 @@ async function parseXlsxBuffer(buffer: Buffer): Promise<ImportRow[]> {
         record[header] = cell.text;
       }
     });
-    rows.push(toRow(rows.length + 1, record));
+    /* `rowIndex` is the sheet's own row number, which is what the reader sees
+     * down the side of the spreadsheet. */
+    rows.push(toRow(rowIndex, record));
   });
   return rows;
 }
@@ -144,9 +153,18 @@ export async function parseImportFile(buffer: Buffer, fileName: string): Promise
   return parseCsvBuffer(buffer);
 }
 
+/* A comma, a quote or a newline in a value all break a bare CSV field. The
+ * old version quoted on a comma alone and left an embedded quote to corrupt
+ * the row — nothing in the example trips that today, which is the moment to
+ * fix it rather than the moment after. */
+const NEEDS_QUOTING = /["\r\n,]/;
+
 export function generateImportTemplateCsv(): string {
   const header = IMPORT_COLUMNS.join(",");
   // Positional: this row must line up with IMPORT_COLUMNS above.
+  /* One value per column, checked by a test rather than by counting them
+   * here: three were missing, and the three missing ones were exactly the
+   * Requirement fields that a sheet is the way to maintain. */
   const example = [
     "PRJ-001",
     "Authentication",
@@ -162,8 +180,13 @@ export function generateImportTemplateCsv(): string {
     "User is on the Login page",
     "Valid credentials reach the dashboard; invalid or missing credentials are rejected with a clear message",
     "Covers the Login page's core functional flow",
+    "REQ-001",
+    "Signing in is the gate to everything else, so it is covered first",
+    "Authentication",
   ]
-    .map((value) => (value.includes(",") ? `"${value}"` : value))
+    .map((value) =>
+      NEEDS_QUOTING.test(value) ? `"${value.replaceAll('"', '""')}"` : value,
+    )
     .join(",");
   return `${header}\n${example}\n`;
 }
