@@ -22,6 +22,33 @@ type NotificationItem = {
 
 const POLL_MS = 30_000;
 
+/**
+ * `fetch` rejects on a dropped connection rather than returning a response,
+ * and none of the four calls below used to say what should happen then. The
+ * polling one reran every thirty seconds, so one flaky minute left a rejection
+ * in the console on a loop; the panel's one left it reading "Loading…" with
+ * nothing on the way.
+ *
+ * Both answers below are "no" rather than a throw, so the caller decides what
+ * to show — which is the part that was missing.
+ */
+async function getJson<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetch(url);
+    return response.ok ? ((await response.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function postOk(url: string): Promise<boolean> {
+  try {
+    return (await fetch(url, { method: "POST" })).ok;
+  } catch {
+    return false;
+  }
+}
+
 const tabClass = (active: boolean) =>
   `flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${
     active ? "bg-brand/10 text-brand" : "text-muted hover:bg-black/[.05] dark:hover:bg-white/[.08]"
@@ -37,21 +64,29 @@ export function NotificationBell() {
    * user has already switched tabs is simply ignored rather than shown under
    * the wrong tab — the same reasoning HeaderSearch tags results with the
    * query term they answer. */
-  const [data, setData] = useState<{ tab: "all" | "unread"; items: NotificationItem[] } | null>(
-    null,
-  );
-  const items = data && data.tab === tab ? data.items : null;
+  /* Two kinds of nothing, told apart: no `data` for this tab yet means the
+   * answer is still coming, and `items: null` inside it means the answer was
+   * that it could not be fetched. They used to be the same value, so a failed
+   * fetch looked exactly like a slow one — forever. */
+  const [data, setData] = useState<{
+    tab: "all" | "unread";
+    items: NotificationItem[] | null;
+  } | null>(null);
+  /** Bumped to ask for the list again, after a failure or a write that did
+   *  not land. */
+  const [reloads, setReloads] = useState(0);
+  const loaded = data && data.tab === tab ? data : null;
 
   // The badge stays live even while the panel is closed — a cheap count, so
   // polling it is fine. The full list only ever fetches when the panel opens.
   useEffect(() => {
     let cancelled = false;
-    function poll() {
-      fetch("/api/notifications/unread-count")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((body) => {
-          if (body && !cancelled) setUnreadCount(body.count);
-        });
+    async function poll() {
+      const body = await getJson<{ count: number }>("/api/notifications/unread-count");
+      // Keeps the last count it knew on a failure. Showing nought would say
+      // "you are up to date", which is a different claim from "I could not
+      // ask" and the one nobody would check again.
+      if (body && !cancelled) setUnreadCount(body.count);
     }
     poll();
     const id = setInterval(poll, POLL_MS);
@@ -64,20 +99,27 @@ export function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    fetch(`/api/notifications?pageSize=20${tab === "unread" ? "&unread=1" : ""}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body) => {
-        if (body && !cancelled) setData({ tab, items: body.items });
-      });
+    (async () => {
+      const body = await getJson<{ items: NotificationItem[] }>(
+        `/api/notifications?pageSize=20${tab === "unread" ? "&unread=1" : ""}`,
+      );
+      if (!cancelled) setData({ tab, items: body ? body.items : null });
+    })();
     return () => {
       cancelled = true;
     };
-  }, [open, tab]);
+  }, [open, tab, reloads]);
 
+  /* The writes below move the panel before the server has answered, which is
+   * the right call for something this small — but only if a refusal is
+   * noticed. Each one asks for the truth again if its request did not land,
+   * rather than leaving the panel claiming something that never happened. */
   function markRead(id: string) {
-    fetch(`/api/notifications/${id}/read`, { method: "POST" });
+    postOk(`/api/notifications/${id}/read`).then((ok) => {
+      if (!ok) setReloads((n) => n + 1);
+    });
     setData((current) => {
-      if (!current) return current;
+      if (!current || !current.items) return current;
       if (current.tab === "unread") {
         return { ...current, items: current.items.filter((item) => item.id !== id) };
       }
@@ -92,9 +134,11 @@ export function NotificationBell() {
   }
 
   function markAllRead() {
-    fetch("/api/notifications/read-all", { method: "POST" });
+    postOk("/api/notifications/read-all").then((ok) => {
+      if (!ok) setReloads((n) => n + 1);
+    });
     setData((current) => {
-      if (!current) return current;
+      if (!current || !current.items) return current;
       if (current.tab === "unread") return { ...current, items: [] };
       const now = new Date().toISOString();
       return {
@@ -172,15 +216,29 @@ export function NotificationBell() {
             </div>
 
             <ul role="none" className="max-h-96 overflow-y-auto p-1.5">
-              {items === null ? (
+              {loaded === null ? (
                 <li className="px-3 py-8 text-center text-sm text-muted">Loading…</li>
-              ) : items.length === 0 ? (
+              ) : loaded.items === null ? (
+                /* Says so, and offers a way out. This state used to read
+                   "Loading…" and never change. */
+                <li className="flex flex-col items-center gap-2 px-3 py-10 text-center text-sm text-muted">
+                  <BellIcon className="size-6 opacity-50" />
+                  Couldn&apos;t load notifications.
+                  <button
+                    type="button"
+                    onClick={() => setReloads((n) => n + 1)}
+                    className="text-xs font-semibold text-brand hover:text-brand-hover hover:underline"
+                  >
+                    Try again
+                  </button>
+                </li>
+              ) : loaded.items.length === 0 ? (
                 <li className="flex flex-col items-center gap-2 px-3 py-10 text-center text-sm text-muted">
                   <BellIcon className="size-6 opacity-50" />
                   {tab === "unread" ? "No unread notifications." : "No notifications yet."}
                 </li>
               ) : (
-                items.map((item) => {
+                loaded.items.map((item) => {
                   const { Icon, className } = NOTIFICATION_TYPE_STYLE[item.type];
                   return (
                     <li key={item.id}>
