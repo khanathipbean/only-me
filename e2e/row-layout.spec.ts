@@ -33,6 +33,15 @@ test("a long name doesn't break the count across two lines", async ({ page }, te
     .fill(`Layout spec ${suffix}`);
   await page.getByRole("button", { name: /add module/i }).click();
 
+  /* Waits for the dialog to close before navigating. Without this the
+     `goto` below raced the server action and sometimes won, cancelling the
+     submission mid-flight — the Module was never created and the next step
+     timed out looking for a row that did not exist. It passed for months
+     because the action was always quicker, then started failing when the
+     Next upgrade changed the timing. The page said so plainly once anyone
+     looked: "No Modules match your search. Total Results: 0". */
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+
   // Filtered through the URL, not by hoping it landed on page one: the fixture
   // project keeps every Module each run leaves behind, and the list pages at
   // ten.
