@@ -84,6 +84,20 @@ export async function createTestGroup(
 ) {
   validateTestGroupInput(input);
 
+  /* The Scenario has to still be there. Archiving a parent deliberately
+   * leaves its children alone — `assertScenarioNotInUse` refuses to archive
+   * one that has any — so a Test Group created afterwards is a row no list
+   * will ever show: its Scenario is hidden, and the only way back to it is
+   * restoring that Scenario. The two levels above this already check the
+   * same thing; these two did not. */
+  const liveScenario = await prisma.scenario.findFirst({
+    where: { id: scenarioId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!liveScenario) {
+    throw new ValidationError("That Scenario has been archived");
+  }
+
   const projectId = await resolveProjectId(scenarioId);
 
   const maxSequence = await prisma.testGroup.aggregate({

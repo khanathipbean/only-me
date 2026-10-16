@@ -110,6 +110,18 @@ export async function createTestCase(
   actorId: string,
 ) {
   validateTestCaseInput(input);
+
+  /* Same reason as `createTestGroup`: a Test Case created under an archived
+   * Test Group appears in no list at all, because the Test Group that would
+   * carry it is hidden. */
+  const liveTestGroup = await prisma.testGroup.findFirst({
+    where: { id: testGroupId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!liveTestGroup) {
+    throw new ValidationError("That Test Group has been archived");
+  }
+
   const projectId = await resolveProjectIdForTestGroup(testGroupId);
 
   const testCase = await prisma.$transaction(async (tx) => {
