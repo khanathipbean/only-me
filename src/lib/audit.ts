@@ -5,7 +5,9 @@ export async function writeAuditLog(entry: {
   entityId: string;
   action: string;
   actorId: string;
-  projectId: string;
+  /** Left out for something that happened to an account rather than inside a
+   *  project — see the note on `AuditLog.projectId`. */
+  projectId?: string | null;
   oldValue?: unknown;
   newValue?: unknown;
 }) {
@@ -15,7 +17,7 @@ export async function writeAuditLog(entry: {
       entityId: entry.entityId,
       action: entry.action,
       actorId: entry.actorId,
-      projectId: entry.projectId,
+      projectId: entry.projectId ?? null,
       oldValue: entry.oldValue === undefined ? undefined : (entry.oldValue as object),
       newValue: entry.newValue === undefined ? undefined : (entry.newValue as object),
     },

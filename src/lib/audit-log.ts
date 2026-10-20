@@ -82,3 +82,65 @@ export async function listAuditLogForProject(projectId: string, filters: AuditLo
   );
   return { entries: items, ...rest };
 }
+
+/**
+ * The entries that belong to an account rather than to a project — a password
+ * set by an administrator, an account unlocked, an account deleted.
+ *
+ * Filtered on `entityType`, not on a null `projectId`. The two pick out the
+ * same rows today, but an optional relation means Prisma emits
+ * `ON DELETE SET NULL` on the project foreign key, so a Project that could be
+ * hard-deleted would turn its entries into null-project ones. Nothing can
+ * hard-delete a Project here — only archive it — and filtering on what the
+ * entry is about rather than on what it lacks means that fact is not load
+ * bearing.
+ */
+export async function listUserAuditLog(filters: AuditLogFilters = {}) {
+  const where = {
+    entityType: "User",
+    ...(filters.actorId ? { actorId: filters.actorId } : {}),
+    ...(filters.actorName
+      ? { actor: { name: { contains: filters.actorName, mode: "insensitive" as const } } }
+      : {}),
+    ...(filters.action ? { action: filters.action } : {}),
+    ...(filters.from || filters.to
+      ? {
+          occurredAt: {
+            ...(filters.from ? { gte: filters.from } : {}),
+            ...(filters.to ? { lte: filters.to } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const { items, ...rest } = await paginate(
+    filters,
+    () => prisma.auditLog.count({ where }),
+    ({ skip, take }) =>
+      prisma.auditLog.findMany({
+        where,
+        include: {
+          actor: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { occurredAt: "desc" },
+        skip,
+        take,
+      }),
+  );
+
+  /* The entry names the account it happened to by id, and that account may
+   * have been deleted — which is one of the three things recorded here. So
+   * the name is looked up separately and allowed to be missing, rather than
+   * joined and relied upon. */
+  const subjectIds = [...new Set(items.map((entry) => entry.entityId))];
+  const subjects = await prisma.user.findMany({
+    where: { id: { in: subjectIds } },
+    select: { id: true, name: true, email: true },
+  });
+  const subjectById = new Map(subjects.map((user) => [user.id, user]));
+
+  return {
+    entries: items.map((entry) => ({ ...entry, subject: subjectById.get(entry.entityId) ?? null })),
+    ...rest,
+  };
+}

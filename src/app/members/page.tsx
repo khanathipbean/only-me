@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { requireAdminAnywhereOrNotFound } from "@/lib/rbac";
@@ -27,7 +28,12 @@ import { RequiredMark } from "@/components/forms/RequiredMark";
 import { Badge, type Tone } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
 import { EditIcon, TrashIcon, UnlockIcon } from "@/components/icons";
-import { MIN_PASSWORD_LENGTH, ProfileValidationError, setPasswordForUser } from "@/lib/users";
+import {
+  MIN_PASSWORD_LENGTH,
+  ProfileValidationError,
+  setPasswordForUser,
+  unlockUserAccount,
+} from "@/lib/users";
 import { ASSIGNABLE_PROJECT_ROLE_OPTIONS, PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import {
   checkboxClass,
@@ -44,13 +50,23 @@ import {
 import type { ProjectRole } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
 import { errorHref } from "@/lib/hrefs";
-import { clearFailures, readLockStates } from "@/lib/login-throttle";
+import { readLockStates } from "@/lib/login-throttle";
+import { listUserAuditLog } from "@/lib/audit-log";
+import { Pagination } from "@/components/ui/Pagination";
+import { formatTimestamp } from "@/lib/dates";
 
 export const metadata = { title: "Members" };
 
 // Color identifies the Project, not the role on it — otherwise the same
 // Project's tag shifts color from row to row as the role differs, reading
 // as a different project each time instead of the same one throughout.
+/** The stored action strings, in the words a reader would use. */
+const ACCOUNT_ACTION_LABELS: Record<string, string> = {
+  "set-password": "Password set by an administrator",
+  unlock: "Account unlocked",
+  delete: "Account deleted",
+};
+
 const PROJECT_TONE_PALETTE: Tone[] = ["blue", "purple", "indigo", "cyan", "green", "amber", "gray", "red"];
 
 type PickerProject = { id: string; code: string; name: string };
@@ -121,9 +137,19 @@ function readAccessFromForm(formData: FormData, projects: PickerProject[]) {
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; userId?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    userId?: string;
+    tab?: string;
+    page?: string;
+    pageSize?: string;
+  }>;
 }) {
-  const { error, userId: erroredUserId } = await searchParams;
+  const { error, userId: erroredUserId, tab, page, pageSize } = await searchParams;
+  /* A tab rather than a page of its own: this is the same audience doing the
+   * same job — the only people who can set somebody's password are the only
+   * people who need to see that it happened. */
+  const onActivity = tab === "activity";
   const session = await auth();
 
   // Not scoped to one Project on purpose: an ADMIN elsewhere has to be able
@@ -136,6 +162,16 @@ export default async function MembersPage({
     listAllProjectsForPicker(),
   ]);
   const projectTone = projectToneMap(projects);
+
+  /* Only the tab being shown is fetched. The activity list is unbounded and
+   * only grows, so loading it to render the other tab would cost every reader
+   * of the Members page a query nobody asked for. */
+  const activity = onActivity
+    ? await listUserAuditLog({
+        page: page ? Number(page) : undefined,
+        pageSize: pageSize ? Number(pageSize) : undefined,
+      })
+    : null;
   /* Who cannot get in right now. This page is where somebody looks the moment
    * a colleague says they are locked out, so the answer is on it rather than
    * one modal deeper. */
@@ -203,7 +239,7 @@ export default async function MembersPage({
       await requireAdminAnywhereOrNotFound(session!.user.id);
 
       try {
-        await setPasswordForUser(targetUserId, formData.get("password") as string);
+        await setPasswordForUser(targetUserId, formData.get("password") as string, session!.user.id);
       } catch (err) {
         if (err instanceof ProfileValidationError) {
           redirect(errorHref("/members", "", err.message, { userId: targetUserId }));
@@ -215,19 +251,22 @@ export default async function MembersPage({
     };
   }
 
-  /* Takes the address, not the user id: the limit counts addresses, including
-   * ones no account owns, so that is what a lock is held against. A plain
-   * string crosses into a server action safely — a function would not, and
-   * trying once cost this project a page that failed on every request while
-   * the build, the types and the tests all stayed green. */
-  function unlockAction(email: string) {
+  /* Takes the user id now, not the address. The limit still counts addresses
+   * — including ones no account owns — but an audit entry has to name an
+   * account, and `unlockUserAccount` looks the address up from the id so the
+   * entry and the clearing cannot disagree.
+   *
+   * A plain string crosses into a server action safely; a function would not,
+   * and trying once cost this project a page that failed on every request
+   * while the build, the types and the tests all stayed green. */
+  function unlockAction(targetUserId: string) {
     return async function unlock() {
       "use server";
       invalidateRouteCache();
       const session = await auth();
       await requireAdminAnywhereOrNotFound(session!.user.id);
 
-      await clearFailures(email);
+      await unlockUserAccount(targetUserId, session!.user.id);
 
       redirect(withToast("/members", "Unlocked — they can sign in again now"));
     };
@@ -315,6 +354,94 @@ export default async function MembersPage({
         }
       />
 
+      {/* Plain links, not buttons: each tab is an address, so it can be
+          bookmarked, opened in another window and gone Back out of. */}
+      <div className="flex items-center gap-1 border-b border-border">
+        {(
+          [
+            ["People", "/members"],
+            ["Account activity", "/members?tab=activity"],
+          ] as const
+        ).map(([label, href]) => {
+          const active = onActivity === href.includes("tab=activity");
+          return (
+            <Link
+              key={label}
+              href={href}
+              aria-current={active ? "page" : undefined}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-semibold ${
+                active
+                  ? "border-brand text-brand"
+                  : "border-transparent text-muted hover:text-foreground"
+              }`}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </div>
+
+      {onActivity ? (
+        <>
+          <div className="flex justify-end">
+            <ResultCount total={activity!.total} />
+          </div>
+
+          <p className={mutedTextClass}>
+            What has been done to accounts themselves — a password set by an
+            administrator, an account unlocked, an account deleted. Everything that happens
+            inside a Project is on that Project&apos;s own Audit Trail.
+          </p>
+
+          {activity!.entries.length === 0 ? (
+            <p className={mutedTextClass}>Nothing has happened to an account yet.</p>
+          ) : (
+            <div className={tableWrapClass}>
+              <table className={tableClass}>
+                <thead>
+                  <tr>
+                    <th className={thClass}>When</th>
+                    <th className={thClass}>Who did it</th>
+                    <th className={thClass}>What</th>
+                    <th className={thClass}>To whom</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activity!.entries.map((entry) => (
+                    <tr key={entry.id} className={trHoverClass}>
+                      <td className={`${tdClass} whitespace-nowrap text-muted`}>
+                        <time dateTime={entry.occurredAt.toISOString()}>
+                          {formatTimestamp(entry.occurredAt)}
+                        </time>
+                      </td>
+                      {/* An actor can be gone: `actorId` is nulled rather than
+                          blocking the deletion of an account, because what
+                          happened outlives who did it. */}
+                      <td className={`${tdClass} ${entry.actor ? "" : "text-muted italic"}`}>
+                        {entry.actor?.name ?? "Deleted user"}
+                      </td>
+                      <td className={tdClass}>{ACCOUNT_ACTION_LABELS[entry.action] ?? entry.action}</td>
+                      {/* And so can the subject — deleting an account is one of
+                          the three things listed here. */}
+                      <td className={`${tdClass} ${entry.subject ? "" : "text-muted italic"}`}>
+                        {entry.subject?.name ?? "Deleted account"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <Pagination
+            page={activity!.page}
+            totalPages={activity!.totalPages}
+            total={activity!.total}
+            pageSize={activity!.pageSize}
+          />
+        </>
+      ) : (
+        <>
       <div className="flex justify-end">
         <ResultCount total={members.length} />
       </div>
@@ -372,7 +499,7 @@ export default async function MembersPage({
                         confirmation either — letting a colleague in early is
                         undone by the next five wrong passwords. */}
                     {lock?.locked && (
-                      <form action={unlockAction(member.email)}>
+                      <form action={unlockAction(member.userId)}>
                         <IconButton
                           type="submit"
                           aria-label={`Unlock ${member.name}`}
@@ -462,6 +589,8 @@ export default async function MembersPage({
             </tbody>
           </table>
         </div>
+      )}
+        </>
       )}
     </main>
   );

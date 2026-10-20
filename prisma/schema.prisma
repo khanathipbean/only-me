@@ -109,19 +109,28 @@ model AuditLog {
   /// this is a history log, not content ownership, so the record of what
   /// happened is worth keeping even once nobody remembers who did it.
   actorId    String?
-  projectId  String
+  /// Null for the things that happen to an account rather than inside a
+  /// project: a password set by an administrator, an account unlocked, an
+  /// account deleted. Those had nowhere to go while this was required, so
+  /// they were not recorded at all — the one question the log could not
+  /// answer was "who changed my password".
+  projectId  String?
   occurredAt DateTime @default(now())
   oldValue   Json?
   newValue   Json?
 
-  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
-  project Project @relation(fields: [projectId], references: [id])
+  actor   User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id])
 
   // Every read of this table filters by projectId and sorts by occurredAt —
   // an unbounded, never-pruned log with no index at all otherwise means a
   // full sequential scan on every Audit Trail page view.
   @@index([projectId, occurredAt])
   @@index([actorId])
+  /// The account-level entries are read by `entityType` with no project to
+  /// narrow by, so without this that page is a sequential scan of the whole
+  /// table — which only ever grows.
+  @@index([entityType, occurredAt])
 }
 
 enum NotificationType {

@@ -339,6 +339,18 @@ export async function deleteUser(userId: string, actorId: string) {
     throw error;
   }
 
+  /* The account itself, with no project. The per-membership entries below
+   * record what the account lost access to, which is nothing at all for a
+   * user who belonged to no project — and deleting one of those used to leave
+   * no trace anywhere. */
+  await writeAuditLog({
+    entityType: "User",
+    entityId: userId,
+    action: "delete",
+    actorId,
+    oldValue: { memberships: memberships.length },
+  });
+
   for (const m of memberships) {
     await writeAuditLog({
       entityType: "ProjectMember",

@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth-credentials";
 import { deleteFile, uploadFile } from "@/lib/storage";
+import { writeAuditLog } from "@/lib/audit";
+import { clearFailures } from "@/lib/login-throttle";
 
 /** Shortest password this app will accept when someone changes it. */
 export const MIN_PASSWORD_LENGTH = 8;
@@ -145,7 +147,11 @@ export async function changePassword(
  * answer the app already gives for creating the account in the first place.
  *
  */
-export async function setPasswordForUser(targetUserId: string, newPassword: string) {
+export async function setPasswordForUser(
+  targetUserId: string,
+  newPassword: string,
+  actorId: string,
+) {
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
     throw new ProfileValidationError(
       `New password must be at least ${MIN_PASSWORD_LENGTH} characters`,
@@ -165,8 +171,40 @@ export async function setPasswordForUser(targetUserId: string, newPassword: stri
     data: { passwordHash: await hashPassword(newPassword) },
   });
 
-  /* Not written to the audit log. Every entry it takes belongs to a project,
-   * and a password is not a project's business — recording this properly
-   * means user-level entries, which the log has never had. Worth adding; not
-   * worth widening a schema inside a security fix. */
+  /* No project, because a password is not a project's business — which is
+   * why this went unrecorded until `AuditLog.projectId` became nullable. The
+   * password itself is nowhere near the entry: what happened and who did it
+   * is the whole of what is worth keeping. */
+  await writeAuditLog({
+    entityType: "User",
+    entityId: user.id,
+    action: "set-password",
+    actorId,
+  });
+}
+
+/**
+ * Lets somebody back in before the login limit would have let them.
+ *
+ * Here rather than in the page so the audit entry travels with the act: an
+ * administrator clearing somebody's lock is exactly the kind of thing that
+ * should be answerable later, and a page is the easiest place to forget.
+ */
+export async function unlockUserAccount(targetUserId: string, actorId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, email: true },
+  });
+  if (!user) {
+    throw new ProfileValidationError("That user no longer exists");
+  }
+
+  await clearFailures(user.email);
+
+  await writeAuditLog({
+    entityType: "User",
+    entityId: user.id,
+    action: "unlock",
+    actorId,
+  });
 }

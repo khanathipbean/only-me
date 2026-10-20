@@ -94,7 +94,7 @@ describe("who can change a password", () => {
       },
     });
 
-    await setPasswordForUser(user.id, "a-brand-new-one");
+    await setPasswordForUser(user.id, "a-brand-new-one", user.id);
 
     expect(
       await authenticateWithPassword({
@@ -121,16 +121,16 @@ describe("who can change a password", () => {
       },
     });
 
-    await expect(setPasswordForUser(user.id, "short")).rejects.toBeInstanceOf(
+    await expect(setPasswordForUser(user.id, "short", user.id)).rejects.toBeInstanceOf(
       ProfileValidationError,
     );
   });
 
   it("refuses a user who is no longer there", async () => {
     const { setPasswordForUser, ProfileValidationError } = await import("@/lib/users");
-    await expect(setPasswordForUser("missing-id", "a-long-enough-one")).rejects.toBeInstanceOf(
-      ProfileValidationError,
-    );
+    await expect(
+      setPasswordForUser("missing-id", "a-long-enough-one", "whoever"),
+    ).rejects.toBeInstanceOf(ProfileValidationError);
   });
 });
 
