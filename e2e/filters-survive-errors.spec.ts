@@ -35,26 +35,33 @@ test("a refused Project keeps the filters the list was showing", async ({ page }
   await expect(page.locator('input[name="search"]')).toHaveValue("E2E");
 });
 
-test("uploading a file keeps the filters the Files page was showing", async ({ page }) => {
+test("a refused upload keeps the filters the Files page was showing", async ({ page }) => {
   /* Reads the id off the first project's own link rather than guessing at a
      name: the fixture's title has changed before and took this spec with it. */
   await page.goto("/projects");
   const href = await page.locator('a[href^="/projects/"]').first().getAttribute("href");
   const projectId = href!.split("/")[2];
 
-  /* The success path, not the failure one. This page's "Choose a file first"
-     cannot be reached through the form at all — the input is `required`, so
-     the browser refuses to submit before the server ever sees it. The
-     redirect that carries the filters is the same either way. */
   await page.goto(`/projects/${projectId}/files?search=quarterly`);
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "quarterly-report.txt",
-    mimeType: "text/plain",
-    buffer: Buffer.from("just enough to be a file"),
-  });
+
+  /* Submitting with nothing chosen, which the browser normally refuses: the
+     file input is `required`. The server-side guard behind it is not
+     decoration — it is what answers a request that did not come from this
+     form — and it is the redirect this spec is about.
+
+     The first version uploaded a real file instead. That needs
+     SUPABASE_URL and a service key, which CI does not have and a developer's
+     machine points at the production bucket, so every local run wrote a file
+     into it. Nothing else in this suite touches storage; the seed even
+     fabricates a row pointing at an object it never uploads. */
+  await page.locator('input[type="file"]').evaluate((el) => el.removeAttribute("required"));
   await page.getByRole("button", { name: /^Upload$/ }).click();
 
-  await expect(page.getByText(/file uploaded/i)).toBeVisible();
+  /* "That file is empty", not "Choose a file first": an unfilled file input
+     still submits a File, it is just a zero-byte one, so the guard it trips is
+     the size check rather than the one above it. Both leave through the same
+     redirect, which is the one this spec is about. */
+  await expect(page.getByText(/that file is empty/i)).toBeVisible();
   expect(new URL(page.url()).searchParams.get("search")).toBe("quarterly");
   await expect(page.locator('input[name="search"]')).toHaveValue("quarterly");
 });

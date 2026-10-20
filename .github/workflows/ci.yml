@@ -35,6 +35,13 @@ jobs:
       # until it exists.
       - run: npx prisma generate
 
+      # `LayoutProps`, `PageProps` and their siblings are globals Next writes
+      # into .next/types, which tsconfig includes. They exist on a developer's
+      # machine because something has run `next dev` or `next build` there, and
+      # not on a fresh checkout — so `tsc` failed here and passed locally,
+      # which is the shape of mistake CI is for.
+      - run: npx next typegen
+
       - run: npx tsc --noEmit
 
       - run: npm run lint
