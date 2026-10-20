@@ -156,3 +156,11 @@ for (const path of ["/projects", "/members"]) {
     expect(unnamed, `unnamed controls on ${path}`).toEqual([]);
   });
 }
+
+test("the site's own address goes somewhere", async ({ page }) => {
+  /* There was no page at `/` at all, so the domain on its own answered 404 —
+     always had, and the not-found page only made it look deliberate. */
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(page.getByRole("heading", { name: /projects/i })).toBeVisible();
+});

@@ -40,8 +40,12 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
             reference {error.digest}
           </p>
         )}
-        {/* A plain reload, not `reset()`: whatever broke is above the router,
-            so re-rendering the same tree would land in the same place. */}
+        {/* A plain reload, not `reset()` and not `<Link>`: whatever broke is
+            above the router, so re-rendering the same tree — which is all a
+            client-side navigation does — lands in the same place. A full page
+            load is the point, which is why the rule is off for this line
+            rather than the element changed. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a
           href="/"
           style={{
