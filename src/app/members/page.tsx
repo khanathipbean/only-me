@@ -356,7 +356,12 @@ export default async function MembersPage({
 
       {/* Plain links, not buttons: each tab is an address, so it can be
           bookmarked, opened in another window and gone Back out of. */}
-      <div className="flex items-center gap-1 border-b border-border">
+      {/* The count sits on this row rather than on one of its own: it belongs
+          to whichever tab is open, and a line of its own below the tabs read
+          as a third thing. `justify-between` with the border on the row keeps
+          the rule under both. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border">
+        <div className="flex items-center gap-1">
         {(
           [
             ["People", "/members"],
@@ -379,14 +384,15 @@ export default async function MembersPage({
             </Link>
           );
         })}
+        </div>
+
+        {/* No padding of its own: the row centres both, and the tabs carry
+            the only vertical space either of them needs. */}
+        <ResultCount total={onActivity ? activity!.total : members.length} />
       </div>
 
       {onActivity ? (
         <>
-          <div className="flex justify-end">
-            <ResultCount total={activity!.total} />
-          </div>
-
           <p className={mutedTextClass}>
             What has been done to accounts themselves — a password set by an
             administrator, an account unlocked, an account deleted. Everything that happens
@@ -442,10 +448,6 @@ export default async function MembersPage({
         </>
       ) : (
         <>
-      <div className="flex justify-end">
-        <ResultCount total={members.length} />
-      </div>
-
       {members.length === 0 ? (
         <p className={mutedTextClass}>No members yet.</p>
       ) : (
