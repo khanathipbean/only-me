@@ -673,12 +673,12 @@ function SummaryWidget({
 
   return (
     <WidgetShell label="Overview">
-      {/* One per row on a phone, then 2 / 3 / 6 — each divides evenly, where
-          the old 4-column grid would leave a ragged last row. Two columns at
-          phone width cost "Requirements" its last four letters: the tile and
-          the rule take the room the label had when the figure sat beneath
-          it. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      {/* 2 / 3 / 6 — each divides evenly, where the old 4-column grid left a
+          ragged last row. Two at phone width used to cost "Requirements" its
+          last four letters, because the icon square and the rule took the
+          room the label needed; both are gone, and the label now fits in half
+          a phone's width. Measured, not assumed. */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <Stat icon={<LayersIcon />} label="Modules" value={data.counts.modules} />
         <Stat icon={<FileTextIcon />} label="Requirements" value={data.counts.requirements} />
         <Stat icon={<BranchIcon />} label="Scenarios" value={data.counts.scenarios} />
