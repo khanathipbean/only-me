@@ -44,8 +44,16 @@ export function useDismissablePanel() {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
-    // Fixed coordinates go stale as soon as anything moves.
-    function onScrollOrResize() {
+    /* Fixed coordinates go stale as soon as an ancestor scrolls or the window
+     * resizes — but a list scrolling inside the panel moves nothing, and the
+     * capture-phase listener below sees that too. Without this guard a panel
+     * long enough to need scrolling closed on the first wheel tick, which is
+     * every notification list anyone has. `Select` already carried the same
+     * guard; this is the copy that did not. */
+    function onScrollOrResize(event: Event) {
+      if (event.type === "scroll" && panelRef.current?.contains(event.target as Node)) {
+        return;
+      }
       setOpen(false);
     }
 

@@ -87,8 +87,14 @@ export function ProjectPicker({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
-    // Fixed coordinates go stale as soon as anything moves.
-    function onScrollOrResize() {
+    /* Fixed coordinates go stale as soon as an ancestor scrolls or the window
+     * resizes — but this list scrolls inside itself (`max-h-72
+     * overflow-y-auto`), which moves nothing, and the capture-phase listener
+     * below sees that too. Same guard `Select` carries. */
+    function onScrollOrResize(event: Event) {
+      if (event.type === "scroll" && panelRef.current?.contains(event.target as Node)) {
+        return;
+      }
       setOpen(false);
     }
 
