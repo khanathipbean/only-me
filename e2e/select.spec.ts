@@ -35,6 +35,14 @@ test("a short option in a narrow filter stays on one line", async ({ page }) => 
     .fill(`Select spec ${suffix}`);
   await page.getByRole("button", { name: /add module/i }).click();
 
+  /* Waits for the dialog to close before navigating, the same guard
+     `row-layout.spec` already carries and for the same reason: the `goto`
+     below races the server action and sometimes wins, cancelling it. The
+     Module is then never created and the next step times out looking for a
+     row that does not exist, which reads as a broken selector rather than as
+     a lost submission. */
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+
   // Filtered through the URL, not by hoping it landed on page one: the fixture
   // project keeps every Module each run leaves behind, and the list pages at
   // ten.

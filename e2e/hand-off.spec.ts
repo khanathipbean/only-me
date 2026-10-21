@@ -14,6 +14,38 @@ import { E2E_HANDOFF_CASE, E2E_HANDOFF_RUN } from "./support/credentials";
  * correctly until the page was opened again — which is exactly the shape of
  * bug that only a browser finds.
  */
+/**
+ * Puts the row back to Unassigned before the test starts rather than after it
+ * finishes.
+ *
+ * Tidying up at the end only runs when the test got there. One of these
+ * timed out once, left the case assigned, and every run after it failed on
+ * the first line for a different reason than the one that broke it — a test
+ * that poisons its own fixture reports the wrong fault forever.
+ */
+async function clearAssignee(page: import("@playwright/test").Page) {
+  const picker = page
+    .getByRole("row", { name: new RegExp(E2E_HANDOFF_CASE) })
+    .getByRole("combobox", { name: `Assign ${E2E_HANDOFF_CASE}` });
+  if ((await picker.textContent())?.includes("Unassigned")) {
+    return;
+  }
+  await picker.click();
+  await page.getByRole("option", { name: "Unassigned" }).click();
+  /* Wait for the page to settle before anything else is pressed. A second
+     action fired while the first redirect is still in flight is cancelled,
+     which this spec found the hard way: the row read Unassigned, the next
+     press was swallowed, and the failure pointed at the press rather than at
+     the one before it.
+     The toast is the signal, and it is waited for in both directions. A
+     check for the parameter being absent from the URL is not a wait at all —
+     it is already absent at the moment of the press, so it passes
+     immediately and changes nothing. */
+  await expect(page.getByRole("status")).toContainText(/Unassigned/);
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(picker).toHaveText(/Unassigned/);
+}
+
 async function openHandoffRun(page: import("@playwright/test").Page) {
   await page.goto("/projects?search=E2E-FIXTURE");
   await page.getByRole("link", { name: "E2E Fixture" }).click();
@@ -29,6 +61,7 @@ async function openHandoffRun(page: import("@playwright/test").Page) {
 
 test("a case can be handed to somebody from the round it failed in", async ({ page }) => {
   await openHandoffRun(page);
+  await clearAssignee(page);
 
   const row = page.getByRole("row", { name: new RegExp(E2E_HANDOFF_CASE) });
   const picker = row.getByRole("combobox", { name: `Assign ${E2E_HANDOFF_CASE}` });
@@ -68,6 +101,7 @@ test("a case can be handed to somebody from the round it failed in", async ({ pa
 
 test("a whole selection can be handed over at once", async ({ page }) => {
   await openHandoffRun(page);
+  await clearAssignee(page);
 
   await page.getByRole("button", { name: "Select cases" }).click();
   await page.getByRole("checkbox", { name: `Select ${E2E_HANDOFF_CASE}` }).check();
