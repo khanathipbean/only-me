@@ -70,13 +70,25 @@ export async function assignCase(
 
   const toState: WorkState | null = assigneeId ? (before.workState ?? "ASSIGNED") : null;
 
-  /* A fresh window only when the case actually changes hands. Re-saving the
-   * same name — which a control that saves on every change makes easy — would
-   * otherwise be a way to extend a deadline by clicking it again. Taking the
-   * case back clears it: there is no promise left to keep. */
+  /* A fresh window whenever a repair starts — which is either the case
+   * changing hands, or a hand-off beginning on a case that had none running.
+   *
+   * The second half was missing and left work with no deadline at all. The
+   * loop closes when a result is recorded, which clears the date and keeps
+   * the assignee, because who looked after it is worth knowing afterwards.
+   * Handing it straight back to that same person is then not a change of
+   * hands by any test of the column — so the repair restarted carrying no
+   * promise, and the card showed nothing where every other card showed a
+   * date.
+   *
+   * What the guard is still for: re-saving the same name while a repair is
+   * already running. A control that saves on every change makes that one
+   * press, and it must not buy another week. Taking the case back clears the
+   * date, because there is no promise left to keep. */
   const changedHands = assigneeId !== before.assigneeId;
+  const startsRepair = before.workState === null;
   const dueAt = assigneeId
-    ? changedHands
+    ? changedHands || startsRepair
       ? addWorkingDays(new Date(), WORK_DAYS_BY_PRIORITY[before.priority])
       : before.dueAt
     : null;

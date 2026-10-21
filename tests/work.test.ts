@@ -166,6 +166,27 @@ describe("how long the repair is given", () => {
     expect(Math.abs(after.dueAt!.getTime() - expectedDue(days).getTime())).toBeLessThan(60_000);
   });
 
+  it("gives a new window when the same person is handed it again later", async () => {
+    /* The sequence that showed up in use: handed over, a result recorded —
+       which closes the loop, clearing the date and keeping the assignee —
+       and then handed straight back to the same person. That is a new repair
+       starting, and it was arriving with no deadline at all, because the
+       assignee column had not changed. */
+    const { owner, dev, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const closed = await prisma.testCase.findUniqueOrThrow({ where: { id: testCase.id } });
+    expect(closed.dueAt).toBeNull();
+    expect(closed.assigneeId).toBe(dev.id);
+
+    await assignCase(testCase.id, dev.id, owner.id);
+
+    const after = await prisma.testCase.findUniqueOrThrow({ where: { id: testCase.id } });
+    expect(after.workState).toBe("ASSIGNED");
+    expect(after.dueAt).not.toBeNull();
+  });
+
   it("does not extend the window when the same person is saved again", async () => {
     const { owner, dev, testCase } = await seed();
     await assignCase(testCase.id, dev.id, owner.id);
