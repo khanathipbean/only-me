@@ -71,7 +71,16 @@ export default async function ModulesPage({
   const { search, archived, page, pageSize, error, editId } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const membership = await requireProjectRoleOrNotFound(
+    session!.user.id,
+    projectId,
+    ALL_MEMBER_ROLES,
+  );
+  /* Every action below already refuses a non-editor; this is so the page
+   * stops offering them. A control that answers 404 is worse than one that
+   * is not there: it reads as the app being broken rather than as the reader
+   * not being allowed. */
+  const canEdit = EDITOR_ROLES.includes(membership.role);
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || showArchived);
@@ -215,6 +224,7 @@ export default async function ModulesPage({
             >
               Export as Excel
             </a>
+            {canEdit && (
             <Modal
               triggerLabel="+ New Module"
               title="New Module"
@@ -247,6 +257,7 @@ export default async function ModulesPage({
               </div>
             </form>
             </Modal>
+            )}
           </>
         }
       />
@@ -329,6 +340,7 @@ export default async function ModulesPage({
                     </td>
                     <td className={tdCenterClass}>
                       <div className="inline-flex items-center gap-1">
+                        {canEdit && (
                         <RowActions
                           key={`${module.id}-${editId === module.id}`}
                           label={module.name}
@@ -414,6 +426,7 @@ export default async function ModulesPage({
                             </div>
                           </div>
                         </RowActions>
+                        )}
                       </div>
                     </td>
                   </tr>

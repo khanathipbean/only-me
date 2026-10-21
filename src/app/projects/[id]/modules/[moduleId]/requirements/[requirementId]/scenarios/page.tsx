@@ -116,7 +116,16 @@ export default async function ScenariosPage({
   } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const membership = await requireProjectRoleOrNotFound(
+    session!.user.id,
+    projectId,
+    ALL_MEMBER_ROLES,
+  );
+  /* Every action below already refuses a non-editor; this is so the page
+   * stops offering them. A control that answers 404 is worse than one that
+   * is not there: it reads as the app being broken rather than as the reader
+   * not being allowed. */
+  const canEdit = EDITOR_ROLES.includes(membership.role);
 
   const [project, requirement] = await Promise.all([
     getProjectById(projectId),
@@ -392,6 +401,7 @@ export default async function ScenariosPage({
           </>
         }
         actions={
+          canEdit && (
           <Modal
             triggerLabel="+ New Scenario"
             title="New Scenario"
@@ -408,6 +418,7 @@ export default async function ScenariosPage({
               defaults={{ requirementId }}
             />
           </Modal>
+          )
         }
       />
 
@@ -567,6 +578,7 @@ export default async function ScenariosPage({
                     </>
                   }
                   actions={
+                    canEdit ? (
                     <RowActions
                       /* Keyed on the flag so a redirect that turns it on remounts the
                          component: `openOnMount` seeds state and is never read again,
@@ -626,6 +638,7 @@ export default async function ScenariosPage({
                         }
                       />
                     </RowActions>
+                    ) : undefined
                   }
                   detail={
                     <DetailFields>

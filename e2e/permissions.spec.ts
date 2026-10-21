@@ -33,3 +33,23 @@ test("a viewer typing /projects/new gets nothing", async ({ page }) => {
   expect(response?.status()).toBe(404);
   await expect(page.getByRole("button", { name: "Create Project" })).toHaveCount(0);
 });
+
+/**
+ * The same hole the DEV role turned up, which a VIEWER had been meeting for
+ * as long as these pages have existed: the create and edit controls were
+ * drawn for every member, and pressing one answered 404. A VIEWER is "sees
+ * everything, changes nothing", so there should be nothing to press.
+ */
+test("a viewer is not offered controls that would refuse them", async ({ page }) => {
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  for (const path of ["modules", "notes", "files"]) {
+    await page.goto(`/projects/${projectId}/${path}`);
+    await expect(page.getByRole("button", { name: /^\+ New/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Actions for/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Upload/ })).toHaveCount(0);
+  }
+});

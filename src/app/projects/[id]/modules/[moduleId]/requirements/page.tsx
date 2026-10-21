@@ -92,7 +92,16 @@ export default async function RequirementsPage({
     await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const membership = await requireProjectRoleOrNotFound(
+    session!.user.id,
+    projectId,
+    ALL_MEMBER_ROLES,
+  );
+  /* Every action below already refuses a non-editor; this is so the page
+   * stops offering them. A control that answers 404 is worse than one that
+   * is not there: it reads as the app being broken rather than as the reader
+   * not being allowed. */
+  const canEdit = EDITOR_ROLES.includes(membership.role);
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || feature || status || priority || showArchived);
@@ -286,6 +295,7 @@ export default async function RequirementsPage({
         }
         subtitle="What the Feature docs ask for. Scenarios hang off these."
         actions={
+          canEdit && (
           <Modal
             triggerLabel="+ New Requirement"
             title="New Requirement"
@@ -300,6 +310,7 @@ export default async function RequirementsPage({
               defaults={{ moduleId }}
             />
           </Modal>
+          )
         }
       />
 
@@ -441,6 +452,7 @@ export default async function RequirementsPage({
                       </>
                     }
                     actions={
+                      canEdit ? (
                       <RowActions
                         key={`${requirement.id}-${editId === requirement.id}`}
                         label={requirement.name}
@@ -519,6 +531,7 @@ export default async function RequirementsPage({
                           </div>
                         </div>
                       </RowActions>
+                      ) : undefined
                     }
                     detail={
                       <DetailFields>

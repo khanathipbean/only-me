@@ -57,7 +57,16 @@ export default async function ProjectFilesPage({
   const session = await auth();
   const hasFilters = Boolean(search || moduleId);
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const membership = await requireProjectRoleOrNotFound(
+    session!.user.id,
+    projectId,
+    ALL_MEMBER_ROLES,
+  );
+  /* Every action below already refuses a non-editor; this is so the page
+   * stops offering them. A control that answers 404 is worse than one that
+   * is not there: it reads as the app being broken rather than as the reader
+   * not being allowed. */
+  const canEdit = EDITOR_ROLES.includes(membership.role);
   const [project, groups, modules] = await Promise.all([
     getProjectById(projectId),
     listProjectFilesByModule(projectId, { search, moduleId }),
@@ -126,6 +135,7 @@ export default async function ProjectFilesPage({
         subtitle="Documents kept against this project, grouped by module."
       />
 
+      {canEdit && (
       <Card className="flex flex-col gap-4">
         <h2 className="text-sm font-semibold text-foreground">Add a file</h2>
 
@@ -181,6 +191,7 @@ export default async function ProjectFilesPage({
           </div>
         </form>
       </Card>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">
@@ -241,6 +252,7 @@ export default async function ProjectFilesPage({
                     }}
                     openOnMount={file.id === fileId}
                     deleteSlot={
+                      canEdit ? (
                       <ConfirmForm
                         action={removeAction(file.id)}
                         confirmMessage={`Remove ${file.fileName} from this project?`}
@@ -256,6 +268,7 @@ export default async function ProjectFilesPage({
                           <TrashIcon />
                         </IconButton>
                       </ConfirmForm>
+                      ) : undefined
                     }
                   />
                 </li>

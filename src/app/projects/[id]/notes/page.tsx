@@ -88,7 +88,16 @@ export default async function NotesPage({
     await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const membership = await requireProjectRoleOrNotFound(
+    session!.user.id,
+    projectId,
+    ALL_MEMBER_ROLES,
+  );
+  /* Every action below already refuses a non-editor; this is so the page
+   * stops offering them. A control that answers 404 is worse than one that
+   * is not there: it reads as the app being broken rather than as the reader
+   * not being allowed. */
+  const canEdit = EDITOR_ROLES.includes(membership.role);
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || moduleId || feature || showArchived);
@@ -315,6 +324,7 @@ export default async function NotesPage({
              refusing something possible the moment the Module turned
              optional. A Project with no Modules yet is exactly where the
              first note tends to be written. */
+          canEdit && (
           <Modal triggerLabel="+ New Note" title="New Note" openOnMount={!!error && !editId}>
             {error && !editId && (
               <p
@@ -332,6 +342,7 @@ export default async function NotesPage({
               </div>
             </form>
           </Modal>
+          )
         }
       />
 
@@ -491,6 +502,7 @@ export default async function NotesPage({
                       </div>
                     }
                     actions={
+                      canEdit ? (
                       <RowActions
                         /* `updatedAt` in the key so a successful save
                            remounts this: the dialog's open/closed state
@@ -547,6 +559,7 @@ export default async function NotesPage({
                           </div>
                         </div>
                       </RowActions>
+                      ) : undefined
                     }
                   />
                 );

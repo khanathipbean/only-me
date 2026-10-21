@@ -36,7 +36,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { Modal } from "@/components/ui/Modal";
 import { TestCaseForm } from "@/components/forms/TestCaseForm";
-import { Badge, priorityTone, workflowStatusTone } from "@/components/ui/Badge";
+import { Badge, priorityTone, testResultTone, workflowStatusTone } from "@/components/ui/Badge";
 import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RowActions } from "@/components/ui/RowActions";
@@ -111,7 +111,16 @@ export default async function TestCasesPage({
     notFound();
   }
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const membership = await requireProjectRoleOrNotFound(
+    session!.user.id,
+    projectId,
+    ALL_MEMBER_ROLES,
+  );
+  /* Every action below already refuses a non-editor; this is so the page
+   * stops offering them. A control that answers 404 is worse than one that
+   * is not there: it reads as the app being broken rather than as the reader
+   * not being allowed. */
+  const canEdit = EDITOR_ROLES.includes(membership.role);
 
   const [project, scenario, requirement, testCasePage] = await Promise.all([
     getProjectById(projectId),
@@ -213,15 +222,23 @@ export default async function TestCasesPage({
       invalidateRouteCache();
       const session = await auth();
       await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
-      /* The note only when one was asked for. Sending an empty string on
-       * every pass would wipe the note explaining the failure before it, and
-       * `undefined` is how this function is told to leave it alone. */
+      /* The note only when one was actually written. Sending an empty string
+       * on every pass would wipe the note explaining the failure before it,
+       * and leaving the field out is how this function is told to leave it
+       * alone.
+       *
+       * Empty counts as "not written", not as "clear it": the control always
+       * carries the field now (see `InlineSelect`, where gating it on the
+       * dialog silently dropped every note), so absence is no longer the
+       * signal it used to be. Clearing a note is done on the case's own page,
+       * where the field being empty is something somebody meant. */
       const notes = formData.get("notes");
+      const written = notes === null ? "" : String(notes).trim();
       await updateTestResultAndNotes(
         testCaseId,
         {
           testResult: formData.get("testResult") as TestResult,
-          ...(notes === null ? {} : { notes: String(notes) }),
+          ...(written === "" ? {} : { notes: written }),
         },
         session!.user.id,
       );
@@ -336,10 +353,11 @@ export default async function TestCasesPage({
         }
         actions={
           <>
-          {testCases.length > 0 && <BulkSelectToggle />}
+          {canEdit && testCases.length > 0 && <BulkSelectToggle />}
           {/* Wider than the default: the form is three columns of fields
               with a Status explanation beside them, and at the standard width
               every one of them was a column of wrapped fragments. */}
+          {canEdit && (
           <Modal
             triggerLabel="+ New Test Case"
             title="New Test Case"
@@ -352,6 +370,7 @@ export default async function TestCasesPage({
               error={editId ? undefined : error}
             />
           </Modal>
+          )}
           </>
         }
       />
@@ -407,6 +426,7 @@ export default async function TestCasesPage({
         </p>
       ) : (
         <>
+          {canEdit && (
           <ConfirmForm
             id="bulk-archive-test-cases"
             action={bulkArchive}
@@ -424,6 +444,7 @@ export default async function TestCasesPage({
               </SubmitButton>
             </BulkActionBar>
           </ConfirmForm>
+          )}
 
           <div className={tableWrapClass}>
             <table className={tableClass}>
@@ -482,19 +503,25 @@ export default async function TestCasesPage({
                         <Badge tone={priorityTone(testCase.priority)}>{testCase.priority}</Badge>
                       </td>
                       <td className={tdCenterClass}>
-                        <InlineSelect
-                          action={setResultAction(testCase.id)}
-                          name="testResult"
-                          defaultValue={testCase.testResult}
-                          options={TEST_RESULT_OPTIONS}
-                          ariaLabel={`Test Result for ${testCase.name}`}
-                          /* A result that says something went wrong is not
-                             worth recording without saying what: the report
-                             that collects them is read for the notes. */
-                          needsNote={["FAILED", "BLOCKED"]}
-                          noteTitle={testCase.name}
-                          className="mx-auto"
-                        />
+                        {canEdit ? (
+                          <InlineSelect
+                            action={setResultAction(testCase.id)}
+                            name="testResult"
+                            defaultValue={testCase.testResult}
+                            options={TEST_RESULT_OPTIONS}
+                            ariaLabel={`Test Result for ${testCase.name}`}
+                            /* A result that says something went wrong is not
+                               worth recording without saying what: the report
+                               that collects them is read for the notes. */
+                            needsNote={["FAILED", "BLOCKED"]}
+                            noteTitle={testCase.name}
+                            className="mx-auto"
+                          />
+                        ) : (
+                          <Badge tone={testResultTone(testCase.testResult)}>
+                            {testCase.testResult.replace(/_/g, " ")}
+                          </Badge>
+                        )}
                       </td>
                       {/* The dash is the point. NOT RUN beside a dash is a
                           case nothing has ever looked at; NOT RUN beside a
@@ -513,7 +540,7 @@ export default async function TestCasesPage({
                             status follows it. A control here would be a
                             choice the next result overrules, which reads as
                             the app throwing away what someone entered. */}
-                        {testCase.testResult === "NOT_RUN" ? (
+                        {canEdit && testCase.testResult === "NOT_RUN" ? (
                           <InlineSelect
                             action={setStatusAction(testCase.id)}
                             name="status"
@@ -533,6 +560,7 @@ export default async function TestCasesPage({
                     </>
                   }
                   actions={
+                    canEdit ? (
                     <RowActions
                       /* Keyed on the flag so a redirect that turns it on remounts the
                          component: `openOnMount` seeds state and is never read again,
@@ -564,6 +592,7 @@ export default async function TestCasesPage({
                         }}
                       />
                     </RowActions>
+                    ) : undefined
                   }
                   detail={
                     <DetailFields>
@@ -576,7 +605,7 @@ export default async function TestCasesPage({
                       <DetailField label="Test Type">{testCase.testType}</DetailField>
                       {ASSIGNEE_ENABLED && (
                         <DetailField label="Assignee">
-                          {testCase.assigneeId ?? "Unassigned"}
+                          {testCase.assignee?.name ?? "Unassigned"}
                         </DetailField>
                       )}
                       <DetailField label="Actual Result">{testCase.notes}</DetailField>
