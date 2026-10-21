@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { NON_DEV_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { getProjectById } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { listPhasesForProject } from "@/lib/test-runs";
@@ -209,7 +209,7 @@ export default async function ProblemCasesPage({
   const { phase, moduleId, pattern, search } = query;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  await requireProjectRoleOrNotFound(session!.user.id, projectId, NON_DEV_ROLES);
 
   const [project, modules, phases, cases] = await Promise.all([
     getProjectById(projectId),

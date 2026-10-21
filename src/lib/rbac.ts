@@ -12,7 +12,25 @@ export const ALL_MEMBER_ROLES: ProjectRole[] = [
   "QA_LEAD",
   "TESTER",
   "VIEWER",
+  "DEV",
 ];
+
+/**
+ * The pages a DEV has no business in: managing rounds, importing, the audit
+ * trail, and the two overview pages they have their own version of.
+ *
+ * Hiding these from the menu is not enough on its own — a hidden page whose
+ * URL still answers is the hole `/projects/new` once had, where the button
+ * was gone and typing the address still let anyone create a Project.
+ */
+export const NON_DEV_ROLES: ProjectRole[] = ["ADMIN", "QA_LEAD", "TESTER", "VIEWER"];
+
+/**
+ * Who may move a case along its repair: everybody who can edit, plus the DEV
+ * doing the repairing. The one place a DEV is allowed to write, and the
+ * reason it cannot simply reuse `EDITOR_ROLES`.
+ */
+export const WORK_STATE_ROLES: ProjectRole[] = ["ADMIN", "QA_LEAD", "TESTER", "DEV"];
 
 export class ForbiddenError extends Error {
   constructor() {

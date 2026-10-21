@@ -1,6 +1,6 @@
 import { getProjectById } from "@/lib/projects";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { NON_DEV_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { AUDIT_ACTIONS, listAuditLogForProject, parseUtcDateTimeLocal } from "@/lib/audit-log";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { auditLogBreadcrumb, nameOr } from "@/lib/breadcrumb";
@@ -49,7 +49,7 @@ export default async function AuditLogPage({
   const { actorId, actorName, action, entityType, from, to, page, pageSize } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  await requireProjectRoleOrNotFound(session!.user.id, projectId, NON_DEV_ROLES);
 
   // `page`/`pageSize` are paging, not filtering, so clearing shouldn't be
   // offered for them alone.

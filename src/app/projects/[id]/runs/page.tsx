@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { EDITOR_ROLES, NON_DEV_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { getProjectById } from "@/lib/projects";
 import {
   TestRunValidationError,
@@ -83,7 +83,7 @@ export default async function TestRunsPage({
   const { search, status, archived, overdue, page, pageSize, error, editId } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  await requireProjectRoleOrNotFound(session!.user.id, projectId, NON_DEV_ROLES);
 
   const showArchived = archived === "1";
   const showOverdue = overdue === "1";

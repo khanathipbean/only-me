@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, getProjectMembership, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import {
+  EDITOR_ROLES,
+  NON_DEV_ROLES,
+  getProjectMembership,
+  requireProjectRoleOrNotFound,
+} from "@/lib/rbac";
 import { archiveProject, getProjectById, restoreProject } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { getProjectOverviewSummary } from "@/lib/project-overview";
@@ -30,12 +35,25 @@ export default async function ProjectOverviewPage({
   const { id } = await params;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, id, ALL_MEMBER_ROLES);
+  /* A DEV is sent on rather than refused.
+   *
+   * This address is where every link into a project points — the Projects
+   * list, the picker in the header, every breadcrumb — so refusing it would
+   * hand a DEV a 404 from each of them. One redirect here means no link
+   * anywhere has to know about roles, which is the same move `/` made when it
+   * learned to send people to `/projects`.
+   *
+   * Before the guard below, because the guard is what would refuse them. */
+  const membership = await getProjectMembership(session!.user.id, id);
+  if (membership?.role === "DEV") {
+    redirect(`/projects/${id}/my-work`);
+  }
 
-  const [project, modules, membership] = await Promise.all([
+  await requireProjectRoleOrNotFound(session!.user.id, id, NON_DEV_ROLES);
+
+  const [project, modules] = await Promise.all([
     getProjectById(id),
     listModulesForProject(id),
-    getProjectMembership(session!.user.id, id),
   ]);
   if (!project) {
     redirect("/projects");

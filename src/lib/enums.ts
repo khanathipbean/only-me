@@ -66,13 +66,14 @@ export const PROJECT_ROLE_OPTIONS = [
   { value: "QA_LEAD", label: "QA Lead" },
   { value: "TESTER", label: "Tester" },
   { value: "VIEWER", label: "Viewer" },
+  { value: "DEV", label: "Dev" },
 ];
 
 /** QA_LEAD and VIEWER hidden for now: TESTER covers everything QA_LEAD did
  * (see `EDITOR_ROLES`) and ADMIN covers everything VIEWER did plus more, so
  * neither is offered for a new or changed assignment. */
 export const ASSIGNABLE_PROJECT_ROLE_OPTIONS = PROJECT_ROLE_OPTIONS.filter(
-  (option) => option.value === "ADMIN" || option.value === "TESTER",
+  (option) => option.value === "ADMIN" || option.value === "TESTER" || option.value === "DEV",
 );
 
 export const TEST_TYPE_OPTIONS = [
