@@ -97,15 +97,25 @@ export function InlineSelect({
               setAsking(true);
               return;
             }
+            /* A note belongs to the answer it was written for, so an answer
+               that does not ask for one must not carry the last one along. */
+            setNote("");
             /* requestSubmit rather than submit: it runs the form's own submit
                path, which is what React's action is attached to. */
             formRef.current?.requestSubmit();
           }}
         />
-        {/* Only while one was asked for. Left out, the action leaves whatever
-            note the case already carries alone — an empty field sent on every
-            pass would wipe the explanation of the failure before it. */}
-        {asking && <input type="hidden" name="notes" value={note} readOnly />}
+        {/* Always rendered, and empty unless a note was asked for and given.
+            It used to be written `{asking && <input …>}`, which reads
+            correctly and lost every note: Save closes the dialog first, that
+            unmounts the field, and the submit a frame later carried a form
+            without it. The result was stored, the explanation of the failure
+            was not, and nothing said so.
+
+            An empty value is still safe to send: `updateTestResultAndNotes`
+            is given `undefined` for an empty string by the action, and
+            leaves whatever note the case already carries alone. */}
+        <input type="hidden" name="notes" value={note} readOnly />
       </form>
 
       <Dialog open={asking} onClose={cancel} title={noteTitle}>
@@ -131,9 +141,7 @@ export function InlineSelect({
               disabled={note.trim() === ""}
               onClick={() => {
                 setAsking(false);
-                /* After the state that renders the hidden field has been
-                   applied, or the form would submit without it. */
-                requestAnimationFrame(() => formRef.current?.requestSubmit());
+                formRef.current?.requestSubmit();
               }}
             >
               Save
