@@ -6,10 +6,12 @@
  */
 
 /**
- * Assigning a Test Case to a person. `TestCase.assigneeId`,
- * `updateAssignee()` and `PATCH /api/test-cases/:id/assignee` all still work,
- * but nothing in the UI can set one — so every Test Case reads "Unassigned"
- * forever, and a dashboard chart of one grey bar says nothing. Hidden until
- * there is a way to actually assign someone.
+ * Assigning a Test Case to a person.
+ *
+ * Off for as long as nothing in the UI could set one: every case read
+ * "Unassigned" forever, and a dashboard chart of a single grey bar said
+ * nothing. The Test Run page can now hand a case over — a control on the row
+ * and one in the selection panel — so the places that show an assignee have
+ * something to show.
  */
-export const ASSIGNEE_ENABLED = false;
+export const ASSIGNEE_ENABLED = true;

@@ -5,6 +5,7 @@ import { rollUpAfter, rollUpFrom, statusFromResult } from "@/lib/status-rollup";
 import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { setDeletedAt, type SoftDeleteAction } from "@/lib/soft-delete";
+import { assignCase, notifyBounced, workOpsForResult } from "@/lib/work";
 import type { Priority, TestResult, TestType, WorkflowStatus } from "@/generated/prisma/client";
 
 export class ValidationError extends Error {}
@@ -236,6 +237,11 @@ export async function listTestCasesWithStepsForTestGroupPage(
            * and counting them would credit a case with coverage nobody can
            * open — the mistake the Dashboard made once. */
           _count: { select: { runCases: { where: { testRun: { deletedAt: null } } } } },
+          /* The person, not their id. Both pages that show an assignee were
+           * printing `assigneeId` straight out — a cuid, which names nobody.
+           * Nobody had seen it while `ASSIGNEE_ENABLED` was off; turning it
+           * on without this would ship it. */
+          assignee: { select: { id: true, name: true, email: true } },
         },
         skip,
         take,
@@ -255,6 +261,8 @@ export const getTestCaseWithProjectId = cache(async (id: string) => {
       steps: { orderBy: { sequence: "asc" } },
       attachments: true,
       testGroup: { include: { scenario: { select: { projectId: true } } } },
+      // See the note on the list query above: the id names nobody.
+      assignee: { select: { id: true, name: true, email: true } },
     },
   });
   if (!testCase) {
@@ -333,6 +341,10 @@ export async function updateTestResultAndNotes(
    * with whatever status it was given. */
   const status = input.testResult !== undefined ? statusFromResult(input.testResult) : null;
 
+  /* Set inside the transaction, acted on after it: a notification about work
+   * that was rolled back is worse than none. */
+  let bouncedTo: string | null = null;
+
   const after = await prisma.$transaction(async (tx) => {
     const updated = await tx.testCase.update({
       where: { id },
@@ -364,11 +376,26 @@ export async function updateTestResultAndNotes(
       });
     }
 
+    /* The same rule the Test Run page applies — one function, so a result
+     * recorded here and a result recorded in a round cannot disagree about
+     * what it means for the repair. */
+    if (input.testResult !== undefined) {
+      const work = workOpsForResult(tx, before, actorId, input.testResult);
+      for (const op of work.ops) {
+        await op;
+      }
+      bouncedTo = work.bouncedTo;
+    }
+
     if (status) {
       await rollUpFrom(tx, "testGroup", updated.testGroupId);
     }
     return updated;
   });
+
+  if (bouncedTo) {
+    await notifyBounced(bouncedTo, before.projectId, before.name, actorId);
+  }
 
   await logTestCaseEvent("update-result", after, before.projectId, actorId, {
     oldValue: before,
@@ -413,23 +440,16 @@ export async function updateTestCaseStatus(id: string, status: WorkflowStatus, a
   return after;
 }
 
+/**
+ * Kept as the name the API route and the older callers already use. The work
+ * itself moved to `assignCase`, because setting an assignee is now the start
+ * of a hand-off rather than a field edit: it opens the work state, appends
+ * the event the history is read from, and refuses somebody who is not on the
+ * project. Two ways to write the same column would mean one of them silently
+ * skipping all three.
+ */
 export async function updateAssignee(id: string, assigneeId: string | null, actorId: string) {
-  const before = await getTestCaseWithProjectId(id);
-  if (!before) {
-    throw new Error("Test Case not found");
-  }
-
-  const after = await prisma.testCase.update({
-    where: { id },
-    data: { assigneeId, updatedById: actorId },
-  });
-
-  await logTestCaseEvent("update-assignee", after, before.projectId, actorId, {
-    oldValue: before,
-    newValue: after,
-  });
-
-  return after;
+  return assignCase(id, assigneeId, actorId);
 }
 
 export async function duplicateTestCase(id: string, actorId: string) {

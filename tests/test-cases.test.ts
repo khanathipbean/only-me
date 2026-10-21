@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import {
   createTestCase,
+  getTestCaseWithProjectId,
   listTestCaseIdsForTestGroup,
   listTestCasesWithStepsForTestGroupPage,
+  updateAssignee,
 } from "@/lib/test-cases";
 
 vi.mock("@/auth", () => ({
@@ -89,7 +91,7 @@ async function setup() {
   return { owner, project, scenario, testGroup };
 }
 
-async function addMember(projectId: string, userId: string, role: "TESTER" | "VIEWER") {
+async function addMember(projectId: string, userId: string, role: "TESTER" | "VIEWER" | "DEV") {
   await prisma.projectMember.create({ data: { projectId, userId, role } });
 }
 
@@ -577,5 +579,62 @@ describe("test case routes", () => {
      * the set that stands in for "everything on the list". */
     await prisma.testCase.update({ where: { id: matching[0] }, data: { deletedAt: new Date() } });
     expect(await listTestCaseIdsForTestGroup(testGroup.id, { search: "alpha" })).toHaveLength(1);
+  });
+});
+/**
+ * Both pages that show an assignee printed `assigneeId` — a cuid, which names
+ * nobody. Nobody had seen it, because `ASSIGNEE_ENABLED` is off; turning that
+ * on without this would have shipped it.
+ */
+describe("who a Test Case is assigned to", () => {
+  it("comes back as a person, not an id, from the list", async () => {
+    const { owner, testGroup, project } = await setup();
+    /* On the project: assigning now means handing work over, and handing it
+     * to somebody who cannot open the project is refused. */
+    const assignee = await createUser(uniqueEmail("tc-assignee"));
+    await addMember(project.id, assignee.id, "DEV");
+    const testCase = await createTestCase(
+      testGroup.id,
+      { name: "Assigned", expectedResult: "ok", priority: "MEDIUM", steps: [{ step: "s", expectedResult: "r" }] },
+      owner.id,
+    );
+    await updateAssignee(testCase.id, assignee.id, owner.id);
+
+    const { items } = await listTestCasesWithStepsForTestGroupPage(testGroup.id, {});
+    const row = items.find((item) => item.id === testCase.id);
+
+    expect(row?.assignee?.name).toBe(assignee.name);
+    expect(row?.assignee?.name).not.toMatch(/^c[a-z0-9]{20,}$/);
+  });
+
+  it("comes back as a person from the detail record too", async () => {
+    const { owner, testGroup, project } = await setup();
+    /* On the project: assigning now means handing work over, and handing it
+     * to somebody who cannot open the project is refused. */
+    const assignee = await createUser(uniqueEmail("tc-assignee"));
+    await addMember(project.id, assignee.id, "DEV");
+    const testCase = await createTestCase(
+      testGroup.id,
+      { name: "Assigned", expectedResult: "ok", priority: "MEDIUM", steps: [{ step: "s", expectedResult: "r" }] },
+      owner.id,
+    );
+    await updateAssignee(testCase.id, assignee.id, owner.id);
+
+    const record = await getTestCaseWithProjectId(testCase.id);
+    expect(record?.assignee?.name).toBe(assignee.name);
+  });
+
+  it("says nobody rather than nothing when it is unassigned", async () => {
+    const { owner, testGroup } = await setup();
+    const testCase = await createTestCase(
+      testGroup.id,
+      { name: "Nobody", expectedResult: "ok", priority: "MEDIUM", steps: [{ step: "s", expectedResult: "r" }] },
+      owner.id,
+    );
+
+    const record = await getTestCaseWithProjectId(testCase.id);
+    // Null, so the pages can write "Unassigned" rather than an empty cell.
+    expect(record?.assignee).toBeNull();
+    expect(record?.assigneeId).toBeNull();
   });
 });

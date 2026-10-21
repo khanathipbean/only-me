@@ -5,6 +5,7 @@ import { paginate, type PageFilters } from "@/lib/pagination";
 import { deleteFile } from "@/lib/storage";
 import { rollUpAfter, statusFromResult } from "@/lib/status-rollup";
 import type { Prisma, TestResult } from "@/generated/prisma/client";
+import { notifyBounced, workOpsForResult } from "@/lib/work";
 
 export class TestRunValidationError extends Error {}
 
@@ -185,6 +186,12 @@ const RUN_CASE_INCLUDE = {
       name: true,
       priority: true,
       deletedAt: true,
+      /* Who is fixing it, and how far they have got — the round is where a
+       * failure is found, so it is also where one is handed over. A person,
+       * not the raw id the column holds. */
+      workState: true,
+      dueAt: true,
+      assignee: { select: { id: true, name: true, email: true } },
       condition: true,
       preconditions: true,
       testData: true,
@@ -840,6 +847,23 @@ export async function setRunCaseResult(
 
   const ran = input.testResult !== "NOT_RUN";
   const derivedStatus = statusFromResult(input.testResult);
+
+  /* A repair in flight, if there is one. Read here rather than inside the
+   * transaction below, which takes prepared queries and so cannot look
+   * anything up. */
+  const workBefore = await prisma.testCase.findUnique({
+    where: { id: testCaseId },
+    select: { id: true, name: true, workState: true, assigneeId: true, dueAt: true, priority: true },
+  });
+
+  /* What this answer does to a repair in flight — worked out here because the
+   * transaction below takes prepared queries and so cannot look anything up,
+   * and skipped when a newer round has spoken, for the same reason the case's
+   * own columns are: this round is no longer the one being read. */
+  const work =
+    workBefore && !newerRound
+      ? workOpsForResult(prisma, workBefore, actorId, input.testResult)
+      : { ops: [], bouncedTo: null };
   const priorAnswers = await prisma.testResultEvent.count({
     where: { testRunCaseId: before.id },
   });
@@ -907,6 +931,7 @@ export async function setRunCaseResult(
             },
           }),
         ]),
+    ...work.ops,
   ]);
 
   /* After the transaction, not inside it: the array form takes prepared
@@ -937,6 +962,12 @@ export async function setRunCaseResult(
       ...(newerRound ? { mirrorHeldBy: newerRound.testRun.name } : {}),
     },
   });
+
+  /* After the transaction, never inside it: a notification about work that
+   * was rolled back is worse than none. */
+  if (work.bouncedTo && workBefore) {
+    await notifyBounced(work.bouncedTo, run.projectId, workBefore.name, actorId);
+  }
 
   if (input.testResult === "FAILED") {
     const testCase = await prisma.testCase.findUniqueOrThrow({

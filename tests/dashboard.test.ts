@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { prisma } from "@/lib/prisma";
 import { calculateTestProgress } from "@/lib/dashboard";
 import { createScenario } from "@/lib/scenarios";
 import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
@@ -57,6 +58,14 @@ async function seedDashboardFixture(ownerId: string) {
 
   const user1 = await createUser(`${code}-user1@example.com`);
   const user2 = await createUser(`${code}-user2@example.com`);
+  /* On the project. Assigning is handing work over, and a case cannot be
+   * handed to somebody who could not open it to do the work. */
+  await prisma.projectMember.createMany({
+    data: [
+      { projectId: project.id, userId: user1.id, role: "DEV" },
+      { projectId: project.id, userId: user2.id, role: "DEV" },
+    ],
+  });
 
   // Every Scenario needs a Requirement; one shared fixture keeps the tree
   // shape the assertions below expect.

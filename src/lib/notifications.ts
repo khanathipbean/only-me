@@ -40,6 +40,42 @@ export async function notifyProject(params: {
   });
 }
 
+/**
+ * The same thing for one person.
+ *
+ * Every other notification is about something that happened to the project
+ * and goes to everybody in it. Handing a case over is about one person, and
+ * fanning it out would tell nine people something that concerns one of them
+ * — which is how a notification list stops being read.
+ *
+ * Nothing is written when the recipient is the actor: assigning a case to
+ * yourself is a decision you have just made, not news.
+ */
+export async function notifyUser(params: {
+  recipientId: string;
+  projectId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  link?: string;
+  actorId?: string;
+}) {
+  if (params.recipientId === params.actorId) {
+    return;
+  }
+  await prisma.notification.create({
+    data: {
+      recipientId: params.recipientId,
+      projectId: params.projectId,
+      type: params.type,
+      title: params.title,
+      body: params.body,
+      link: params.link,
+      actorId: params.actorId,
+    },
+  });
+}
+
 export type NotificationFilters = { unreadOnly?: boolean } & PageFilters;
 
 export async function listNotificationsForUser(userId: string, filters: NotificationFilters) {

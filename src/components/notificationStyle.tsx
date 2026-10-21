@@ -1,4 +1,13 @@
-import { BellIcon, BoxIcon, CheckIcon, ClearIcon, FileIcon, UploadIcon, UserPlusIcon } from "@/components/icons";
+import {
+  BellIcon,
+  BoxIcon,
+  CheckIcon,
+  ClearIcon,
+  ClockIcon,
+  FileIcon,
+  UploadIcon,
+  UserPlusIcon,
+} from "@/components/icons";
 import type { NotificationType } from "@/generated/prisma/client";
 
 /**
@@ -18,4 +27,9 @@ export const NOTIFICATION_TYPE_STYLE: Record<
   ENTITY_ARCHIVED: { Icon: BoxIcon, className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
   TEST_CASE_FAILED: { Icon: ClearIcon, className: "bg-red-500/10 text-red-600 dark:text-red-400" },
   MEMBER_ADDED: { Icon: UserPlusIcon, className: "bg-teal-500/10 text-teal-600 dark:text-teal-400" },
+  ASSIGNED: { Icon: UserPlusIcon, className: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" },
+  /* Red, with the one icon on this list that is about time rather than about
+     a thing: the only notification that says something should already have
+     happened. */
+  OVERDUE: { Icon: ClockIcon, className: "bg-red-500/10 text-red-600 dark:text-red-400" },
 };
