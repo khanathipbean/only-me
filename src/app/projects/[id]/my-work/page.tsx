@@ -465,6 +465,10 @@ function WorkCard({
               <RunHistoryList
                 entries={history}
                 projectId={projectId}
+                /* Three is where a round stops reading as "what happened" and
+                   starts reading as a log. The card has a failure, a list of
+                   steps and the controls to get through first. */
+                collapseAfter={3}
                 emptyMessage="No round has recorded an answer for this case yet."
               />
             </div>

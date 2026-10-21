@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { Badge, testResultTone } from "@/components/ui/Badge";
 import { formatDate } from "@/lib/dates";
-import { summariseHistory, type RunHistoryEntry } from "@/lib/run-history";
+import {
+  summariseHistory,
+  type RunAttempt,
+  type RunHistoryEntry,
+} from "@/lib/run-history";
 
 /**
  * Every round a Test Case has been in, newest first, with what was written
@@ -19,11 +23,17 @@ import { summariseHistory, type RunHistoryEntry } from "@/lib/run-history";
 export function RunHistoryList({
   entries,
   projectId,
+  collapseAfter,
   currentRunId,
   emptyMessage,
 }: {
   entries: RunHistoryEntry[];
   projectId: string;
+  /** Keep a round's answers to this many at rest, the newest ones, with the
+   *  rest behind a Show more. Left out, every answer is shown — which is what
+   *  a page devoted to the history wants, and what a card beside three other
+   *  things does not. */
+  collapseAfter?: number;
   /** Marked as "this round" instead of linked. */
   currentRunId?: string;
   emptyMessage: string;
@@ -139,23 +149,35 @@ export function RunHistoryList({
                   badge called PASSED read "failed", and the two argued. */}
               {entry.attempts.length > 1 && (
                 <ul className="w-full border-l border-border pl-2.5 text-xs text-muted">
-                  {entry.attempts.map((attempt, index) => (
-                    <li key={index} className="flex flex-wrap items-baseline gap-1.5 py-0.5">
-                      <span
-                        className={
-                          attempt.testResult === "FAILED"
-                            ? "font-medium text-red-600 dark:text-red-400"
-                            : "font-medium text-foreground"
-                        }
-                      >
-                        {attempt.testResult.replace(/_/g, " ").toLowerCase()}
-                      </span>
-                      <span>
-                        {formatDate(attempt.recordedAt)}
-                        {attempt.recordedBy && ` · ${attempt.recordedBy}`}
-                      </span>
-                      {attempt.notes && <span className="w-full">{attempt.notes}</span>}
-                    </li>
+                  {/* The older ones folded away, the newest left out.
+                      A round that was answered eight times is a log, and on a
+                      card beside the failure, the steps and the controls it
+                      took the whole height while the column next to it sat
+                      empty. Oldest first is kept inside the fold, so opening
+                      it reads the way the strip always has. */}
+                  {collapseAfter !== undefined &&
+                    entry.attempts.length > collapseAfter && (
+                      <li>
+                        <details>
+                          <summary className="cursor-pointer py-0.5 text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand">
+                            Show {entry.attempts.length - collapseAfter} earlier answer
+                            {entry.attempts.length - collapseAfter === 1 ? "" : "s"}
+                          </summary>
+                          <ul>
+                            {entry.attempts
+                              .slice(0, entry.attempts.length - collapseAfter)
+                              .map((attempt, index) => (
+                                <Attempt key={index} attempt={attempt} />
+                              ))}
+                          </ul>
+                        </details>
+                      </li>
+                    )}
+                  {(collapseAfter === undefined
+                    ? entry.attempts
+                    : entry.attempts.slice(-collapseAfter)
+                  ).map((attempt, index) => (
+                    <Attempt key={index} attempt={attempt} />
                   ))}
                 </ul>
               )}
@@ -164,5 +186,28 @@ export function RunHistoryList({
         })}
       </ul>
     </div>
+  );
+}
+
+/** One answer within a round. Its own component because it is drawn twice —
+ *  once in the fold and once out of it. */
+function Attempt({ attempt }: { attempt: RunAttempt }) {
+  return (
+    <li className="flex flex-wrap items-baseline gap-1.5 py-0.5">
+      <span
+        className={
+          attempt.testResult === "FAILED"
+            ? "font-medium text-red-600 dark:text-red-400"
+            : "font-medium text-foreground"
+        }
+      >
+        {attempt.testResult.replace(/_/g, " ").toLowerCase()}
+      </span>
+      <span>
+        {formatDate(attempt.recordedAt)}
+        {attempt.recordedBy && ` · ${attempt.recordedBy}`}
+      </span>
+      {attempt.notes && <span className="w-full">{attempt.notes}</span>}
+    </li>
   );
 }

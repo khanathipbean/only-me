@@ -229,6 +229,36 @@ export async function seedBaseline() {
   // Adds only what is missing; a case already in the round is left alone.
   await addCasesToRun(run.id, [toHandOver.id, handedOver.id, overdue.id], user.id);
 
+  /* A round answered several times over, so the history strip has something
+   * to fold away. Written as rows rather than driven through
+   * `setRunCaseResult`, which would close the hand-off the moment it recorded
+   * a result — the point here is the shape of the history, not the loop. */
+  const runCase = await prisma.testRunCase.findUniqueOrThrow({
+    where: { testRunId_testCaseId: { testRunId: run.id, testCaseId: handedOver.id } },
+    select: { id: true },
+  });
+  const answers = await prisma.testResultEvent.count({ where: { testRunCaseId: runCase.id } });
+  if (answers === 0) {
+    const script = [
+      { testResult: "FAILED" as const, notes: "Hangs on the spinner." },
+      { testResult: "NOT_RUN" as const, notes: null },
+      { testResult: "FAILED" as const, notes: "Still hanging after the first fix." },
+      { testResult: "BLOCKED" as const, notes: "Environment was down." },
+      { testResult: "FAILED" as const, notes: "Back to hanging." },
+    ];
+    for (const answer of script) {
+      await prisma.testResultEvent.create({
+        data: {
+          testCaseId: handedOver.id,
+          testRunCaseId: runCase.id,
+          testResult: answer.testResult,
+          notes: answer.notes,
+          recordedById: user.id,
+        },
+      });
+    }
+  }
+
   // A file row whose object was never in storage — the state the app is
   // actually in, where the storage key layout changed and old rows were left
   // pointing at nothing. Seeded rather than produced, because there is no way

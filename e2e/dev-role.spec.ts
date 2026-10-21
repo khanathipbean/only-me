@@ -39,6 +39,18 @@ test.beforeEach(async ({ page }) => {
   }
 });
 
+/** The seeded card, back on its first step. See the note in hand-off.spec:
+ *  a test that tidies up only on success poisons its own fixture. */
+async function resetToFix(page: import("@playwright/test").Page) {
+  const card = page.getByRole("group", { name: E2E_ASSIGNED_CASE, exact: true });
+  const toFix = card.getByRole("button", { name: "To fix" });
+  if ((await toFix.getAttribute("aria-pressed")) === "true") {
+    return;
+  }
+  await toFix.click();
+  await expect(card.getByRole("button", { name: "To fix", pressed: true })).toBeVisible();
+}
+
 test("lands on My Work instead of the Overview it was linked to", async ({ page }) => {
   await page.goto(`/projects/${projectId}`);
   await page.waitForURL(/\/my-work$/);
@@ -89,6 +101,14 @@ test("sees the case it was given, with what went wrong", async ({ page }) => {
   await card.getByText("What happened").click();
   await expect(card.getByText("What should happen")).toBeVisible();
 
+  /* A round answered five times over is a log, and at rest the card shows
+     the last three of it. The rest is a press away, not gone — the shape of
+     the failures is the reason the strip is on the card at all. */
+  await expect(card.getByText("Hangs on the spinner")).toBeHidden();
+  await expect(card.getByText(/Show 2 earlier answers/)).toBeVisible();
+  await card.getByText(/Show 2 earlier answers/).click();
+  await expect(card.getByText("Hangs on the spinner")).toBeVisible();
+
   /* And how it got here. Checked for having entries rather than for the
      first one's words: the card shows the latest ten moves, the fixture
      database is not reset between runs, and the note written when the case
@@ -122,6 +142,10 @@ test("puts what is already late at the top, in red", async ({ page }) => {
 
 test("can say how far a repair has got, and nothing else", async ({ page }) => {
   await page.goto(`/projects/${projectId}/my-work`);
+  /* Put it back first rather than afterwards: tidying at the end only runs
+     when the test got there, and one that leaves the fixture moved makes the
+     next run fail on a line that was never the fault. */
+  await resetToFix(page);
 
   /* The one write a DEV has. Everything else on this page is read-only, and
      every other page refuses them outright. */
@@ -155,6 +179,7 @@ test("can say how far a repair has got, and nothing else", async ({ page }) => {
 
 test("cannot say a repair is fixed without saying what was done", async ({ page }) => {
   await page.goto(`/projects/${projectId}/my-work`);
+  await resetToFix(page);
   const card = page.getByRole("group", { name: E2E_ASSIGNED_CASE, exact: true });
 
   await card.getByRole("button", { name: "Ready to retest" }).click();
