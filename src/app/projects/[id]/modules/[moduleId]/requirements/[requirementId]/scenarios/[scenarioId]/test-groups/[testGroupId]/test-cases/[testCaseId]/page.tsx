@@ -46,6 +46,9 @@ import { nameOr, testCaseBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { testCasesListHref } from "@/lib/hrefs";
 import { getProjectById } from "@/lib/projects";
+import { listAllMembers } from "@/lib/members";
+import { InlineSelect } from "@/components/InlineSelect";
+import { WORK_STATE_LABELS, WorkValidationError, assignCase } from "@/lib/work";
 import { getRequirementById } from "@/lib/requirements";
 import { ASSIGNEE_ENABLED } from "@/lib/features";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -100,13 +103,26 @@ export default async function TestCaseDetailPage({
   await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
   const membership = await getProjectMembership(session!.user.id, projectId);
   const canEditFully = !!membership && EDITOR_ROLES.includes(membership.role);
-  const [project, scenario, requirement, allTestGroups, historyByCase] = await Promise.all([
-    getProjectById(projectId),
-    getScenarioById(scenarioId),
-    getRequirementById(requirementId),
-    listTestGroupsForProject(projectId),
-    listRunHistoryForCases([testCaseId]),
-  ]);
+  const [project, scenario, requirement, allTestGroups, historyByCase, members] =
+    await Promise.all([
+      getProjectById(projectId),
+      getScenarioById(scenarioId),
+      getRequirementById(requirementId),
+      listTestGroupsForProject(projectId),
+      listRunHistoryForCases([testCaseId]),
+      listAllMembers({ projectId }),
+    ]);
+
+  /* Who the case can be handed to. "Unassigned" named rather than blank: an
+   * empty first option reads as "nothing chosen yet" when what it means is
+   * "nobody is on this". */
+  const assigneeOptions = [
+    { value: "", label: "Unassigned" },
+    ...members.map((member) => ({
+      value: member.user.id,
+      label: member.user.name || member.user.email,
+    })),
+  ];
   const history = historyByCase.get(testCaseId) ?? [];
 
   // The ancestors in the URL must be this Test Case's actual ancestors.
@@ -161,6 +177,25 @@ export default async function TestCaseDetailPage({
     }
 
     redirect(`${basePath}/${testCaseId}`);
+  }
+
+  /* Handing the case over. An editor's action: a DEV may say how far a
+   * repair has got, never who is on it. */
+  async function assign(formData: FormData) {
+    "use server";
+    invalidateRouteCache();
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    const assigneeId = String(formData.get("assigneeId") ?? "") || null;
+    try {
+      await assignCase(testCaseId, assigneeId, session!.user.id);
+    } catch (err: unknown) {
+      if (err instanceof WorkValidationError) {
+        redirect(withToast(basePath, err.message));
+      }
+      throw err;
+    }
+    redirect(withToast(basePath, assigneeId ? "Assigned" : "Unassigned"));
   }
 
   async function updateResult(formData: FormData) {
@@ -354,8 +389,30 @@ export default async function TestCaseDetailPage({
           <span className="text-muted">Expected Result:</span> {testCase.expectedResult}
         </p>
         {ASSIGNEE_ENABLED && (
-          <p>
-            <span className="text-muted">Assignee:</span> {testCase.assigneeId ?? "Unassigned"}
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="text-muted">Assignee:</span>{" "}
+            {canEditFully ? (
+              /* The same control the round carries, because a failure found
+                 here is handed over the same way as one found there — and a
+                 case that failed outside a round had no way out of this page
+                 at all. Saves on the change, like every other inline control
+                 in this app. */
+              <InlineSelect
+                action={assign}
+                name="assigneeId"
+                defaultValue={testCase.assignee?.id ?? ""}
+                options={assigneeOptions}
+                ariaLabel={`Assign ${testCase.name}`}
+                className="text-xs"
+              />
+            ) : (
+              (testCase.assignee?.name ?? "Unassigned")
+            )}
+            {testCase.workState && (
+              <span className="text-xs text-muted">
+                {WORK_STATE_LABELS[testCase.workState]}
+              </span>
+            )}
           </p>
         )}
       </Card>
@@ -393,12 +450,23 @@ export default async function TestCaseDetailPage({
             {testCase.testResult.replace(/_/g, " ")}
           </Badge>
         </div>
-        {/* Keyed on what the server last said, so the whole form is built
+        {/* Recording a result is a write, so somebody who cannot edit the
+            case is shown what it says instead of a form that would be
+            refused. Before this the controls were drawn for everybody and
+            pressing one answered 404 — a VIEWER had met that for as long as
+            the page has existed; a DEV, who has a reason to be on this page
+            every day, met it immediately. */}
+        {!canEditFully ? (
+          <p className="mt-3 text-sm text-muted">
+            {testCase.notes || "Nobody has written down what happened."}
+          </p>
+        ) : (
+        /* Keyed on what the server last said, so the whole form is built
             again when either field changes. React resets a form once its
             action resolves, which hands every uncontrolled field in it back
             the value it was built with — the control then showed the old
             answer over a case that had already been changed, and only a
-            reload put it right. */}
+            reload put it right. */
         <form
           key={`${testCase.testResult}-${testCase.notes ?? ""}`}
           action={updateResult}
@@ -424,6 +492,7 @@ export default async function TestCaseDetailPage({
             Update Result
           </SubmitButton>
         </form>
+        )}
       </Card>
 
       <Card>
@@ -492,7 +561,14 @@ export default async function TestCaseDetailPage({
         {attachmentError && (
           <DismissibleAlert clearParams={["attachmentError"]}>{attachmentError}</DismissibleAlert>
         )}
-        <form action={uploadAttachment} encType="multipart/form-data" className="mt-3 flex items-center gap-3">
+        {!canEditFully && testCase.attachments.length === 0 && (
+          <p className="mt-3 text-sm text-muted">Nothing is attached to this case.</p>
+        )}
+        {canEditFully && (
+        /* No `encType`: React sets it itself for a server action and warns
+           that anything given here is overridden — the Files page learned
+           this one first. */
+        <form action={uploadAttachment} className="mt-3 flex items-center gap-3">
           <input
             type="file"
             name="file"
@@ -503,6 +579,7 @@ export default async function TestCaseDetailPage({
             Upload Attachment
           </SubmitButton>
         </form>
+        )}
       </Card>
 
       {canEditFully && (

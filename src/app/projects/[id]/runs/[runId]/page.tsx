@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { EDITOR_ROLES, NON_DEV_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
 import { getProjectById } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { listRequirementsForProject } from "@/lib/requirements";
@@ -52,7 +52,7 @@ import { DetailField, DetailFields } from "@/components/ui/DetailFields";
 import { Badge, priorityTone, testResultFieldClass, testResultTone } from "@/components/ui/Badge";
 import { IconButton } from "@/components/ui/Button";
 import { TrashIcon } from "@/components/icons";
-import { isTestRunOverdue } from "@/lib/deadlines";
+import { isTestRunOverdue, isWorkOverdue } from "@/lib/deadlines";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
@@ -72,6 +72,14 @@ import {
 } from "@/lib/ui";
 import type { TestResult } from "@/generated/prisma/client";
 import { invalidateRouteCache } from "@/lib/revalidate";
+import { listAllMembers } from "@/lib/members";
+import {
+  WORK_STATE_LABELS,
+  WorkValidationError,
+  assignCase,
+  assignCases,
+} from "@/lib/work";
+import { InlineSelect } from "@/components/InlineSelect";
 import { errorHref, listHrefWithFilters } from "@/lib/hrefs";
 
 export async function generateMetadata({
@@ -124,7 +132,7 @@ export default async function TestRunPage({
   } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  await requireProjectRoleOrNotFound(session!.user.id, projectId, NON_DEV_ROLES);
 
   const [project, run] = await Promise.all([getProjectById(projectId), getRunById(runId)]);
   if (!run || run.projectId !== projectId) {
@@ -136,7 +144,8 @@ export default async function TestRunPage({
   const isPicking = picking === "1";
   const hasFilters = Boolean(moduleId || requirementId || priority || lastResult || search);
 
-  const [casePage, resultTotals, scope, modules, requirements, candidates] = await Promise.all([
+  const [casePage, resultTotals, scope, modules, requirements, candidates, members] =
+    await Promise.all([
     listCasesInRunPage(runId, {
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
@@ -154,6 +163,11 @@ export default async function TestRunPage({
       lastResult: lastResult as TestResult | undefined,
       search,
     }),
+    /* Who a failure can be handed to. Everybody on the project rather than
+     * the Devs alone: a case is handed to whoever is going to look at it,
+     * and which role they hold is the wrong question to answer with a
+     * disappearing name. */
+    listAllMembers({ projectId }),
   ]);
   const cases = casePage.items;
 
@@ -161,6 +175,18 @@ export default async function TestRunPage({
    * dozens at a time, and a round trip per row is how a page gets slow
    * without anyone being able to say which change did it. */
   const runHistory = await listRunHistoryForCases(cases.map((row) => row.testCase.id));
+
+  /* "Unassigned" first, and named rather than blank: an empty first option
+   * reads as "nothing chosen yet" when what it means is "nobody is on this".
+   * The name, falling back to the email — an account created but never named
+   * would otherwise be an empty row in the list. */
+  const assigneeOptions = [
+    { value: "", label: "Unassigned" },
+    ...members.map((member) => ({
+      value: member.user.id,
+      label: member.user.name || member.user.email,
+    })),
+  ];
 
   const isOpen = run.status === "OPEN";
   const ran = casePage.ranCount;
@@ -298,6 +324,39 @@ export default async function TestRunPage({
     );
   }
 
+  /* The same hand-off for everything ticked. Twenty cases failing in one
+   * round is the normal shape of a bad round, and assigning them one at a
+   * time is twenty trips through the same dialog. */
+  async function assignSelected(formData: FormData) {
+    "use server";
+    invalidateRouteCache();
+    const session = await auth();
+    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    /* Which cases this touches — see the note in `recordSelected`, which
+     * this follows exactly, down to being written out rather than shared. */
+    const ids =
+      formData.get("scope") === "all"
+        ? await listCaseIdsInRun(runId, {
+            result: result as TestResult | undefined,
+            search: caseSearch,
+          })
+        : formData.getAll("testCaseId").map(String).filter(Boolean);
+    const assigneeId = String(formData.get("assigneeId") ?? "") || null;
+    const { assigned, skipped } = await assignCases(ids, assigneeId, session!.user.id);
+    /* Counts, not the name: who was chosen is on screen in the panel that
+     * was just used, and naming them here would mean closing this action
+     * over the whole member list to look it up. */
+    const verb = assigneeId ? "Assigned" : "Unassigned";
+    redirect(
+      withToast(
+        listHref,
+        skipped > 0
+          ? `${verb} ${assigned}; skipped ${skipped} that are no longer there`
+          : `${verb} ${assigned} case${assigned === 1 ? "" : "s"}`,
+      ),
+    );
+  }
+
   async function removeSelected(formData: FormData) {
     "use server";
     invalidateRouteCache();
@@ -401,6 +460,24 @@ export default async function TestRunPage({
               )
             : listHref,
         );
+      },
+      /* Handing the case over. An editor's action, not a DEV's: a DEV may
+         say how far a repair has got, never who is on it. */
+      async assign(formData: FormData) {
+        "use server";
+        invalidateRouteCache();
+        const session = await auth();
+        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        const assigneeId = String(formData.get("assigneeId") ?? "") || null;
+        try {
+          await assignCase(testCaseId, assigneeId, session!.user.id);
+        } catch (err) {
+          if (err instanceof WorkValidationError) {
+            redirect(withToast(listHref, err.message));
+          }
+          throw err;
+        }
+        redirect(withToast(listHref, assigneeId ? "Assigned" : "Unassigned"));
       },
       /* The words only. Recording the same answer again is a real event and
          still belongs to the Save beside the result; correcting a typo is
@@ -506,6 +583,8 @@ export default async function TestRunPage({
         cases={cases.map((row) => ({ testCaseId: row.testCase.id, ran: Boolean(row.ranAt) }))}
         totalMatching={casePage.total}
         setResultAction={recordSelected}
+        assignAction={assignSelected}
+        assigneeOptions={assigneeOptions}
         removeAction={removeSelected}
       >
       <Breadcrumb
@@ -839,11 +918,14 @@ export default async function TestRunPage({
                         that was only ever showing "—" can hold a sentence
                         now, and a name that wraps costs less than a note
                         nobody can finish typing. */}
-                    <col className="w-[27%]" />
-                    <col className="w-[9%]" />
-                    <col className="w-[16%]" />
                     <col className="w-[22%]" />
-                    <col className="w-[7%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[6%]" />
+                    {/* Wide enough for a name rather than a truncation: the
+                        whole point of the column is which person it is. */}
+                    <col className="w-[12%]" />
                     <col className="w-[8%]" />
                     <col className="w-[8%]" />
                   </colgroup>
@@ -858,6 +940,9 @@ export default async function TestRunPage({
                       <th className={thCenterClass}>Result in this run</th>
                       <th className={thClass}>Actual Result</th>
                       <th className={thCenterClass}>Attachments</th>
+                      {/* Beside the round that found the failure, because
+                          this is where somebody decides who looks at it. */}
+                      <th className={thClass}>Assigned to</th>
                       {/* Last of the data columns because it doubles as the
                           row's action: a case that has not run yet shows
                           Remove here instead of a date, and an action belongs
@@ -873,7 +958,7 @@ export default async function TestRunPage({
                       return (
                         <ExpandableRow
                           key={row.id}
-                          colSpan={8}
+                          colSpan={9}
                           detailLabel={row.testCase.name}
                           cells={
                             <>
@@ -981,6 +1066,59 @@ export default async function TestRunPage({
                               </td>
                               <td className={`${tdCenterClass} text-xs text-muted`}>
                                 {row.attachments.length > 0 ? row.attachments.length : "—"}
+                              </td>
+                              <td className={tdClass}>
+                                {isOpen ? (
+                                  <>
+                                    {/* Saves on the change, like the status
+                                        control on the Test Cases list: a Save
+                                        button down a column of twenty rows
+                                        goes unpressed, and a row that looks
+                                        assigned but is not is worse than
+                                        either state. */}
+                                    <InlineSelect
+                                      action={actions.assign}
+                                      name="assigneeId"
+                                      defaultValue={row.testCase.assignee?.id ?? ""}
+                                      options={assigneeOptions}
+                                      ariaLabel={`Assign ${row.testCase.name}`}
+                                      className="text-xs"
+                                    />
+                                    {/* How far the repair has got, under the
+                                        name — read-only here. Setting it is
+                                        the one thing My Work does, and the
+                                        person who sets it is not the person
+                                        reading this page. */}
+                                    {row.testCase.workState && (
+                                      <span className="mt-1 block text-xs text-muted">
+                                        {WORK_STATE_LABELS[row.testCase.workState]}
+                                        {/* The promise that was made when it
+                                            changed hands, so the person
+                                            chasing it does not have to open
+                                            another page to find out whether
+                                            it is late. */}
+                                        {row.testCase.dueAt && (
+                                          <span
+                                            className={
+                                              isWorkOverdue(row.testCase)
+                                                ? " font-semibold text-red-600 dark:text-red-400"
+                                                : ""
+                                            }
+                                          >
+                                            {" · "}
+                                            {isWorkOverdue(row.testCase)
+                                              ? "overdue"
+                                              : `due ${formatDate(row.testCase.dueAt)}`}
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-muted">
+                                    {row.testCase.assignee?.name ?? "—"}
+                                  </span>
+                                )}
                               </td>
                               <td className={`${tdCenterClass} text-xs text-muted`}>
                                 {row.ranAt ? (
@@ -1156,9 +1294,12 @@ export default async function TestRunPage({
                                 </ul>
                               )}
                               {isOpen && (
+                                /* No `encType`: React sets it itself for a
+                                   server action and warns on every render
+                                   that anything given here is overridden —
+                                   the Files page learned this one first. */
                                 <form
                                   action={attachmentActionsForRow.upload}
-                                  encType="multipart/form-data"
                                   className="flex items-center gap-3"
                                 >
                                   <input

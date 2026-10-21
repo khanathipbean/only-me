@@ -1,8 +1,22 @@
 import { hashPassword } from "@/lib/auth-credentials";
 import { prisma } from "@/lib/prisma";
+import { createScenario } from "@/lib/scenarios";
+import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+import { createTestGroup } from "@/lib/test-groups";
+import { createTestCase, updateTestResultAndNotes } from "@/lib/test-cases";
+import { addCasesToRun, createRun } from "@/lib/test-runs";
+import { assignCase } from "@/lib/work";
+import { WORK_DAYS_BY_PRIORITY, addWorkingDays } from "@/lib/deadlines";
 import {
   MISSING_FILE_NAME,
+  E2E_DEV_EMAIL,
+  E2E_DEV_PASSWORD,
   E2E_EMAIL,
+  E2E_ASSIGNED_CASE,
+  E2E_OVERDUE_CASE,
+  E2E_HANDOFF_CASE,
+  E2E_HANDOFF_GROUP,
+  E2E_HANDOFF_RUN,
   E2E_PASSWORD,
   E2E_VIEWER_EMAIL,
   E2E_VIEWER_PASSWORD,
@@ -80,6 +94,141 @@ export async function seedBaseline() {
     create: { projectId: project.id, userId: viewer.id, role: "VIEWER" },
   });
 
+  /* Somebody to hand work to, and somebody for the role tests to be refused
+   * as: a DEV reads what a VIEWER reads and writes one thing, so every page
+   * it may not open needs an account that actually holds the role. */
+  const dev =
+    (await prisma.user.findUnique({ where: { email: E2E_DEV_EMAIL } })) ??
+    (await prisma.user.create({
+      data: {
+        email: E2E_DEV_EMAIL,
+        passwordHash: await hashPassword(E2E_DEV_PASSWORD),
+        name: "E2E Dev",
+      },
+    }));
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: dev.id } },
+    update: { role: "DEV" },
+    create: { projectId: project.id, userId: dev.id, role: "DEV" },
+  });
+
+  /* A round with two cases in it, so the specs that act on one do not each
+   * have to build the five levels above a Test Case through the UI first.
+   * Built with the same service functions the app uses, so the rows are the
+   * rows the app would have made.
+   *
+   * Each piece is checked for separately rather than the whole block being
+   * skipped once the round exists: a seed that adds a fixture later would
+   * otherwise never reach a database that had already been seeded once, and
+   * the specs needing it would fail with nothing to say why.
+   */
+  const existingGroup = await prisma.testGroup.findFirst({
+    where: { name: E2E_HANDOFF_GROUP, scenario: { projectId: project.id } },
+    select: { id: true },
+  });
+  let groupId = existingGroup?.id;
+  if (!groupId) {
+    const requirementId = await findOrCreateUnassignedRequirement(project.id, user.id);
+    const scenario = await createScenario(
+      project.id,
+      {
+        name: "Handing a failure over",
+        requirementId,
+        expectedResult: "The case can be handed to somebody",
+        priority: "MEDIUM",
+      },
+      user.id,
+    );
+    groupId = (await createTestGroup(scenario.id, { name: E2E_HANDOFF_GROUP }, user.id)).id;
+  }
+
+  async function fixtureCase(name: string, make: () => Promise<{ id: string }>) {
+    const existing = await prisma.testCase.findFirst({
+      where: { name, testGroupId: groupId },
+      select: { id: true },
+    });
+    return existing ?? (await make());
+  }
+
+  const toHandOver = await fixtureCase(E2E_HANDOFF_CASE, () =>
+    createTestCase(
+      groupId!,
+      {
+        name: E2E_HANDOFF_CASE,
+        expectedResult: "ok",
+        priority: "HIGH",
+        steps: [{ step: "Open the round", expectedResult: "It opens" }],
+      },
+      user.id,
+    ),
+  );
+
+  /* The second one arrives already handed over, with the failure that caused
+   * it: a My Work page with nothing on it can only be tested for being
+   * empty. */
+  const handedOver = await fixtureCase(E2E_ASSIGNED_CASE, async () => {
+    const made = await createTestCase(
+      groupId!,
+      {
+        name: E2E_ASSIGNED_CASE,
+        expectedResult: "The page opens",
+        priority: "CRITICAL",
+        steps: [{ step: "Open the page", expectedResult: "It opens" }],
+      },
+      user.id,
+    );
+    await updateTestResultAndNotes(
+      made.id,
+      { testResult: "FAILED", notes: "The page hangs on a spinner and never loads." },
+      user.id,
+    );
+    await assignCase(made.id, dev.id, user.id, "Over to you — it never finishes loading.");
+    return made;
+  });
+
+  /* A deadline for the one handed over, if it does not have one. Cases this
+   * fixture created before deadlines existed carry none — which is correct
+   * for real rows and makes a poor fixture, since the normal card is the one
+   * with a date on it. */
+  await prisma.testCase.updateMany({
+    where: { id: handedOver.id, dueAt: null },
+    data: { dueAt: addWorkingDays(new Date(), WORK_DAYS_BY_PRIORITY.CRITICAL) },
+  });
+
+  /* The same again, but late. The deadline is pushed into the past by hand
+   * because the only honest alternative is waiting a week. */
+  const overdue = await fixtureCase(E2E_OVERDUE_CASE, async () => {
+    const made = await createTestCase(
+      groupId!,
+      {
+        name: E2E_OVERDUE_CASE,
+        expectedResult: "The export finishes",
+        priority: "HIGH",
+        steps: [{ step: "Press Export", expectedResult: "A file is produced" }],
+      },
+      user.id,
+    );
+    await updateTestResultAndNotes(
+      made.id,
+      { testResult: "FAILED", notes: "Export stops at 40% every time." },
+      user.id,
+    );
+    await assignCase(made.id, dev.id, user.id, "This one has been waiting a while.");
+    return made;
+  });
+  await prisma.testCase.update({
+    where: { id: overdue.id },
+    data: { dueAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+  });
+
+  const run =
+    (await prisma.testRun.findUnique({
+      where: { projectId_name: { projectId: project.id, name: E2E_HANDOFF_RUN } },
+    })) ?? (await createRun(project.id, { name: E2E_HANDOFF_RUN }, user.id));
+  // Adds only what is missing; a case already in the round is left alone.
+  await addCasesToRun(run.id, [toHandOver.id, handedOver.id, overdue.id], user.id);
+
   // A file row whose object was never in storage — the state the app is
   // actually in, where the storage key layout changed and old rows were left
   // pointing at nothing. Seeded rather than produced, because there is no way
@@ -98,7 +247,7 @@ export async function seedBaseline() {
     },
   });
 
-  return { user, viewer, project };
+  return { user, viewer, dev, project };
 }
 
 async function main() {

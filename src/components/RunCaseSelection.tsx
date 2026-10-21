@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { ClearIcon } from "@/components/icons";
-import { Select } from "@/components/ui/Select";
+import { Select, type SelectOption } from "@/components/ui/Select";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TEST_RESULT_OPTIONS } from "@/lib/enums";
 import { checkboxClass } from "@/lib/ui";
@@ -61,6 +61,8 @@ export function RunCaseSelection({
   cases,
   totalMatching,
   setResultAction,
+  assignAction,
+  assigneeOptions,
   removeAction,
   children,
 }: {
@@ -69,6 +71,9 @@ export function RunCaseSelection({
    *  can offer the rest rather than pretending this page is all there is. */
   totalMatching: number;
   setResultAction: (formData: FormData) => void;
+  assignAction: (formData: FormData) => void;
+  /** Everybody on the project, "Unassigned" first. */
+  assigneeOptions: SelectOption[];
   removeAction: (formData: FormData) => void;
   children: ReactNode;
 }) {
@@ -79,6 +84,11 @@ export function RunCaseSelection({
    * would be offering to do it before any decision was made. Choosing is the
    * step that makes Save appear. */
   const [result, setResult] = useState("");
+  /* Same reasoning as the result beside it: no default, so nothing can be
+   * handed to the first name in the list by one stray click. "Unassigned" is
+   * a real choice here and has its own value, which is why the placeholder
+   * is a third option rather than the empty one. */
+  const [assignee, setAssignee] = useState("none");
   /* Reaching past this page is a second, deliberate step, never a side
      effect of ticking the header box. A single control that quietly covered
      every page would put Remove one click from rows nobody has seen. */
@@ -121,6 +131,7 @@ export function RunCaseSelection({
           if (on) {
             setSelected(new Set());
             setResult("");
+            setAssignee("none");
           }
           return !on;
         }),
@@ -133,6 +144,7 @@ export function RunCaseSelection({
     setActive(false);
     setSelected(new Set());
     setResult("");
+    setAssignee("none");
   }
 
   return (
@@ -201,6 +213,39 @@ export function RunCaseSelection({
               {result !== "" && (
                 <SubmitButton variant="secondary" pendingLabel="Saving…">
                   Save
+                </SubmitButton>
+              )}
+            </form>
+
+            {/* Handing the batch over, beside the batch's result: after a
+                round where twenty things failed, "who is fixing these" is
+                the next question asked, and the alternative is twenty trips
+                through the same control one row at a time. */}
+            <form action={assignAction} className="flex items-center gap-2">
+              {allMatching ? (
+                <input type="hidden" name="scope" value="all" />
+              ) : (
+                onPage.map((row) => (
+                  <input
+                    key={row.testCaseId}
+                    type="hidden"
+                    name="testCaseId"
+                    value={row.testCaseId}
+                  />
+                ))
+              )}
+              <Select
+                name="assigneeId"
+                value={assignee}
+                onChange={setAssignee}
+                options={[{ value: "none", label: "Assign to…" }, ...assigneeOptions]}
+                ariaLabel="Who to assign the selected cases to"
+                disabled={!allMatching && onPage.length === 0}
+                className="max-w-40"
+              />
+              {assignee !== "none" && (
+                <SubmitButton variant="secondary" pendingLabel="Assigning…">
+                  Assign
                 </SubmitButton>
               )}
             </form>
