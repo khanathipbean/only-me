@@ -334,7 +334,12 @@ export default async function ProblemCasesPage({
                       {/* Named for its unit, because the unit is not obvious:
                           one square is one result recorded, and a round can
                           hold several. */}
-                      <th className={thClass}>Every result recorded</th>
+                      {/* Not "every result recorded" any more. The strip
+                          draws passes and failures, because those are what
+                          the grouping on the left is worked out from — so a
+                          heading promising everything was promising squares
+                          that the sections it sits above never counted. */}
+                      <th className={thClass}>Pass and fail, oldest first</th>
                     </tr>
                   </thead>
                   <tbody>

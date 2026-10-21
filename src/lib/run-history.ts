@@ -290,12 +290,20 @@ export async function listRunHistoryForCases(
  * attempts, and drawing those from attempts alone would empty the strip of
  * all the history there was.
  *
- * NOT_RUN is never drawn, in either form. It is the absence of an answer, not
- * one: a round nobody reached carries it by default, and setting it by hand
- * is how a result gets taken back. Either way a square for it sat under a
- * heading promising every result recorded while recording none. The pattern
- * rules have always skipped it for the same reason; the strip was the one
- * place still drawing it.
+ * Passed and failed only. NOT_RUN is the absence of an answer rather than
+ * one — a round nobody reached carries it by default, and setting it by hand
+ * is how a result gets taken back.
+ *
+ * BLOCKED and SKIPPED are left out for a different reason, and it is the one
+ * that matters here: `classifyPattern` has never counted them, so the page
+ * that draws this strip groups a case by its passes and failures and nothing
+ * else. Drawing four colours against a rule that reads two meant the squares
+ * answering "why is this case in Regression" included squares that had no
+ * part in putting it there — and a six-square strip in four colours is not a
+ * shape anybody can read at a glance, which is the only reason it exists.
+ *
+ * They are not lost: the Test Case page shows every answer, in words, with
+ * who recorded it and when.
  */
 export type ResultMark = {
   /** Null when this was recorded outside any round — there is nowhere to link
@@ -310,12 +318,17 @@ export type ResultMark = {
   startsRound: boolean;
 };
 
+/** Passed or failed, which is the only pair this strip is about. */
+function isVerdict(result: TestResult) {
+  return result === "PASSED" || result === "FAILED";
+}
+
 export function toResultMarks(entries: RunHistoryEntry[]): ResultMark[] {
   return entries.flatMap<ResultMark>((entry) => {
     const group = { testRunId: entry.testRunId, runName: entry.runName };
-    const answers = entry.attempts.filter((attempt) => attempt.testResult !== "NOT_RUN");
+    const answers = entry.attempts.filter((attempt) => isVerdict(attempt.testResult));
     if (answers.length === 0) {
-      if (entry.attempts.length > 0 || entry.testResult === "NOT_RUN") {
+      if (entry.attempts.length > 0 || !isVerdict(entry.testResult)) {
         return [];
       }
       return [

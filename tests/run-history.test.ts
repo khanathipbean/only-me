@@ -729,3 +729,37 @@ describe("the Problem cases report", () => {
     expect(thisPhase[0]?.history).toHaveLength(1);
   });
 });
+
+describe("what the strip draws", () => {
+  it("leaves out the answers the grouping never counted", async () => {
+    /* `classifyPattern` reads passes and failures and nothing else, so a
+       blocked or skipped square was a square with no part in putting the
+       case where it is — and four colours in a six-square strip is not a
+       shape anybody can read, which is the only reason the strip exists. */
+    const { owner, project, testCase } = await seed();
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [testCase.id], owner.id);
+
+    for (const testResult of ["FAILED", "BLOCKED", "SKIPPED", "PASSED"] as const) {
+      await setRunCaseResult(run.id, testCase.id, { testResult }, owner.id);
+    }
+
+    const history = (await listRunHistoryForCases([testCase.id])).get(testCase.id) ?? [];
+    expect(toResultMarks(history).map((mark) => mark.testResult)).toEqual([
+      "FAILED",
+      "PASSED",
+    ]);
+  });
+
+  it("draws nothing for a case that was only ever blocked", async () => {
+    const { owner, project, testCase } = await seed();
+    const run = await createRun(project.id, { name: "Sprint 1" }, owner.id);
+    await addCasesToRun(run.id, [testCase.id], owner.id);
+    await setRunCaseResult(run.id, testCase.id, { testResult: "BLOCKED" }, owner.id);
+
+    const history = (await listRunHistoryForCases([testCase.id])).get(testCase.id) ?? [];
+    expect(toResultMarks(history)).toHaveLength(0);
+    // And the grouping agrees: nothing has been answered for it.
+    expect(classifyPattern(history)).toBe("untested");
+  });
+});
