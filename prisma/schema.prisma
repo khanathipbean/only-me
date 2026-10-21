@@ -41,6 +41,8 @@ model User {
   createdTestRuns        TestRun[]         @relation("TestRunCreatedBy")
   ranTestRunCases        TestRunCase[]     @relation("TestRunCaseRanBy")
   recordedRunResults     TestResultEvent[] @relation("TestResultEventRecordedBy")
+  workEventsActed        WorkEvent[]       @relation("WorkEventActor")
+  workEventsAssigned     WorkEvent[]       @relation("WorkEventAssignee")
   notifications          Notification[]    @relation("NotificationRecipient")
   triggeredNotifications Notification[]    @relation("NotificationActor")
 }
@@ -56,6 +58,10 @@ enum ProjectRole {
   QA_LEAD
   TESTER
   VIEWER
+  /// Reads what a VIEWER reads, and changes exactly one thing: the work state
+  /// of a case handed to them to fix. Deliberately outside `EDITOR_ROLES`, so
+  /// every write in the app refuses it without being told to.
+  DEV
 }
 
 model Project {
@@ -140,6 +146,14 @@ enum NotificationType {
   ENTITY_ARCHIVED
   TEST_CASE_FAILED
   MEMBER_ADDED
+  /// A failed case handed to one person to fix. The only type addressed to a
+  /// single recipient rather than fanned out to the whole project — see
+  /// `notifyUser`.
+  ASSIGNED
+  /// A repair whose deadline has passed, also to one person. Its own value
+  /// rather than another ASSIGNED, so "has this deadline already been
+  /// reported" is a question the data can answer.
+  OVERDUE
 }
 
 /// One row per recipient, written at the moment the triggering event happens
@@ -188,6 +202,15 @@ enum TestType {
   POSITIVE
   NEGATIVE
   BOUNDARY
+}
+
+/// Where a repair has got to. Deliberately separate from `TestResult`, which
+/// answers what happened when the case was last run: one is about the test,
+/// the other about the fix, and a case that failed is in both at once.
+enum WorkState {
+  ASSIGNED
+  IN_PROGRESS
+  READY_TO_RETEST
 }
 
 enum TestResult {
@@ -275,6 +298,17 @@ model TestCase {
   status         WorkflowStatus @default(DRAFT)
   testResult     TestResult     @default(NOT_RUN)
   assigneeId     String?
+  /// Where the repair has got to, when there is one. Null means nobody is on
+  /// it — which is also what a tester recording a fresh result puts it back
+  /// to, since retesting is the end of the loop and should not be a second
+  /// thing to remember.
+  workState      WorkState?
+  /// When the repair was promised, set from the priority at the moment the
+  /// case changed hands. Stored rather than worked out on the fly: it is a
+  /// promise made on a day, so changing the table of windows later must not
+  /// move a deadline somebody has already been given. Null whenever no
+  /// repair is in flight.
+  dueAt          DateTime?
   notes          String?
   deletedAt      DateTime?
   createdById    String
@@ -284,6 +318,7 @@ model TestCase {
 
   testGroup    TestGroup         @relation(fields: [testGroupId], references: [id])
   assignee     User?             @relation("TestCaseAssignee", fields: [assigneeId], references: [id])
+  workEvents   WorkEvent[]
   createdBy    User              @relation("TestCaseCreatedBy", fields: [createdById], references: [id])
   updatedBy    User?             @relation("TestCaseUpdatedBy", fields: [updatedById], references: [id])
   steps        TestStep[]
@@ -293,6 +328,9 @@ model TestCase {
   resultEvents TestResultEvent[]
 
   @@index([testGroupId, deletedAt])
+  /// My Work asks exactly this: everything handed to one person, soonest
+  /// deadline first.
+  @@index([assigneeId, dueAt])
 }
 
 /// A round of testing — a Sprint's regression pass, a release check. Exists so
@@ -593,4 +631,38 @@ model LoginThrottle {
   lockedUntil DateTime?
 
   updatedAt DateTime @updatedAt
+}
+
+/// Every move a repair made, and what was said about it.
+///
+/// `TestCase.workState` holds where it is now; this holds how it got there —
+/// the same split as `TestRunCase.testResult` and `TestResultEvent`, which
+/// this project already built once and Run History already reads.
+///
+/// Two things were asked for separately — somewhere for a Dev to write back,
+/// and a record of the handing over — and they are the same row.
+model WorkEvent {
+  id         String  @id @default(cuid())
+  testCaseId String
+  /// Null once the account is gone. What happened outlives who did it, the
+  /// same reasoning `AuditLog.actorId` carries.
+  actorId    String?
+  /// Null for the event that clears it: the tester retested and the loop is
+  /// closed, which is a move worth recording and not a state to sit in.
+  toState    WorkState?
+  /// Who it was handed to at that moment, so the history reads on its own
+  /// rather than against whoever the case happens to be assigned to today.
+  assigneeId String?
+  /// "Fixed in abc123", or why it was handed over. Optional: a state change
+  /// with nothing to add is still worth recording.
+  note       String?
+  occurredAt DateTime @default(now())
+
+  testCase TestCase @relation(fields: [testCaseId], references: [id])
+  actor    User?    @relation("WorkEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  assignee User?    @relation("WorkEventAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([testCaseId, occurredAt])
+  /// The My Work page reads by who it is on and what state it is in.
+  @@index([assigneeId, occurredAt])
 }
