@@ -50,53 +50,24 @@ export function WorkStatePicker({
   label: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
-  const [shown, setShown] = useState(value);
+  const buttons = useRef<Record<string, HTMLButtonElement | null>>({});
   const [asking, setAsking] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
   const [note, setNote] = useState("");
-
-  /* Adjusted while rendering rather than in an effect, so the control never
-     paints the old value on its way to the one the server just sent. */
-  const [serverValue, setServerValue] = useState(value);
-  if (serverValue !== value) {
-    setServerValue(value);
-    setShown(value);
-  }
-
-  function choose(next: string) {
-    if (next === shown && !needsNote.includes(next)) {
-      return;
-    }
-    setShown(next);
-    /* A note belongs to the move it was written for, so a move that does not
-       ask for one must not carry the last one along. */
-    if (!needsNote.includes(next)) {
-      setNote("");
-    }
-    if (needsNote.includes(next)) {
-      setAsking(true);
-      return;
-    }
-    // requestSubmit, not submit: it runs the form's own submit path, which is
-    // where React has attached the action.
-    formRef.current?.requestSubmit();
-  }
 
   function cancel() {
     setAsking(false);
+    setPending(null);
     setNote("");
-    /* Back to what is actually stored. Leaving the pressed value on screen
-       would show a repair as finished that nobody has been told about. */
-    setShown(serverValue);
   }
 
   return (
     <>
       <form ref={formRef} action={action}>
-        <input type="hidden" name="workState" value={shown} readOnly />
         {/* Always rendered, never gated on the dialog being open. Writing it
             as `{asking && <input …>}` reads fine and loses every note: Save
             closes the dialog first, which unmounts the field, and the submit
-            a frame later carries a form that no longer has it. */}
+            that follows carries a form that no longer has it. */}
         <input type="hidden" name="note" value={note} readOnly />
         <div
           role="group"
@@ -104,13 +75,42 @@ export function WorkStatePicker({
           className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-black/[.03] p-0.5 dark:bg-white/[.04]"
         >
           {options.map((option) => (
+            /* Real submit buttons carrying the value, rather than a hidden
+               field this component keeps in step.
+               The first version held the chosen value in React state and
+               called `requestSubmit()` in the same handler that set it —
+               which submits before React has re-rendered, so the form carried
+               the value that was there before the press and the state never
+               moved. `InlineSelect` gets away with the same shape only
+               because `Select` writes to the DOM node itself before calling
+               back.
+               A submitter's own name and value are part of what the form
+               sends, so there is nothing to keep in step, and the two moves
+               that need no note work with no JavaScript at all. */
             <button
               key={option.value}
-              type="button"
-              aria-pressed={option.value === shown}
-              onClick={() => choose(option.value)}
+              ref={(element) => {
+                buttons.current[option.value] = element;
+              }}
+              type="submit"
+              name="workState"
+              value={option.value}
+              aria-pressed={option.value === value}
+              onClick={(event) => {
+                if (needsNote.includes(option.value)) {
+                  event.preventDefault();
+                  setPending(option.value);
+                  setAsking(true);
+                  return;
+                }
+                /* Pressing the step it is already on is not a move, and
+                   would otherwise append an event saying nothing happened. */
+                if (option.value === value) {
+                  event.preventDefault();
+                }
+              }}
               className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-brand ${
-                option.value === shown
+                option.value === value
                   ? "bg-surface text-foreground shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
@@ -144,7 +144,10 @@ export function WorkStatePicker({
               disabled={note.trim() === ""}
               onClick={() => {
                 setAsking(false);
-                formRef.current?.requestSubmit();
+                /* Through the button that was pressed, so the value it
+                   carries is the one that gets sent. */
+                const submitter = pending ? buttons.current[pending] : null;
+                formRef.current?.requestSubmit(submitter ?? undefined);
               }}
             >
               Save

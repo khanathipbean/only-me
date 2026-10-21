@@ -133,10 +133,15 @@ test("can say how far a repair has got, and nothing else", async ({ page }) => {
   await card.getByRole("button", { name: "In progress" }).click();
 
   await page.waitForURL(/toast=/);
-  /* It has moved sections, and what was said about the move is on the card's
-     own history — which is the whole point of writing it down. */
-  await expect(page.getByText("You said you are on these")).toBeVisible();
+
+  /* The step the server stored, read off the control it was stored from.
+     The first version of this asserted the "In progress" section heading was
+     visible — which it always is, empty or not, so it passed while the
+     control was submitting the value it had before the press and nothing
+     moved at all. */
   const after = page.getByRole("group", { name: E2E_ASSIGNED_CASE, exact: true });
+  await expect(after.getByRole("button", { name: "In progress", pressed: true })).toBeVisible();
+  await expect(after.getByRole("button", { name: "To fix", pressed: false })).toBeVisible();
   await after.getByText("How it got here").click();
   /* `first`: the history keeps every move, so a database the suite has run
      against before holds one of these per run. */
@@ -166,6 +171,9 @@ test("cannot say a repair is fixed without saying what was done", async ({ page 
   await page.waitForURL(/toast=/);
 
   const moved = page.getByRole("group", { name: E2E_ASSIGNED_CASE, exact: true });
+  await expect(
+    moved.getByRole("button", { name: "Ready to retest", pressed: true }),
+  ).toBeVisible();
   await moved.getByText("How it got here").click();
   await expect(moved.getByText("Fixed in abc123").first()).toBeVisible();
 
