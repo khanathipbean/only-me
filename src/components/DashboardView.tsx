@@ -701,6 +701,14 @@ function SummaryWidget({
           onClick={(key) => onDrillDown("testResult", key)}
           tone={testResultTone}
         />
+        {/* Priority and Assignee share a column.
+            There are four blocks and three columns, so the fourth used to
+            drop onto a row of its own and sit there with two thirds of the
+            width empty beside it. Grouping two of them is the fix that keeps
+            Test Runs wide — its rows carry a round's name and two figures,
+            and halving them to make four equal quadrants cost more than the
+            gap did. */}
+        <div className="flex flex-col gap-6">
         <BreakdownList
           title="By Priority"
           entries={Object.entries(data.testCasesByPriority)}
@@ -708,6 +716,10 @@ function SummaryWidget({
           onClick={(key) => onDrillDown("priority", key)}
           tone={priorityTone}
         />
+        {ASSIGNEE_ENABLED && (
+          <AssigneeBreakdown entries={data.testCasesByAssignee} onDrillDown={onDrillDown} />
+        )}
+        </div>
         {/* The third column, which the two breakdowns left empty. One panel,
             not two stacked: the rounds and the work no round covers are the
             same story — where the testing has been spread — and a second
@@ -753,26 +765,68 @@ function SummaryWidget({
           </div>
         )}
 
-        {ASSIGNEE_ENABLED && (
-        <div>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">By Assignee</h3>
-          <ul className="mt-3 grid grid-cols-[max-content_1fr_auto] items-center gap-x-2.5 gap-y-2">
-            {data.testCasesByAssignee.map((entry) => (
-              <li key={entry.assigneeId ?? "unassigned"} className="col-span-3 grid grid-cols-subgrid items-center">
-                <MeterRow
-                  label={entry.assigneeName}
-                  count={entry.count}
-                  total={data.counts.testCases}
-                  tone="gray"
-                  onClick={entry.assigneeId ? () => onDrillDown("assigneeId", entry.assigneeId!) : undefined}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-        )}
       </div>
     </WidgetShell>
+  );
+}
+
+/**
+ * Who is carrying what, which is a question about people.
+ *
+ * It used to list "Unassigned" as a row like any other, measured against
+ * every case in the project — so the bar for nobody ran the full width and
+ * every real person was a sliver beside it, which answers the question it was
+ * put there to ask with a picture of the opposite. The useful comparison is
+ * person against person, so the scale is the work that is actually in
+ * somebody's hands.
+ *
+ * How much is in nobody's hands is still worth knowing, and it is one
+ * sentence rather than a bar: a bar invites comparison, and that figure is
+ * not in the same race as the people above it.
+ */
+function AssigneeBreakdown({
+  entries,
+  onDrillDown,
+}: {
+  entries: DashboardData["testCasesByAssignee"];
+  onDrillDown: (key: keyof Filters, value: string) => void;
+}) {
+  const people = entries.filter((entry) => entry.assigneeId !== null);
+  const assigned = people.reduce((total, entry) => total + entry.count, 0);
+  const unassigned = entries.find((entry) => entry.assigneeId === null)?.count ?? 0;
+
+  return (
+    /* Named as a group so the rows belong to something: the headings here are
+     * `h3`s inside a widget, and without this the list is a run of bars with
+     * no stated subject for anyone reading by structure rather than by eye. */
+    <div role="group" aria-label="By Assignee">
+      <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">By Assignee</h3>
+      {people.length === 0 ? (
+        <p className="mt-3 text-sm text-muted">
+          Nothing is in anybody&apos;s hands. A tester hands a case over from the round it
+          failed in.
+        </p>
+      ) : (
+        <ul className="mt-3 grid grid-cols-[max-content_1fr_auto] items-center gap-x-2.5 gap-y-2">
+          {people.map((entry) => (
+            <li key={entry.assigneeId} className="col-span-3 grid grid-cols-subgrid items-center">
+              <MeterRow
+                label={entry.assigneeName}
+                count={entry.count}
+                total={assigned}
+                tone="gray"
+                onClick={() => onDrillDown("assigneeId", entry.assigneeId!)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+      {unassigned > 0 && (
+        <p className="mt-2 text-[11px] text-muted">
+          {unassigned.toLocaleString()} in nobody&apos;s hands.
+        </p>
+      )}
+    </div>
   );
 }
 

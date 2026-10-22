@@ -158,3 +158,29 @@ test("opens on what the reader handed out, for somebody who hands work out", asy
   // And it is their own hand-offs on it: the seed made these two.
   await expect(page.getByRole("link", { name: E2E_ASSIGNED_CASE })).toBeVisible();
 });
+
+/**
+ * The Dashboard's assignee breakdown is about people.
+ *
+ * It used to list "Unassigned" as a row like any other, measured against every
+ * case in the project — so the bar for nobody ran the full width and every
+ * real person was a sliver beside it.
+ */
+test("compares people against each other, not against nobody", async ({ page }) => {
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  await page.goto(`/projects/${projectId}/dashboard`);
+  const section = page.getByRole("group", { name: "By Assignee" });
+
+  await expect(section.getByText("E2E Dev")).toBeVisible();
+  // Nobody is a sentence, not a bar: a bar invites a comparison that is not
+  // in the same race as the people above it.
+  /* Case-insensitive: the row renders its label lower-cased and lets CSS
+     capitalise it, so a `/Unassigned/` that looked right matched nothing and
+     the test passed against the very layout it was written to rule out. */
+  await expect(section.getByRole("button", { name: /unassigned/i })).toHaveCount(0);
+  await expect(section.getByText(/in nobody.s hands/)).toBeVisible();
+});
