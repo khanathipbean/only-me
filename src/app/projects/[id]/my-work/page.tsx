@@ -129,14 +129,28 @@ export default async function MyWorkPage({
   /* Everybody, not only a DEV. A tester who hands themselves a case to look
    * at should be able to find it again, and a page that refused them would
    * be refusing them their own work. */
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  const membership = await requireProjectRoleOrNotFound(
+    session!.user.id,
+    projectId,
+    ALL_MEMBER_ROLES,
+  );
 
-  /* Default `me`, whatever the role. A tester who hands work out wants the
-   * other two views, but the page is called My Work and opening it on
-   * somebody else's would be the page lying about its own name. */
+  /* The default follows what the reader does with this page, because "my
+   * work" means two different things either side of the hand-off.
+   *
+   * A Dev opens it to find what is waiting on them, so it opens on what they
+   * were given. Everybody else opens it to find out what became of the cases
+   * they pushed out — which is their work too, just the other end of it, and
+   * a list of what they were handed would be empty for most of them most of
+   * the time.
+   *
+   * An explicit choice in the URL always wins, so neither default is a
+   * ceiling. */
   const scope: WorkScope = WORK_SCOPES.includes(query.who as WorkScope)
     ? (query.who as WorkScope)
-    : "me";
+    : membership.role === "DEV"
+      ? "me"
+      : "handed-out";
 
   const [project, cases] = await Promise.all([
     getProjectById(projectId),

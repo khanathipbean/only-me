@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { E2E_HANDOFF_CASE, E2E_HANDOFF_RUN } from "./support/credentials";
+import {
+  E2E_ASSIGNED_CASE,
+  E2E_HANDOFF_CASE,
+  E2E_HANDOFF_RUN,
+} from "./support/credentials";
 
 /**
  * Handing a failed case to somebody, from the round where it failed.
@@ -129,4 +133,28 @@ test("a whole selection can be handed over at once", async ({ page }) => {
       .getByRole("row", { name: new RegExp(E2E_HANDOFF_CASE) })
       .getByRole("combobox", { name: `Assign ${E2E_HANDOFF_CASE}` }),
   ).toHaveText(/Unassigned/);
+});
+
+/**
+ * The page opens on the end of the hand-off the reader is standing at.
+ *
+ * This runs as the suite's admin — somebody who hands work out rather than
+ * does it — so "my work" means the cases they pushed and are waiting on. A
+ * Dev gets the other default; `dev-role.spec` checks that end.
+ */
+test("opens on what the reader handed out, for somebody who hands work out", async ({
+  page,
+}) => {
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  await page.goto(`/projects/${projectId}/my-work`);
+  await expect(
+    page.getByRole("combobox", { name: "Whose repairs to show" }),
+  ).toHaveText(/Handed out by me/);
+
+  // And it is their own hand-offs on it: the seed made these two.
+  await expect(page.getByRole("link", { name: E2E_ASSIGNED_CASE })).toBeVisible();
 });
