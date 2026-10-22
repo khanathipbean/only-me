@@ -187,12 +187,23 @@ export async function seedBaseline() {
     return made;
   });
 
-  /* A deadline for the one handed over, if it does not have one. Cases this
-   * fixture created before deadlines existed carry none — which is correct
-   * for real rows and makes a poor fixture, since the normal card is the one
-   * with a date on it. */
+  /* A deadline for the one handed over, and a fresh one whenever the old has
+   * gone by.
+   *
+   * Two reasons rather than one. Cases this fixture created before deadlines
+   * existed carry none, which is correct for a real row and a poor fixture —
+   * the ordinary card is the one with a date on it. And a date set on the day
+   * the fixture was made is in the past by the end of the week, so the card
+   * meant to show a repair still in time quietly became a second overdue one
+   * and the test for "Day N of M" had nothing to find.
+   *
+   * A fixture that means something different depending on the day it is read
+   * is not a fixture. */
   await prisma.testCase.updateMany({
-    where: { id: handedOver.id, dueAt: null },
+    where: {
+      id: handedOver.id,
+      OR: [{ dueAt: null }, { dueAt: { lt: new Date() } }],
+    },
     data: { dueAt: addWorkingDays(new Date(), WORK_DAYS_BY_PRIORITY.CRITICAL) },
   });
 

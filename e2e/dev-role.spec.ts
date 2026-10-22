@@ -123,7 +123,14 @@ test("puts what is already late at the top, in red", async ({ page }) => {
 
   const late = page.getByRole("link", { name: E2E_OVERDUE_CASE });
   await expect(late).toBeVisible();
-  await expect(page.getByText(/Overdue by \d+ days?/)).toBeVisible();
+  /* Scoped to the card: the fixture accumulates hand-offs, so more than one
+     of them can be late at once and an unscoped match is a strict-mode
+     failure waiting for the second. */
+  await expect(
+    page
+      .getByRole("group", { name: E2E_OVERDUE_CASE, exact: true })
+      .getByText(/Overdue by \d+ days?/),
+  ).toBeVisible();
 
   /* Above the other card, not merely present: "ดันขึ้นบนสุด" is the whole
      point, and a red badge halfway down a page nobody scrolled to is not it.
