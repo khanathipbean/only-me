@@ -50,3 +50,19 @@ test("an administrator can see what was done to an account, and get back", async
   await page.getByRole("link", { name: "People" }).click();
   await expect(page).toHaveURL(/\/members$/);
 });
+
+/**
+ * The Projects column names the Projects.
+ *
+ * It printed the code — "prom-001" — which is how the system tells two apart
+ * and not what anybody calls them. The code stays, on hover, because a name
+ * is the one thing that is not guaranteed unique.
+ */
+test("names the Projects somebody is in, with the code on hover", async ({ page }) => {
+  await page.goto("/members");
+
+  const chip = page.getByTitle(/E2E-FIXTURE/).first();
+  await expect(chip).toBeVisible();
+  await expect(chip).toContainText("E2E Fixture");
+  await expect(chip).not.toContainText("E2E-FIXTURE ·");
+});

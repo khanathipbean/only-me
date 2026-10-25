@@ -476,10 +476,18 @@ export default async function MembersPage({
                   </td>
                   <td className={tdClass}>
                     <div className="flex flex-wrap gap-1.5">
+                      {/* The Project's name, not its code. A reader looking
+                          down this column is asking which Projects somebody
+                          is in, and "prom-001" is the answer to a different
+                          question — the code is how the system tells two
+                          apart, which is the one thing a name cannot be
+                          trusted to do, so it stays on hover. */}
                       {member.memberships.map((m) => (
-                        <Badge key={m.projectId} tone={projectTone.get(m.projectId) ?? "gray"}>
-                          {m.code} · {m.role}
-                        </Badge>
+                        <span key={m.projectId} title={`${m.code} · ${m.name}`}>
+                          <Badge tone={projectTone.get(m.projectId) ?? "gray"}>
+                            {m.name} · {m.role}
+                          </Badge>
+                        </span>
                       ))}
                     </div>
                   </td>
