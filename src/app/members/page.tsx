@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { requireAdminAnywhereOrNotFound } from "@/lib/rbac";
@@ -18,6 +17,7 @@ import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Modal } from "@/components/ui/Modal";
 import { ResultCount } from "@/components/ui/ResultCount";
+import { ViewTabs } from "@/components/ui/ViewTabs";
 import { ConfirmForm } from "@/components/ConfirmForm";
 
 import { SubmitButton } from "@/components/SubmitButton";
@@ -363,43 +363,18 @@ export default async function MembersPage({
           which one is open, and a second line beneath it only boxed the pair
           in. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* One control with two segments, not two separate buttons: the pair
-            is a single choice, and a box drawn round both says so before any
-            of them is read. The chosen one is lifted onto the page's own
-            surface colour; the other stays flat against the track. */}
-        {/* No `role="tablist"`/`"tab"`, though it is drawn as one: those
-            promise a widget that swaps a panel in place and answers arrow
-            keys. These are links to two addresses. Overriding the link role
-            would take away what they are and advertise behaviour they do not
-            have; `aria-current` is the right word for which page you are on. */}
-        <nav
-          aria-label="Members view"
-          className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-black/[.03] p-0.5 dark:bg-white/[.04]"
-        >
-          {(
-            [
-              ["People", "/members", UsersIcon],
-              ["Account activity", "/members?tab=activity", ClockIcon],
-            ] as const
-          ).map(([label, href, Icon]) => {
-            const active = onActivity === href.includes("tab=activity");
-            return (
-              <Link
-                key={label}
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold [&>svg]:size-4 ${
-                  active
-                    ? "bg-surface text-foreground shadow-sm"
-                    : "text-muted hover:text-foreground"
-                }`}
-              >
-                <Icon />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <ViewTabs
+          label="Members view"
+          tabs={[
+            { label: "People", href: "/members", active: !onActivity, icon: UsersIcon },
+            {
+              label: "Account activity",
+              href: "/members?tab=activity",
+              active: onActivity,
+              icon: ClockIcon,
+            },
+          ]}
+        />
 
         {/* No padding of its own: the row centres both, and the tabs carry
             the only vertical space either of them needs. */}
