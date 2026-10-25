@@ -632,18 +632,29 @@ export default async function TestRunPage({
                 </Badge>
               </a>
             ))}
-            {scope.modules.length > 0 && (
-              <span className="text-muted">
-                {scope.modules.length === 1
-                  ? scope.modules[0].name
-                  : `${scope.modules.length} Modules: ${scope.modules
-                      .map((m) => m.name)
-                      .join(", ")}`}
-                <span className="px-1">·</span>
-                {scope.requirementCount} Requirement
-                {scope.requirementCount === 1 ? "" : "s"}
-              </span>
-            )}
+            {scope.modules.length > 0 &&
+              (() => {
+                const reach =
+                  (scope.modules.length === 1
+                    ? scope.modules[0].name
+                    : `${scope.modules.length} Modules: ${scope.modules
+                        .map((m) => m.name)
+                        .join(", ")}`) +
+                  ` · ${scope.requirementCount} Requirement${
+                    scope.requirementCount === 1 ? "" : "s"
+                  }`;
+                return (
+                  /* Capped and cut, with the whole thing on hover. A round
+                     drawing on six Modules names all six here, which is a
+                     sentence long enough to wrap the badge row above it onto
+                     a second line — and the names are what somebody wanted,
+                     so shortening it to "6 Modules" would answer a different
+                     question. */
+                  <span className="max-w-xs truncate text-muted" title={reach}>
+                    {reach}
+                  </span>
+                );
+              })()}
           </span>
         }
         actions={
