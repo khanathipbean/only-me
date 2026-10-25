@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ALL_MEMBER_ROLES, WORK_STATE_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
@@ -245,45 +246,50 @@ export default async function MyWorkPage({
         segments={myWorkBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
 
-      <PageHeader
-        title="My Work"
-        subtitle={finishedTab ? FINISHED_BLURB[scope] : SCOPE_BLURB[scope](total)}
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <ViewTabs
-              label="My Work view"
-              tabs={[
-                {
-                  label: "Open",
-                  href: `${basePath}?who=${scope}`,
-                  active: !finishedTab,
-                  icon: ListChecksIcon,
-                },
-                {
-                  label: "Finished",
-                  href: `${basePath}?who=${scope}&tab=finished`,
-                  active: finishedTab,
-                  icon: ClockIcon,
-                },
-              ]}
-            />
-            {/* Three readings of the same list, because the people who hand
-                work out need to follow it as much as the people doing it. A
-                form that navigates, like every other filter here. The tab
-                rides along so switching whose does not also switch which. */}
-            <FilterForm showClear={scope !== "me"} ownLayout className="flex items-end gap-2">
-              {finishedTab && <input type="hidden" name="tab" value="finished" />}
-              <Select
-                name="who"
-                defaultValue={scope}
-                options={WORK_SCOPE_OPTIONS}
-                ariaLabel="Whose repairs to show"
-                className="max-w-48"
-              />
-            </FilterForm>
-          </div>
-        }
-      />
+      <PageHeader title="My Work" subtitle={finishedTab ? FINISHED_BLURB[scope] : SCOPE_BLURB[scope](total)} />
+
+      {/* On its own row under the header, where the Members page puts the
+          same control — and for the reason that makes that the right place
+          rather than merely the matching one: the header's right-hand slot is
+          for actions, and changing which view you are looking at is
+          navigation. Mixing the two crowded a row that then had to be fought
+          over.
+          The filter rides the right of this row, the way the result count
+          does on Members: it belongs to whichever tab is open, and a line of
+          its own would read as a third thing. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ViewTabs
+          label="My Work view"
+          tabs={[
+            {
+              label: "Open",
+              href: `${basePath}?who=${scope}`,
+              active: !finishedTab,
+              icon: ListChecksIcon,
+            },
+            {
+              label: "Finished",
+              href: `${basePath}?who=${scope}&tab=finished`,
+              active: finishedTab,
+              icon: ClockIcon,
+            },
+          ]}
+        />
+        {/* Three readings of the same list, because the people who hand work
+            out need to follow it as much as the people doing it. A form that
+            navigates, like every other filter here. The tab rides along so
+            switching whose does not also switch which. */}
+        <FilterForm showClear={scope !== "me"} ownLayout className="flex items-end gap-2">
+          {finishedTab && <input type="hidden" name="tab" value="finished" />}
+          <Select
+            name="who"
+            defaultValue={scope}
+            options={WORK_SCOPE_OPTIONS}
+            ariaLabel="Whose repairs to show"
+            className="max-w-48"
+          />
+        </FilterForm>
+      </div>
 
       {/* Who is carrying what, over the same set as the list below. It used
           to live on the Dashboard, where it was the one block asking about
@@ -404,11 +410,16 @@ function AssigneeStrip({
           one again gives everybody back. Without this the strip said two
           people had work and the page offered no way to look at either of
           them on their own. */}
-      {people.map((entry) => {
+      {people.map((entry, index) => {
         const active = entry.assigneeId === chosen;
         return (
+          <Fragment key={entry.assigneeId}>
+            {/* A rule between people, not a typed "|": it is a separator, so
+                it carries no text for a screen reader to read out, and a
+                drawn line sits at the same weight as the panel's own borders
+                instead of riding the text baseline. */}
+            {index > 0 && <span aria-hidden="true" className="h-4 w-px bg-border" />}
           <Link
-            key={entry.assigneeId}
             href={hrefFor(active ? null : entry.assigneeId)}
             aria-current={active ? "true" : undefined}
             /* `items-center`, not `items-baseline`: the count sits in a box,
@@ -431,6 +442,7 @@ function AssigneeStrip({
               {entry.count}
             </span>
           </Link>
+          </Fragment>
         );
       })}
       {chosen && (

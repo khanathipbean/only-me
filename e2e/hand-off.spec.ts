@@ -277,3 +277,33 @@ test("keeps a round's actions on the title's row on a desk-sized screen", async 
   const reach = page.locator("[title*='Requirement']").first();
   await expect(reach).toHaveAttribute("title", /Modules?/);
 });
+
+/**
+ * The view switch sits in the same place on every page that has one.
+ *
+ * It started in the header's right-hand slot on My Work, which is where the
+ * actions live — and changing which view you are looking at is navigation,
+ * not an action. Members had it right: its own row under the title, with
+ * whatever belongs to the open view on the right of that row.
+ */
+test("puts the view switch where Members puts it", async ({ page }) => {
+  async function tabRow(url: string, label: string) {
+    await page.goto(url);
+    const heading = await page.getByRole("heading", { level: 1 }).boundingBox();
+    const tabs = await page.getByRole("navigation", { name: label }).boundingBox();
+    return { below: tabs!.y > heading!.y + heading!.height, left: Math.round(tabs!.x) };
+  }
+
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  const mine = await tabRow(`/projects/${projectId}/my-work`, "My Work view");
+  const members = await tabRow("/members", "Members view");
+
+  expect(mine.below, "My Work's tabs should sit under the title").toBe(true);
+  expect(members.below).toBe(true);
+  // And starting at the same edge, so the eye finds them in the same place.
+  expect(mine.left).toBe(members.left);
+});
