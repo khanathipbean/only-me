@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { paginate, type PageFilters } from "@/lib/pagination";
 import { writeAuditLog } from "@/lib/audit";
 import { notifyUser } from "@/lib/notifications";
 import { WORK_DAYS_BY_PRIORITY, addWorkingDays } from "@/lib/deadlines";
@@ -502,10 +503,13 @@ export async function listMyWork(
   projectId: string,
   userId: string,
   scope: WorkScope = "me",
+  /** One person's share of it, chosen from the strip above the list. */
+  person?: string,
 ) {
   return prisma.testCase.findMany({
     where: {
       ...scopeFilter(userId, scope),
+      ...(person ? { assigneeId: person } : {}),
       workState: { not: null },
       deletedAt: null,
       testGroup: { scenario: { projectId } },
@@ -585,3 +589,240 @@ export async function listMyWork(
 }
 
 export type MyWorkCase = Awaited<ReturnType<typeof listMyWork>>[number];
+
+/**
+ * Hand-offs that are over, newest first.
+ *
+ * Read from the events rather than from the case, and that is the whole
+ * design. A case closed by a pass yesterday and broken again today carries
+ * `testResult: FAILED` now — reading the case would make yesterday's row
+ * vanish, though "closed by a pass on the 22nd" is still true of the 22nd.
+ * What happened is written down once; what a case is doing changes.
+ *
+ * Every closing event, not only the ones a pass closed. The loop also ends on
+ * BLOCKED and SKIPPED, and showing only passes would take those out of this
+ * list while they are already out of the open one — the hole this page exists
+ * to close, moved down a floor. The row says which result ended it.
+ *
+ * A case that was handed out twice and closed once has one row here and may
+ * have a card on the open tab at the same time. That is right: it was handed
+ * out twice.
+ */
+export async function listFinishedWork(
+  projectId: string,
+  userId: string,
+  scope: WorkScope,
+  filters: PageFilters,
+  person?: string,
+) {
+  /* The same three readings the open tab has, but `handed-out` cannot be
+   * read off this event: the actor on a closing event is the tester who
+   * recorded the result, never the person who handed the case over. Asking
+   * for `actorId = me` here would quietly turn this tab into "retested by
+   * me", which is somebody else's question. It goes to the case's own
+   * hand-off events instead — the same test `scopeFilter` makes. */
+  /* `toState: null` is written by two different things, and only one of them
+   * is a hand-off ending: a result was recorded and the loop closed, or the
+   * case was simply taken back off somebody.
+   *
+   * They are told apart by who the event says it was with. Closing by a
+   * result copies the assignee the case had, and a repair cannot be running
+   * without one — `setWorkState` refuses a case nobody is on, and assigning
+   * nobody ends the loop outright. Taking a case back records the new
+   * assignee, which is nobody. So a non-null name here means the repair was
+   * live and finished; a null one means it was cancelled.
+   *
+   * Without this the tab listed every withdrawal as a finished repair, with
+   * a dash where the person should be — which is how it was found. */
+  const where = {
+    toState: null,
+    assigneeId: person ? person : { not: null },
+    testCase: {
+      deletedAt: null,
+      testGroup: { scenario: { projectId } },
+      ...(scope === "handed-out" ? scopeFilter(userId, "handed-out") : {}),
+    },
+    ...(scope === "me" ? { assigneeId: userId } : {}),
+  };
+
+  /* One row per case, not one per hand-off.
+   *
+   * This tab answers "have I worked on this before", not "what did the state
+   * do". A case handed over three times and finished three times is still
+   * one case anybody is looking for, and repeating it makes the list longer
+   * without making it say more. The newest ending is the one shown.
+   *
+   * Grouped here rather than with `distinct`, which Prisma does not always
+   * push down to the database — and an in-memory distinct applied after
+   * `take` quietly returns short pages. */
+  const page = await paginate(
+    filters,
+    async () => (await prisma.workEvent.groupBy({ by: ["testCaseId"], where })).length,
+    async ({ skip, take }) => {
+      const latest = await prisma.workEvent.groupBy({
+        by: ["testCaseId"],
+        where,
+        _max: { occurredAt: true },
+        orderBy: { _max: { occurredAt: "desc" } },
+        skip,
+        take,
+      });
+      if (latest.length === 0) {
+        return [];
+      }
+
+      const events = await prisma.workEvent.findMany({
+        where: {
+          OR: latest.map((group) => ({
+            testCaseId: group.testCaseId,
+            occurredAt: group._max.occurredAt!,
+          })),
+        },
+        select: {
+          id: true,
+          occurredAt: true,
+          testCaseId: true,
+          assignee: { select: { id: true, name: true, email: true } },
+          actor: { select: { id: true, name: true } },
+          testCase: {
+            select: {
+              id: true,
+              name: true,
+              priority: true,
+              testGroup: {
+                select: {
+                  id: true,
+                  name: true,
+                  scenario: {
+                    select: {
+                      id: true,
+                      name: true,
+                      requirement: {
+                        select: { id: true, name: true, moduleId: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      /* Back into the order the grouping decided, which `findMany` with an OR
+       * has no reason to preserve. */
+      return latest
+        .map((group) => events.find((event) => event.testCaseId === group.testCaseId))
+        .filter((event): event is (typeof events)[number] => event !== undefined);
+    },
+  );
+
+  /* Which answer ended each hand-off: the newest one recorded at or before
+   * it closed.
+   *
+   * Not a nested `take: 1`, which would give the case's latest answer full
+   * stop — the very reading this function exists to avoid, and it looks
+   * correct right up until a case closed by a pass fails again and its
+   * finished row starts claiming it failed.
+   *
+   * One query for the whole page rather than one per row, the rule every
+   * other list here follows. */
+  const closedCaseIds = [...new Set(page.items.map((event) => event.testCase.id))];
+  const answers = await prisma.testResultEvent.findMany({
+    where: { testCaseId: { in: closedCaseIds }, testResult: { not: "NOT_RUN" } },
+    orderBy: { recordedAt: "desc" },
+    select: { testCaseId: true, testResult: true, recordedAt: true },
+  });
+
+  return {
+    ...page,
+    items: page.items.map((event) => ({
+      ...event,
+      closedBy:
+        answers.find(
+          (answer) =>
+            answer.testCaseId === event.testCase.id && answer.recordedAt <= event.occurredAt,
+        )?.testResult ?? null,
+    })),
+  };
+}
+
+export type FinishedWork = Awaited<ReturnType<typeof listFinishedWork>>["items"][number];
+
+/**
+ * Who is carrying the repairs, counted over the same set the page is showing.
+ *
+ * Not the Dashboard's old version of this, which counted every case with an
+ * `assigneeId` whether or not a repair was still running — and closing a loop
+ * keeps the assignee, so that number quietly included work that finished
+ * weeks ago. This counts what the tab and the filter have in front of the
+ * reader, which is the only number the strip above them can honestly carry.
+ */
+export async function countWorkByAssignee(
+  projectId: string,
+  userId: string,
+  scope: WorkScope,
+  /** Which tab is open. The strip has to count the same things the list
+   *  below it holds — it said "6 in hand" over a table of three finished
+   *  cases, which is one screen describing two different populations. */
+  finished = false,
+) {
+  const rows = finished
+    ? await countFinishedByAssignee(projectId, userId, scope)
+    : (
+        await prisma.testCase.groupBy({
+          by: ["assigneeId"],
+          where: {
+            ...scopeFilter(userId, scope),
+            workState: { not: null },
+            deletedAt: null,
+            testGroup: { scenario: { projectId } },
+          },
+          _count: { _all: true },
+        })
+      ).map((row) => ({ assigneeId: row.assigneeId, count: row._count._all }));
+
+  const ids = rows.map((row) => row.assigneeId).filter((id): id is string => id !== null);
+  const people = ids.length
+    ? await prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, email: true },
+      })
+    : [];
+
+  return rows
+    .filter((row) => row.assigneeId !== null)
+    .map((row) => {
+      const person = people.find((candidate) => candidate.id === row.assigneeId);
+      return {
+        assigneeId: row.assigneeId!,
+        name: person?.name || person?.email || row.assigneeId!,
+        count: row.count,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+}
+
+/** Distinct cases per person among the hand-offs that have ended — the
+ *  Finished tab counts cases, so this cannot count events. */
+async function countFinishedByAssignee(projectId: string, userId: string, scope: WorkScope) {
+  const pairs = await prisma.workEvent.groupBy({
+    by: ["assigneeId", "testCaseId"],
+    where: {
+      toState: null,
+      assigneeId: { not: null },
+      testCase: {
+        deletedAt: null,
+        testGroup: { scenario: { projectId } },
+        ...(scope === "handed-out" ? scopeFilter(userId, "handed-out") : {}),
+      },
+      ...(scope === "me" ? { assigneeId: userId } : {}),
+    },
+  });
+
+  const counts = new Map<string, number>();
+  for (const pair of pairs) {
+    counts.set(pair.assigneeId!, (counts.get(pair.assigneeId!) ?? 0) + 1);
+  }
+  return [...counts].map(([assigneeId, count]) => ({ assigneeId, count }));
+}

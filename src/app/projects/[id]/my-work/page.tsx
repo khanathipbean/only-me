@@ -8,6 +8,8 @@ import {
   WorkValidationError,
   WORK_SCOPES,
   WORK_SCOPE_OPTIONS,
+  countWorkByAssignee,
+  listFinishedWork,
   listMyWork,
   setWorkState,
   type MyWorkCase,
@@ -22,9 +24,12 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { Select } from "@/components/ui/Select";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ViewTabs } from "@/components/ui/ViewTabs";
+import { ClockIcon, ListChecksIcon } from "@/components/icons";
 import { Pagination } from "@/components/ui/Pagination";
 import { RunHistoryList } from "@/components/RunHistoryList";
-import { Badge, priorityTone } from "@/components/ui/Badge";
+import Link from "next/link";
+import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { WorkStatePicker } from "@/components/WorkStatePicker";
 import { myWorkBreadcrumb, nameOr } from "@/lib/breadcrumb";
@@ -36,7 +41,17 @@ import {
 } from "@/lib/deadlines";
 import { withToast } from "@/lib/toast";
 import { invalidateRouteCache } from "@/lib/revalidate";
-import { mutedTextClass, pageClass } from "@/lib/ui";
+import {
+  mutedTextClass,
+  pageClass,
+  tableClass,
+  tableWrapClass,
+  tdCenterClass,
+  tdClass,
+  thCenterClass,
+  thClass,
+  trHoverClass,
+} from "@/lib/ui";
 import type { WorkState } from "@/generated/prisma/client";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -78,6 +93,13 @@ const SCOPE_BLURB: Record<WorkScope, (total: number) => string> = {
     total === 0
       ? "Nothing is being repaired in this project."
       : `${total} case${total === 1 ? "" : "s"} being repaired, grouped by what happens next.`,
+};
+
+/** The same three readings, for the tab that looks backwards. */
+const FINISHED_BLURB: Record<WorkScope, string> = {
+  me: "Hand-offs that ended with you, newest first.",
+  "handed-out": "Cases you handed over that have been retested, newest first.",
+  all: "Every hand-off in this project that has ended, newest first.",
 };
 
 const SECTION_BLURB: Record<WorkState, string> = {
@@ -152,9 +174,33 @@ export default async function MyWorkPage({
       ? "me"
       : "handed-out";
 
-  const [project, cases] = await Promise.all([
+  /* Two tabs, one axis each: the filter above says whose, this says whether
+   * the hand-off is still running. Open is the default because that is what
+   * anybody is on this page to do something about. */
+  const finishedTab = query.tab === "finished";
+  /* One person's share, chosen by pressing their name on the strip. Narrows
+   * the list and leaves the strip alone — hiding the others would take away
+   * the only way back to them. */
+  const person = query.person || undefined;
+
+  const [project, cases, finished, byAssignee] = await Promise.all([
     getProjectById(projectId),
-    listMyWork(projectId, session!.user.id, scope),
+    finishedTab
+      ? Promise.resolve([])
+      : listMyWork(projectId, session!.user.id, scope, person),
+    finishedTab
+      ? listFinishedWork(
+          projectId,
+          session!.user.id,
+          scope,
+          {
+            page: query.page ? Number(query.page) : undefined,
+            pageSize: query.pageSize ? Number(query.pageSize) : undefined,
+          },
+          person,
+        )
+      : Promise.resolve(null),
+    countWorkByAssignee(projectId, session!.user.id, scope, finishedTab),
   ]);
 
   /* One query for every card, not one per card — the same rule the Test Run
@@ -201,24 +247,64 @@ export default async function MyWorkPage({
 
       <PageHeader
         title="My Work"
-        subtitle={SCOPE_BLURB[scope](total)}
+        subtitle={finishedTab ? FINISHED_BLURB[scope] : SCOPE_BLURB[scope](total)}
         actions={
-          /* Three readings of the same list, because the people who hand work
-             out need to follow it as much as the people doing it. A form that
-             navigates, like every other filter here. */
-          <FilterForm showClear={scope !== "me"} ownLayout className="flex items-end gap-2">
-            <Select
-              name="who"
-              defaultValue={scope}
-              options={WORK_SCOPE_OPTIONS}
-              ariaLabel="Whose repairs to show"
-              className="max-w-48"
+          <div className="flex flex-wrap items-center gap-3">
+            <ViewTabs
+              label="My Work view"
+              tabs={[
+                {
+                  label: "Open",
+                  href: `${basePath}?who=${scope}`,
+                  active: !finishedTab,
+                  icon: ListChecksIcon,
+                },
+                {
+                  label: "Finished",
+                  href: `${basePath}?who=${scope}&tab=finished`,
+                  active: finishedTab,
+                  icon: ClockIcon,
+                },
+              ]}
             />
-          </FilterForm>
+            {/* Three readings of the same list, because the people who hand
+                work out need to follow it as much as the people doing it. A
+                form that navigates, like every other filter here. The tab
+                rides along so switching whose does not also switch which. */}
+            <FilterForm showClear={scope !== "me"} ownLayout className="flex items-end gap-2">
+              {finishedTab && <input type="hidden" name="tab" value="finished" />}
+              <Select
+                name="who"
+                defaultValue={scope}
+                options={WORK_SCOPE_OPTIONS}
+                ariaLabel="Whose repairs to show"
+                className="max-w-48"
+              />
+            </FilterForm>
+          </div>
         }
       />
 
-      {total === 0 ? (
+      {/* Who is carrying what, over the same set as the list below. It used
+          to live on the Dashboard, where it was the one block asking about
+          people among three asking about the testing — and it counted every
+          case with an assignee, including the ones whose repair finished
+          weeks ago, because closing a loop keeps the name. */}
+      {scope !== "me" && byAssignee.length > 0 && (
+        <AssigneeStrip
+          people={byAssignee}
+          chosen={person}
+          hrefFor={(id) =>
+            `${basePath}?who=${scope}${finishedTab ? "&tab=finished" : ""}` +
+            (id ? `&person=${id}` : "")
+          }
+          finished={finishedTab}
+        />
+      )}
+
+      {finishedTab ? (
+        <FinishedList page={finished!} projectId={projectId} scope={scope} />
+      ) : total === 0 ? (
         <p className={mutedTextClass}>
           {scope === "me"
             ? "A tester hands a case over from the round it failed in. When one arrives it shows up here, with what went wrong and what to do about it."
@@ -278,6 +364,204 @@ export default async function MyWorkPage({
     </main>
   );
 }
+
+/**
+ * Who the repairs below are with, as a row of names and counts.
+ *
+ * Not drawn on the reading that is somebody's own work, where every row
+ * below carries the same name and the strip would be repeating it. The other
+ * two readings span people, which is the only time "who has how many" is a
+ * question.
+ *
+ * No bars. The whole reason this stopped working on the Dashboard was a bar
+ * for nobody running the width of the panel; counts in a row say the same
+ * thing in a tenth of the height, which is what a summary above a list
+ * should cost.
+ */
+function AssigneeStrip({
+  people,
+  chosen,
+  hrefFor,
+  finished,
+}: {
+  people: { assigneeId: string; name: string; count: number }[];
+  /** Whose share is being shown, if anybody's. */
+  chosen?: string;
+  hrefFor: (assigneeId: string | null) => string;
+  finished: boolean;
+}) {
+  const total = people.reduce((sum, person) => sum + person.count, 0);
+  return (
+    <div
+      role="group"
+      aria-label="By Assignee"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-black/[.02] px-4 py-2.5 dark:bg-white/[.03]"
+    >
+      <span className="mr-2 text-xs font-semibold tracking-wider text-muted uppercase">
+        By Assignee
+      </span>
+      {/* Pressing a name narrows the list to that person; pressing the chosen
+          one again gives everybody back. Without this the strip said two
+          people had work and the page offered no way to look at either of
+          them on their own. */}
+      {people.map((entry) => {
+        const active = entry.assigneeId === chosen;
+        return (
+          <Link
+            key={entry.assigneeId}
+            href={hrefFor(active ? null : entry.assigneeId)}
+            aria-current={active ? "true" : undefined}
+            /* `items-center`, not `items-baseline`: the count sits in a box,
+               and aligning a box on the text baseline inside it pushes the
+               box down — it read as resting on the row's floor with all the
+               spare room above it. */
+            className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors ${
+              active
+                ? "bg-surface text-foreground shadow-sm"
+                : "text-muted hover:bg-black/[.03] hover:text-foreground dark:hover:bg-white/[.05]"
+            }`}
+          >
+            <span>{entry.name}</span>
+            {/* The count in a box of its own. Bare, it ran straight on from
+                the name — and these names end in digits, so "Dev 1 2" could
+                be read as a person called Dev 1 2. The same box the result
+                counts on the list pages wear, which is what this app already
+                means by "this number is a count". */}
+            <span className="rounded border border-border bg-surface px-1.5 py-0.5 text-xs leading-none font-semibold tabular-nums text-foreground">
+              {entry.count}
+            </span>
+          </Link>
+        );
+      })}
+      {chosen && (
+        <Link href={hrefFor(null)} className="text-xs text-brand hover:underline">
+          Everyone
+        </Link>
+      )}
+      <span className="ml-auto text-xs text-muted">
+        {total} {finished ? "finished" : "in hand"}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The hand-offs that are over.
+ *
+ * A table rather than the cards above it: nothing here needs doing, so the
+ * reader is scanning for one row rather than reading each in turn, and a
+ * card's worth of height per finished repair would bury the one they came
+ * for.
+ */
+function FinishedList({
+  page,
+  projectId,
+  scope,
+}: {
+  page: NonNullable<Awaited<ReturnType<typeof listFinishedWork>>>;
+  projectId: string;
+  scope: WorkScope;
+}) {
+  if (page.total === 0) {
+    return <p className={mutedTextClass}>{FINISHED_EMPTY[scope]}</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className={tableWrapClass}>
+        {/* `table-fixed`, which is what makes the widths below mean anything.
+            Left to lay itself out, a table treats a `col` width as a
+            suggestion and lets unbreakable content win — so the chain under a
+            case name, which is `nowrap` so it can end in an ellipsis, took
+            whatever width it wanted and pushed the other three columns off
+            the side behind a scrollbar. Fixed, the column gets its share and
+            the chain ends in an ellipsis when it does not fit — and on a wide
+            window there is room, so nothing is cut. */}
+        <table className={`${tableClass} table-fixed`}>
+          {/* Widths, because the chain under a case name is four Thai names
+              long and a table left to size itself gave that column all of
+              them — pushing Was with, Ended and Closed by off the side
+              behind a horizontal scrollbar. The name is what people read;
+              the chain is there to tell two of the same name apart, and
+              truncating it costs nothing it was doing. */}
+          <colgroup>
+            <col className="w-[52%]" />
+            <col className="w-[16%]" />
+            <col className="w-[16%]" />
+            <col className="w-[16%]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={thClass}>Test Case</th>
+              <th className={thClass}>Was with</th>
+              <th className={thCenterClass}>Ended</th>
+              <th className={thCenterClass}>Closed by</th>
+            </tr>
+          </thead>
+          <tbody>
+            {page.items.map((event) => {
+              const { scenario } = event.testCase.testGroup;
+              const { requirement } = scenario;
+              const href =
+                `/projects/${projectId}/modules/${requirement.moduleId}` +
+                `/requirements/${requirement.id}/scenarios/${scenario.id}` +
+                `/test-groups/${event.testCase.testGroup.id}/test-cases/${event.testCase.id}`;
+              return (
+                <tr key={event.id} className={trHoverClass}>
+                  <td className={tdClass}>
+                    <Link
+                      href={href}
+                      className="font-medium text-foreground hover:text-brand hover:underline"
+                    >
+                      {event.testCase.name}
+                    </Link>
+                    <p className="mt-0.5 truncate text-xs text-muted">
+                      {requirement.name} › {scenario.name} › {event.testCase.testGroup.name}
+                    </p>
+                  </td>
+                  <td className={`${tdClass} text-sm text-muted`}>
+                    {event.assignee?.name || event.assignee?.email || "—"}
+                  </td>
+                  <td className={`${tdCenterClass} text-xs text-muted`}>
+                    {formatDate(event.occurredAt)}
+                    {event.actor?.name && <div>{event.actor.name}</div>}
+                  </td>
+                  <td className={tdCenterClass}>
+                    {/* Which answer ended it, as it stood that day. Not every
+                        one of these is a pass: the loop also ends when a
+                        retest is blocked or skipped, and leaving those out
+                        would take them off both tabs at once. */}
+                    {event.closedBy ? (
+                      <Badge tone={testResultTone(event.closedBy)}>
+                        {event.closedBy.replace(/_/g, " ")}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <Pagination
+        page={page.page}
+        totalPages={page.totalPages}
+        total={page.total}
+        pageSize={page.pageSize}
+      />
+    </div>
+  );
+}
+
+/** Nothing has ended yet, said in the terms of whichever reading is open. */
+const FINISHED_EMPTY: Record<WorkScope, string> = {
+  me: "Nothing handed to you has been retested yet.",
+  "handed-out": "Nothing you handed over has come back yet.",
+  all: "No hand-off in this project has ended yet.",
+};
 
 /**
  * The deadline, and whether it has passed.

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   E2E_ASSIGNED_CASE,
+  E2E_FINISHED_CASE,
   E2E_DEV_EMAIL,
   E2E_DEV_PASSWORD,
   E2E_OVERDUE_CASE,
@@ -212,6 +213,37 @@ test("cannot say a repair is fixed without saying what was done", async ({ page 
   // Back where the seed left it.
   await moved.getByRole("button", { name: "To fix" }).click();
   await page.waitForURL(/toast=/);
+});
+
+test("keeps what it finished, instead of losing it when the tester passes it", async ({
+  page,
+}) => {
+  await page.goto(`/projects/${projectId}/my-work`);
+  await resetToFix(page);
+
+  /* The complaint this tab exists for: a card vanished the moment a tester
+     recorded a pass, and there was nowhere to go and look at it. */
+  await expect(page.getByRole("link", { name: "Finished" })).toBeVisible();
+  await page.getByRole("link", { name: "Finished" }).click();
+  await page.waitForURL(/tab=finished/);
+
+  /* On a laptop-width window, and in the viewport rather than merely in the
+     DOM. The chain under a case name runs three long Thai names, and a table
+     left to size itself handed that column all of them — pushing Was with,
+     Ended and Closed by off the side behind a horizontal scrollbar.
+     `toBeVisible` passes for an element parked out there, which is why this
+     asks where it actually is. */
+  await page.setViewportSize({ width: 1000, height: 720 });
+  await expect(page.getByRole("columnheader", { name: "Closed by" })).toBeInViewport();
+  const row = page.getByRole("row", { name: new RegExp(E2E_FINISHED_CASE) });
+  await expect(row).toBeVisible();
+  // What ended it, as it stood that day.
+  await expect(row.getByText("PASSED")).toBeVisible();
+
+  // And back, without the filter being lost on the way.
+  await page.getByRole("link", { name: "Open", exact: true }).click();
+  await page.waitForURL(/who=me/);
+  await expect(page.getByRole("group", { name: E2E_ASSIGNED_CASE, exact: true })).toBeVisible();
 });
 
 /**

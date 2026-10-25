@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   E2E_ASSIGNED_CASE,
+  E2E_FINISHED_CASE,
   E2E_HANDOFF_CASE,
   E2E_HANDOFF_RUN,
 } from "./support/credentials";
@@ -160,27 +161,119 @@ test("opens on what the reader handed out, for somebody who hands work out", asy
 });
 
 /**
- * The Dashboard's assignee breakdown is about people.
+ * Who the repairs are with, on the page that is about them.
  *
- * It used to list "Unassigned" as a row like any other, measured against every
- * case in the project — so the bar for nobody ran the full width and every
- * real person was a sliver beside it.
+ * This lived on the Dashboard, where it counted every case carrying an
+ * assignee — including ones whose repair finished weeks ago, because closing
+ * a loop keeps the name — and drew "Unassigned" as a bar running the width of
+ * the panel beside slivers for the actual people.
  */
-test("compares people against each other, not against nobody", async ({ page }) => {
+test("says who the repairs are with, and counts only live ones", async ({ page }) => {
   await page.goto("/projects?search=E2E-FIXTURE");
   await page.getByRole("link", { name: "E2E Fixture" }).click();
   await page.waitForURL(/\/projects\/[^/]+$/);
   const projectId = page.url().split("/projects/")[1].split("/")[0];
 
-  await page.goto(`/projects/${projectId}/dashboard`);
-  const section = page.getByRole("group", { name: "By Assignee" });
+  /* The admin's own default: the cases they handed out. */
+  await page.goto(`/projects/${projectId}/my-work`);
+  const strip = page.getByRole("group", { name: "By Assignee" });
+  await expect(strip).toBeVisible();
+  await expect(strip.getByText("E2E Dev")).toBeVisible();
 
-  await expect(section.getByText("E2E Dev")).toBeVisible();
-  // Nobody is a sentence, not a bar: a bar invites a comparison that is not
-  // in the same race as the people above it.
-  /* Case-insensitive: the row renders its label lower-cased and lets CSS
-     capitalise it, so a `/Unassigned/` that looked right matched nothing and
-     the test passed against the very layout it was written to rule out. */
-  await expect(section.getByRole("button", { name: /unassigned/i })).toHaveCount(0);
-  await expect(section.getByText(/in nobody.s hands/)).toBeVisible();
+  /* Nobody is not a person and does not appear. The finished case is not a
+     live repair and is not counted — the number beside the name is what the
+     list underneath actually holds. */
+  await expect(strip.getByText(/unassigned/i)).toHaveCount(0);
+
+  /* Pressing a name narrows the list to that person, and the strip keeps
+     everybody so the way back is still on screen. */
+  await strip.getByRole("link", { name: /E2E Dev/ }).click();
+  await page.waitForURL(/person=/);
+  await expect(page.getByRole("link", { name: "Everyone" })).toBeVisible();
+  await page.getByRole("link", { name: "Everyone" }).click();
+  await expect(page).not.toHaveURL(/person=/);
+
+  // And it stays out of the way on the reading where every row is yours.
+  await page.goto(`/projects/${projectId}/my-work?who=me`);
+  await expect(page.getByRole("group", { name: "By Assignee" })).toHaveCount(0);
+});
+
+test("counts the tab it is sitting above", async ({ page }) => {
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  /* The strip said "6 in hand" over a table of three finished cases — one
+     screen describing two different populations. */
+  await page.goto(`/projects/${projectId}/my-work?who=handed-out`);
+  await expect(page.getByRole("group", { name: "By Assignee" })).toContainText("in hand");
+
+  await page.goto(`/projects/${projectId}/my-work?who=handed-out&tab=finished`);
+  await expect(page.getByRole("group", { name: "By Assignee" })).toContainText("finished");
+});
+
+/**
+ * The chain under a case name gives up room when there is none, and takes it
+ * back when there is.
+ *
+ * Measured rather than eyeballed: a clipped line and a full one look the same
+ * in a class list, and the failure this guards against — the chain taking the
+ * width it wanted and pushing the other three columns off the side — showed
+ * up as a horizontal scrollbar nobody noticed until the columns were missed.
+ */
+test("gives the chain the room there is, and no more", async ({ page }) => {
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  async function measure(width: number) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`/projects/${projectId}/my-work?who=handed-out&tab=finished`);
+    const chain = page
+      .getByRole("row", { name: new RegExp(E2E_FINISHED_CASE) })
+      .locator("p")
+      .first();
+    return chain.evaluate((el) => el.scrollWidth > el.clientWidth);
+  }
+
+  // Narrow: cut, with an ellipsis, so the row still fits.
+  expect(await measure(900)).toBe(true);
+  await expect(page.getByRole("columnheader", { name: "Closed by" })).toBeInViewport();
+
+  // Wide: there is room, so nothing is cut.
+  expect(await measure(1800)).toBe(false);
+  await expect(page.getByRole("columnheader", { name: "Closed by" })).toBeInViewport();
+});
+
+/**
+ * A round's own buttons stay where the reader looks for them.
+ *
+ * The header puts the title and its line of badges, counts and Module names
+ * on the left and the actions on the right. Left to wrap at any width, the
+ * left block takes whatever room its content asks for — so a round drawing on
+ * two Modules with real names pushed Export, Add and Close onto a row of
+ * their own on a laptop screen.
+ */
+test("keeps a round's actions on the title's row on a desk-sized screen", async ({
+  page,
+}) => {
+  await openHandoffRun(page);
+
+  for (const width of [1024, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    const title = await page.getByRole("heading", { level: 1 }).boundingBox();
+    const action = await page.getByRole("link", { name: "Export results" }).boundingBox();
+    expect(
+      action!.y,
+      `actions dropped below the title at ${width}px`,
+    ).toBeLessThan(title!.y + title!.height);
+  }
+
+  /* And the line that caused it is capped rather than shortened: the Module
+     names are what somebody wanted, so they stay — on hover when they do not
+     fit. */
+  const reach = page.locator("[title*='Requirement']").first();
+  await expect(reach).toHaveAttribute("title", /Modules?/);
 });

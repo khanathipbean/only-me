@@ -29,9 +29,19 @@ export const E2E_HANDOFF_CASE = "TC-HANDOFF-001 A case to hand over";
  *  first driving another account's session to put it there. */
 export const E2E_ASSIGNED_CASE = "TC-HANDOFF-002 A case already handed over";
 
+/** A fourth, handed over and then retested green — the only thing that puts
+ *  a row on the Finished tab, which is what that tab exists to hold. */
+export const E2E_FINISHED_CASE = "TC-HANDOFF-004 A case that was fixed";
+
 /** A third, handed over with a deadline that has already passed, so the
  *  "overdue goes to the top and turns red" rule has something to act on. */
 export const E2E_OVERDUE_CASE = "TC-HANDOFF-003 A case that is already late";
+
+/** A second Module in the hand-off round, with a name as long as the real
+ *  ones. The round's header names every Module it reaches, and a long list
+ *  there is what pushed the page's own buttons off their row. */
+export const E2E_WIDE_MODULE = "Governance และการจัดการ Classification";
+export const E2E_WIDE_CASE = "TC-CLS-001 เปิดหน้า Classification จากเมนู Governance";
 
 /** The fixture file the seed points at an object that was never uploaded. */
 export const MISSING_FILE_NAME = "gone-from-storage.pdf";

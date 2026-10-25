@@ -1,11 +1,11 @@
 import { hashPassword } from "@/lib/auth-credentials";
 import { prisma } from "@/lib/prisma";
 import { createScenario } from "@/lib/scenarios";
-import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+import { createRequirement, findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { createTestGroup } from "@/lib/test-groups";
 import { createTestCase, updateTestResultAndNotes } from "@/lib/test-cases";
 import { addCasesToRun, createRun } from "@/lib/test-runs";
-import { assignCase } from "@/lib/work";
+import { assignCase, setWorkState } from "@/lib/work";
 import { WORK_DAYS_BY_PRIORITY, addWorkingDays } from "@/lib/deadlines";
 import {
   MISSING_FILE_NAME,
@@ -14,8 +14,11 @@ import {
   E2E_EMAIL,
   E2E_ASSIGNED_CASE,
   E2E_OVERDUE_CASE,
+  E2E_FINISHED_CASE,
   E2E_HANDOFF_CASE,
   E2E_HANDOFF_GROUP,
+  E2E_WIDE_CASE,
+  E2E_WIDE_MODULE,
   E2E_HANDOFF_RUN,
   E2E_PASSWORD,
   E2E_VIEWER_EMAIL,
@@ -143,9 +146,13 @@ export async function seedBaseline() {
     groupId = (await createTestGroup(scenario.id, { name: E2E_HANDOFF_GROUP }, user.id)).id;
   }
 
+  /* Looked up across the project rather than inside one Test Group: one of
+   * these lives under a chain of its own, and a check scoped to the usual
+   * group never found it — so every run built another copy, and the page
+   * that lists them started showing four of the same case. */
   async function fixtureCase(name: string, make: () => Promise<{ id: string }>) {
     const existing = await prisma.testCase.findFirst({
-      where: { name, testGroupId: groupId },
+      where: { name, testGroup: { scenario: { projectId: project.id } } },
       select: { id: true },
     });
     return existing ?? (await make());
@@ -233,12 +240,109 @@ export async function seedBaseline() {
     data: { dueAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
   });
 
+  /* One that went round the loop and came back green. Without it the
+   * Finished tab has nothing in it, and a test that only ever sees the empty
+   * state is a test of the empty state. */
+  await fixtureCase(E2E_FINISHED_CASE, async () => {
+    /* Under a chain of its own, named the way the real ones are.
+     *
+     * The table that lists this row prints requirement, scenario and group
+     * under the case name, and in use those run to four long Thai names —
+     * which pushed the other three columns off the side of the page. The
+     * fixture's own names are short English ones, so a test written against
+     * them cannot tell a table that fits from one that does not. */
+    const longScenario = await createScenario(
+      project.id,
+      {
+        name: "SCN-DSD-001 เปิด Data Sharing Dashboard และเลือก Domain ที่ต้องการดูข้อมูล",
+        requirementId: await findOrCreateUnassignedRequirement(project.id, user.id),
+        expectedResult: "ระบบโหลดข้อมูลตาม Domain ที่เลือก",
+        priority: "MEDIUM",
+      },
+      user.id,
+    );
+    const longGroup = await createTestGroup(
+      longScenario.id,
+      { name: "Domain Filter และการตรวจสอบข้อมูลทุกส่วนของหน้า" },
+      user.id,
+    );
+
+    const made = await createTestCase(
+      longGroup.id,
+      {
+        name: E2E_FINISHED_CASE,
+        expectedResult: "The filter applies",
+        priority: "MEDIUM",
+        steps: [{ step: "Choose a filter", expectedResult: "The list narrows" }],
+      },
+      user.id,
+    );
+    await updateTestResultAndNotes(
+      made.id,
+      { testResult: "FAILED", notes: "The filter did nothing." },
+      user.id,
+    );
+    await assignCase(made.id, dev.id, user.id, "Filter is ignored.");
+    await setWorkState(made.id, "READY_TO_RETEST", dev.id, "Fixed the predicate.");
+    // Retested green, which ends the hand-off and puts it on the Finished tab.
+    await updateTestResultAndNotes(made.id, { testResult: "PASSED" }, user.id);
+    return made;
+  });
+
   const run =
     (await prisma.testRun.findUnique({
       where: { projectId_name: { projectId: project.id, name: E2E_HANDOFF_RUN } },
     })) ?? (await createRun(project.id, { name: E2E_HANDOFF_RUN }, user.id));
   // Adds only what is missing; a case already in the round is left alone.
-  await addCasesToRun(run.id, [toHandOver.id, handedOver.id, overdue.id], user.id);
+  /* A second Module in the round, named the way the real ones are.
+   *
+   * The round's own line names every Module it reaches, so a round drawing on
+   * one short English name produces a header nothing can go wrong in — and
+   * the thing that went wrong was a long one pushing the page's buttons off
+   * their row. A fixture that cannot reproduce it cannot guard it. */
+  const wideCase = await fixtureCase(E2E_WIDE_CASE, async () => {
+    const wideModule = await prisma.module.upsert({
+      where: { projectId_name: { projectId: project.id, name: E2E_WIDE_MODULE } },
+      update: { deletedAt: null },
+      create: { projectId: project.id, name: E2E_WIDE_MODULE, sequence: 99 },
+    });
+    const requirement = await createRequirement(
+      project.id,
+      {
+        name: "REQ-CLASSIFICATION-001 ผู้ใช้สามารถเปิดหน้า ค้นหา และเลือก Classification ที่ต้องการได้",
+        moduleId: wideModule.id,
+        priority: "MEDIUM",
+      },
+      user.id,
+    );
+    const scenario = await createScenario(
+      project.id,
+      {
+        name: "การเปิดหน้าและค้นหา Classification",
+        requirementId: requirement.id,
+        expectedResult: "หน้าเปิดได้และค้นหาได้",
+        priority: "MEDIUM",
+      },
+      user.id,
+    );
+    const group = await createTestGroup(scenario.id, { name: "Navigation" }, user.id);
+    return createTestCase(
+      group.id,
+      {
+        name: E2E_WIDE_CASE,
+        expectedResult: "เปิดหน้าได้",
+        priority: "HIGH",
+        steps: [{ step: "กดเมนู", expectedResult: "หน้าเปิด" }],
+      },
+      user.id,
+    );
+  });
+
+  await addCasesToRun(
+    run.id,
+    [toHandOver.id, handedOver.id, overdue.id, wideCase.id],
+    user.id,
+  );
 
   /* A round answered several times over, so the history strip has something
    * to fold away. Written as rows rather than driven through

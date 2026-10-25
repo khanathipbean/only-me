@@ -7,9 +7,11 @@ import { createTestCase, updateTestResultAndNotes } from "@/lib/test-cases";
 import { addCasesToRun, createRun, setRunCaseResult } from "@/lib/test-runs";
 import { addWorkingDays } from "@/lib/deadlines";
 import {
+  countWorkByAssignee,
   WorkValidationError,
   assignCase,
   assignCases,
+  listFinishedWork,
   listMyWork,
   listWorkHistory,
   notifyOverdueWork,
@@ -466,6 +468,181 @@ describe("moving a repair along", () => {
     await expect(setWorkState(testCase.id, "IN_PROGRESS", dev.id)).rejects.toThrow(
       WorkValidationError,
     );
+  });
+});
+
+describe("the hand-offs that are over", () => {
+  beforeEach(() => {
+    mockAuth.mockReset();
+  });
+
+  /** Hands the case over and ends the loop with `result`. */
+  async function roundTrip(
+    testCaseId: string,
+    devId: string,
+    ownerId: string,
+    result: "PASSED" | "BLOCKED" | "SKIPPED",
+  ) {
+    await assignCase(testCaseId, devId, ownerId);
+    await setWorkState(testCaseId, "READY_TO_RETEST", devId);
+    await updateTestResultAndNotes(testCaseId, { testResult: result }, ownerId);
+  }
+
+  it("lists a hand-off once it has ended", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items).toHaveLength(1);
+    expect(finished.items[0].testCase.id).toBe(testCase.id);
+    expect(finished.items[0].assignee?.id).toBe(dev.id);
+    expect(finished.items[0].closedBy).toBe("PASSED");
+  });
+
+  it("lists the ones a pass did not end", async () => {
+    /* The loop ends on blocked and skipped too. Showing only passes would
+       take those out of this list while they are already out of the open
+       one — the hole this page exists to close, moved down a floor. */
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "BLOCKED");
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items).toHaveLength(1);
+    expect(finished.items[0].closedBy).toBe("BLOCKED");
+  });
+
+  it("keeps saying what ended it after the case breaks again", async () => {
+    /* The row is about a moment, and the moment does not change. Read off
+       the case's own column instead and this row would start claiming the
+       hand-off ended in a failure it has nothing to do with. */
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+
+    await updateTestResultAndNotes(testCase.id, { testResult: "FAILED" }, owner.id);
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items[0].closedBy).toBe("PASSED");
+  });
+
+  it("does not list a repair that came back instead of ending", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id);
+    await updateTestResultAndNotes(testCase.id, { testResult: "FAILED" }, owner.id);
+
+    // Retested and still broken: the repair did not finish, it carried on.
+    expect((await listFinishedWork(project.id, dev.id, "me", {})).items).toHaveLength(0);
+    expect(await listMyWork(project.id, dev.id)).toHaveLength(1);
+  });
+
+  it("shows a case handed out twice once, at its latest ending", async () => {
+    /* The tab answers "have I worked on this before", not "what did the
+       state do". Three hand-offs on one case is still one case anybody is
+       looking for. */
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "BLOCKED");
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items).toHaveLength(1);
+    expect(finished.total).toBe(1);
+    // The newest ending, not the first.
+    expect(finished.items[0].closedBy).toBe("PASSED");
+  });
+
+  it("pages over cases rather than over events", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+
+    /* Counting the events would say three and hand back a page with one row
+       on it, which is the shape of "page 2 of 1" bugs. */
+    const finished = await listFinishedWork(project.id, dev.id, "me", { pageSize: 10 });
+    expect(finished.total).toBe(1);
+    expect(finished.totalPages).toBe(1);
+  });
+
+  it("reads 'handed out by me' from who handed it over, not who retested it", async () => {
+    /* The actor on a closing event is the tester who recorded the result.
+       Asking for `actorId = me` would turn this list into "retested by me",
+       which is a different question with the same shape. */
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+
+    // The owner handed it over and also recorded the result.
+    expect(
+      (await listFinishedWork(project.id, owner.id, "handed-out", {})).items,
+    ).toHaveLength(1);
+    // The Dev never handed anything to anybody.
+    expect(
+      (await listFinishedWork(project.id, dev.id, "handed-out", {})).items,
+    ).toHaveLength(0);
+  });
+
+  it("does not call taking a case back a finished repair", async () => {
+    /* Both write an event with no next state. One is "a tester answered and
+       the loop closed", the other is "never mind, give it here" — and the
+       tab listed the second as finished work with a dash where the person
+       should be. */
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await assignCase(testCase.id, null, owner.id);
+
+    expect((await listFinishedWork(project.id, dev.id, "me", {})).items).toHaveLength(0);
+    expect((await listFinishedWork(project.id, owner.id, "handed-out", {})).items).toHaveLength(
+      0,
+    );
+  });
+
+  it("narrows to one person when asked, and counts the rest for the strip", async () => {
+    /* The strip said two people had work and the page offered no way to look
+       at either on their own. */
+    const { owner, dev, project, testCase } = await seed();
+    const other = await createUser(uniqueEmail("work-dev4"));
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: other.id, role: "DEV" },
+    });
+    const second = await prisma.testCase.create({
+      data: {
+        testGroupId: (
+          await prisma.testCase.findUniqueOrThrow({
+            where: { id: testCase.id },
+            select: { testGroupId: true },
+          })
+        ).testGroupId,
+        name: uniqueName("Second"),
+        expectedResult: "ok",
+        priority: "MEDIUM",
+        createdById: owner.id,
+      },
+    });
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+    await roundTrip(second.id, other.id, owner.id, "PASSED");
+
+    const everyone = await listFinishedWork(project.id, owner.id, "handed-out", {});
+    expect(everyone.items).toHaveLength(2);
+
+    const justOne = await listFinishedWork(project.id, owner.id, "handed-out", {}, dev.id);
+    expect(justOne.items).toHaveLength(1);
+    expect(justOne.items[0].assignee?.id).toBe(dev.id);
+
+    /* The strip keeps both, so the way back to the other person is still on
+       screen once one of them is chosen. And on this tab it counts finished
+       cases, not open ones — it used to say "6 in hand" over a table of
+       three finished rows. */
+    const strip = await countWorkByAssignee(project.id, owner.id, "handed-out", true);
+    expect(strip.map((row) => row.count).sort()).toEqual([1, 1]);
+  });
+
+  it("stops at the project it was asked about", async () => {
+    const { owner, dev, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+    const elsewhere = await seed();
+
+    expect(
+      (await listFinishedWork(elsewhere.project.id, dev.id, "me", {})).items,
+    ).toHaveLength(0);
   });
 });
 
