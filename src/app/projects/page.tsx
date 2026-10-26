@@ -204,6 +204,13 @@ export default async function ProjectsPage({
       <Breadcrumb segments={[{ label: "Projects", href: "/projects" }]} />
       <PageHeader
         title="Projects"
+        /* The trail above says "Projects" and so does the title, which on a
+           page that is the top of its own trail reads as the same word
+           twice. The line that stops it being a repetition is the one worth
+           saying anyway: this list is scoped to the reader — see
+           `projectListWhere` — and somebody who cannot find a Project they
+           know exists is owed that sentence rather than left to guess. */
+        subtitle="The Projects you are a member of. Everything else in the app lives inside one of them."
         actions={
           canCreateProject && (
             <Modal
