@@ -57,6 +57,11 @@ export function settingsBreadcrumb(): BreadcrumbSegment[] {
   return [PROJECTS_ROOT, { label: "Settings", href: "/settings" }];
 }
 
+/** Roles & Permissions lives under Settings too. */
+export function rolesBreadcrumb(): BreadcrumbSegment[] {
+  return [...settingsBreadcrumb(), { label: "Roles & Permissions", href: "/settings/roles" }];
+}
+
 /** Users lives under Settings, so the trail says so: going up from it
  * lands on the other things set for the whole install, not back at the
  * Projects list two floors down.

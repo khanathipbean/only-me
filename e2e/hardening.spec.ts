@@ -108,7 +108,7 @@ test("the session cookie cannot be read by script and does not travel cross-site
  * This asks the rendered page instead, which is also how the unnamed
  * `<dialog>` turned up.
  */
-for (const path of ["/projects", "/settings", "/settings/members"]) {
+for (const path of ["/projects", "/settings", "/settings/members", "/settings/roles"]) {
   test(`every control on ${path} has an accessible name`, async ({ page }) => {
     await page.goto(path);
 
@@ -240,4 +240,40 @@ test("deleting a user is offered in the row, and asks first", async ({ page }) =
 
   await confirm.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("cell", { name: E2E_VIEWER_EMAIL, exact: true })).toBeVisible();
+});
+
+/**
+ * What each role can reach, read off the rules rather than retyped.
+ *
+ * The page is a claim about the app's own behaviour, so what is worth
+ * checking in a browser is that it is drawn from the catalogue and changes
+ * when the role does — a page showing the same boxes for every role would
+ * look right in a screenshot and be useless.
+ */
+test("the roles page shows a different set for a different role", async ({ page }) => {
+  await page.goto("/settings");
+  await page.getByRole("link", { name: "Roles & Permissions" }).click();
+  await page.waitForURL(/\/settings\/roles$/);
+
+  const held = () => page.locator("input[type=checkbox]:checked");
+  const boxes = await page.locator("input[type=checkbox]").count();
+  const admin = await held().count();
+  // Admin holds everything, which is the one role that is true of.
+  expect(admin).toBe(boxes);
+
+  /* Every box is read-only until the rules move into the database — a
+     control that looks editable and silently does nothing is worse than one
+     that says it cannot be changed. */
+  expect(await page.locator("input[type=checkbox]:not([disabled])").count()).toBe(0);
+
+  await page
+    .getByRole("navigation", { name: "Roles" })
+    .getByRole("link", { name: /^Dev/ })
+    .click();
+  await page.waitForURL(/role=DEV/);
+  const dev = await held().count();
+  expect(dev).toBeGreaterThan(0);
+  expect(dev).toBeLessThan(admin);
+  // The one write a DEV has, and the page says so.
+  await expect(page.getByText("Move a repair along")).toBeVisible();
 });

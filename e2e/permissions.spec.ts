@@ -69,4 +69,8 @@ test("a viewer gets no Settings tab and no Settings page", async ({ page }) => {
   const response = await page.goto("/settings");
   expect(response?.status()).toBe(404);
   await expect(page.getByRole("link", { name: "Users" })).toHaveCount(0);
+
+  /* And every page under it, not only the one with the cards on. */
+  expect((await page.goto("/settings/roles"))?.status()).toBe(404);
+  await expect(page.getByRole("navigation", { name: "Roles" })).toHaveCount(0);
 });

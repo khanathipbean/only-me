@@ -6,7 +6,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { settingsBreadcrumb } from "@/lib/breadcrumb";
 import { pageClass } from "@/lib/ui";
-import { UsersIcon } from "@/components/icons";
+import { ShieldIcon, UsersIcon } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -24,6 +24,12 @@ const SECTIONS = [
     icon: UsersIcon,
     title: "Users",
     description: "Who can sign in, and which Projects each of them can reach.",
+  },
+  {
+    href: "/settings/roles",
+    icon: ShieldIcon,
+    title: "Roles & Permissions",
+    description: "What each role can reach, in every Project.",
   },
 ];
 
