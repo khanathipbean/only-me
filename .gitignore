@@ -15,7 +15,13 @@
 
 # next.js
 /.next/
-/.next-e2e/
+# Any other build directory too. `next.config.ts` reads NEXT_DIST_DIR, so a
+# build can be sent somewhere other than .next — the e2e suite uses
+# .next-e2e, and a build made while the server is running needs its own
+# directory because writing into the one being read crashes webpack. Named
+# one at a time, 488 files from a stray .next-build turned up in the commit
+# dialog looking like work nobody had committed.
+/.next-*/
 /out/
 
 # production
