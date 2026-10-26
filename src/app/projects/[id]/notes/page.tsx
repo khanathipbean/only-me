@@ -97,7 +97,7 @@ export default async function NotesPage({
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = can(membership.role, "notes.write");
+  const canEdit = await can(membership.role, "notes.write");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || moduleId || feature || showArchived);

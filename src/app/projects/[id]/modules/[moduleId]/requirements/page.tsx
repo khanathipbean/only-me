@@ -101,7 +101,7 @@ export default async function RequirementsPage({
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = can(membership.role, "authoring.edit");
+  const canEdit = await can(membership.role, "authoring.edit");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || feature || status || priority || showArchived);

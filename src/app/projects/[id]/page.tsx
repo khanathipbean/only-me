@@ -58,7 +58,7 @@ export default async function ProjectOverviewPage({
   // Only fetched once there's something to summarize — an empty Project has
   // nothing for any of these queries to find.
   const summary = hasModules ? await getProjectOverviewSummary(id) : null;
-  const canEdit = !!membership && can(membership.role, "project.edit");
+  const canEdit = await can(membership?.role, "project.edit");
 
   async function archive() {
     "use server";

@@ -128,7 +128,7 @@ export default async function TestGroupsPage({
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = can(membership.role, "authoring.edit");
+  const canEdit = await can(membership.role, "authoring.edit");
 
   const result = await listTestGroupsForScenarioPage(scenarioId, {
     search,

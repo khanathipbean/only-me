@@ -25,9 +25,11 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  ownedProjects          Project[]         @relation("ProjectOwner")
-  updatedProjects        Project[]         @relation("ProjectUpdatedBy")
-  memberships            ProjectMember[]
+  ownedProjects   Project[]       @relation("ProjectOwner")
+  updatedProjects Project[]       @relation("ProjectUpdatedBy")
+  memberships     ProjectMember[]
+
+  rolePermissionsSet     RolePermission[]  @relation("RolePermissionUpdatedBy")
   auditLogs              AuditLog[]
   ownedScenarios         Scenario[]
   ownedTestGroups        TestGroup[]
@@ -90,6 +92,34 @@ model Project {
   testRuns      TestRun[]
   notifications Notification[]
   notes         Note[]
+}
+
+/// One capability turned on or off for one role, where somebody has decided
+/// it should differ from the rule in the code.
+///
+/// Absent means "use the code", which is the whole storage design: the
+/// catalogue in `src/lib/permissions.ts` stays the default and this table
+/// holds only what was changed. An empty table behaves exactly as the app
+/// did before it existed, and emptying it again is how any mistake here is
+/// undone.
+model RolePermission {
+  id          String      @id @default(cuid())
+  role        ProjectRole
+  /// The capability's key, e.g. "authoring.edit". A string rather than an
+  /// enum: the catalogue grows with the app, and a migration every time a
+  /// feature appears would be a tax with nothing bought — a key nothing
+  /// recognises is simply ignored on read.
+  capability  String
+  allowed     Boolean
+  /// Who last changed it. Null once that account is gone: what the rule is
+  /// outlives who set it, the same reasoning `AuditLog.actorId` carries.
+  updatedById String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  updatedBy User? @relation("RolePermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([role, capability])
 }
 
 model ProjectMember {
@@ -623,12 +653,12 @@ model LoginThrottle {
   /// Lower-cased, so changing the capitalisation does not buy a fresh count.
   email String @id
 
-  failures Int @default(0)
+  failures       Int       @default(0)
   /// Starts the window the failures are counted in; failures older than the
   /// window are forgotten rather than carried forward forever.
-  firstFailureAt DateTime @default(now())
+  firstFailureAt DateTime  @default(now())
   /// Set once the count is reached. Null means the address is not locked.
-  lockedUntil DateTime?
+  lockedUntil    DateTime?
 
   updatedAt DateTime @updatedAt
 }
@@ -642,7 +672,7 @@ model LoginThrottle {
 /// Two things were asked for separately — somewhere for a Dev to write back,
 /// and a record of the handing over — and they are the same row.
 model WorkEvent {
-  id         String  @id @default(cuid())
+  id         String     @id @default(cuid())
   testCaseId String
   /// Null once the account is gone. What happened outlives who did it, the
   /// same reasoning `AuditLog.actorId` carries.
@@ -656,7 +686,7 @@ model WorkEvent {
   /// "Fixed in abc123", or why it was handed over. Optional: a state change
   /// with nothing to add is still worth recording.
   note       String?
-  occurredAt DateTime @default(now())
+  occurredAt DateTime   @default(now())
 
   testCase TestCase @relation(fields: [testCaseId], references: [id])
   actor    User?    @relation("WorkEventActor", fields: [actorId], references: [id], onDelete: SetNull)

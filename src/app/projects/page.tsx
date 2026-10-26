@@ -13,7 +13,7 @@ import {
 } from "@/lib/projects";
 import { withToast } from "@/lib/toast";
 import { isAdminAnywhere } from "@/lib/rbac";
-import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
+import { rolesFor, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { ResultCount } from "@/components/ui/ResultCount";
@@ -200,6 +200,10 @@ export default async function ProjectsPage({
     };
   }
 
+  /* Asked once for the page rather than once per row: the answer turns
+     only on the role, and the rows are a render, not a place to await. */
+  const editorRoles = await rolesFor("project.edit");
+
   return (
     <main className={pageClass}>
       <Breadcrumb segments={[{ label: "Projects", href: "/projects" }]} />
@@ -312,7 +316,7 @@ export default async function ProjectsPage({
               {projects.map((project) => {
                 const actions = rowActions(project.id);
                 const role = project.members[0]?.role;
-                const canEdit = !!role && can(role, "project.edit");
+                const canEdit = role !== undefined && editorRoles.includes(role);
                 return (
                   <ExpandableRow
                     key={project.id}

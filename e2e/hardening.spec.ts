@@ -261,10 +261,12 @@ test("the roles page shows a different set for a different role", async ({ page 
   // Admin holds everything, which is the one role that is true of.
   expect(admin).toBe(boxes);
 
-  /* Every box is read-only until the rules move into the database — a
-     control that looks editable and silently does nothing is worse than one
-     that says it cannot be changed. */
-  expect(await page.locator("input[type=checkbox]:not([disabled])").count()).toBe(0);
+  /* Two boxes are fixed and the rest are not: Settings and the Users page
+     inside it are the way back in, and nothing here may take them away. */
+  expect(await page.locator("input[type=checkbox][disabled]").count()).toBe(2);
+  expect(
+    await page.locator("input[type=checkbox]:not([disabled])").count(),
+  ).toBeGreaterThan(0);
 
   await page
     .getByRole("navigation", { name: "Roles" })
@@ -276,4 +278,57 @@ test("the roles page shows a different set for a different role", async ({ page 
   expect(dev).toBeLessThan(admin);
   // The one write a DEV has, and the page says so.
   await expect(page.getByText("Move a repair along")).toBeVisible();
+});
+
+/**
+ * Changing what a role may do, from the page.
+ *
+ * The unit tests prove the stored rule wins over the code; what only a
+ * browser can say is that the form carries the whole set — a checkbox sends
+ * nothing when it is off, so "untick" and "never existed" look identical on
+ * the wire, and the page has to send enough for the server to tell them
+ * apart.
+ *
+ * Puts the tick back at the end. A test that leaves a permission changed
+ * changes the suite that runs after it.
+ */
+test("a permission can be given and taken back", async ({ page }) => {
+  await page.goto("/settings/roles?role=DEV");
+  const notes = page.getByRole("checkbox", { name: /Write and archive Notes/ });
+  const authoring = page.getByRole("checkbox", { name: /View Modules, Requirements/ });
+
+  await expect(notes).not.toBeChecked();
+  // A DEV holds this one, and it must survive a save that is about another.
+  await expect(authoring).toBeChecked();
+
+  await notes.check();
+  await page.getByRole("button", { name: /Save Changes/ }).click();
+  await page.waitForURL(/toast=/);
+
+  await page.goto("/settings/roles?role=DEV");
+  await expect(notes).toBeChecked();
+  await expect(authoring).toBeChecked();
+
+  await notes.uncheck();
+  await page.getByRole("button", { name: /Save Changes/ }).click();
+  await page.waitForURL(/toast=/);
+  await page.goto("/settings/roles?role=DEV");
+  await expect(notes).not.toBeChecked();
+});
+
+/**
+ * The two that are the way back in cannot be touched from here.
+ *
+ * A screen that can take away its own way back is a screen that locks the
+ * install. The server refuses them as well — this only checks the page is
+ * not offering what the server will refuse.
+ */
+test("the way back into Settings is not on offer", async ({ page }) => {
+  await page.goto("/settings/roles?role=ADMIN");
+  for (const name of [/Open Settings/, /Add users and set what they can reach/]) {
+    await expect(page.getByRole("checkbox", { name })).toBeDisabled();
+    await expect(page.getByRole("checkbox", { name })).toBeChecked();
+  }
+  // And they say why, rather than looking broken.
+  await expect(page.getByText(/the way back into Settings/).first()).toBeVisible();
 });

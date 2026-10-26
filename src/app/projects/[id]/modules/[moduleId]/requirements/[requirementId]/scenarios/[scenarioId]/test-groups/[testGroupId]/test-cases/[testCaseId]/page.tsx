@@ -98,7 +98,7 @@ export default async function TestCaseDetailPage({
 
   await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.view");
   const membership = await getProjectMembership(session!.user.id, projectId);
-  const canEditFully = !!membership && can(membership.role, "authoring.edit");
+  const canEditFully = await can(membership?.role, "authoring.edit");
   const [project, scenario, requirement, allTestGroups, historyByCase, members] =
     await Promise.all([
       getProjectById(projectId),

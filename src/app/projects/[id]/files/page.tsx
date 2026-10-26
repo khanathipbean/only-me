@@ -66,7 +66,7 @@ export default async function ProjectFilesPage({
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = can(membership.role, "files.manage");
+  const canEdit = await can(membership.role, "files.manage");
   const [project, groups, modules] = await Promise.all([
     getProjectById(projectId),
     listProjectFilesByModule(projectId, { search, moduleId }),

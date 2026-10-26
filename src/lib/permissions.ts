@@ -1,4 +1,6 @@
+import { cache } from "react";
 import type { ProjectRole } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
 import {
   ADMIN_ROLES,
   ALL_MEMBER_ROLES,
@@ -31,6 +33,16 @@ export type Capability = {
   detail: string;
   /** The array the code checks. Identity matters — see the note above. */
   roles: ProjectRole[];
+  /**
+   * Not editable, and refused by the server if somebody asks anyway.
+   *
+   * Only the two that are the way back in: Settings, and the Users page
+   * inside it. Everything else can be switched off and switched on again
+   * from there, so these two being fixed is what makes every other
+   * mistake recoverable — and keeps this page from being the thing that
+   * locks the install.
+   */
+  fixed?: boolean;
 };
 
 export type CapabilityGroup = {
@@ -241,12 +253,14 @@ export const CAPABILITY_GROUPS = [
     capabilities: [
       {
         key: "install.settings",
+        fixed: true,
         label: "Open Settings",
         detail: "ADMIN on any Project, not this one",
         roles: ADMIN_ROLES,
       },
       {
         key: "install.users",
+        fixed: true,
         label: "Add users and set what they can reach",
         detail: "ADMIN on any Project, not this one",
         roles: ADMIN_ROLES,
@@ -285,26 +299,92 @@ const BY_KEY = new Map<string, Capability>(
   CAPABILITIES.map((capability) => [capability.key, capability]),
 );
 
-/**
- * Who may do this, as the array the code has always checked.
- *
- * The one place a capability turns back into roles. When the rules move into
- * the database this is where they will be read from, and every guard in the
- * app already goes through it.
- */
-export function rolesFor(key: CapabilityKey): ProjectRole[] {
+/** The rule as the code ships it, before anybody has changed anything. */
+export function defaultRolesFor(key: CapabilityKey): ProjectRole[] {
   /* Non-null because `CapabilityKey` is the catalogue's own keys — an
    * unknown one cannot be written, so this cannot be missing. */
   return BY_KEY.get(key)!.roles;
 }
 
+/**
+ * Every change anybody has made to the defaults, read once per request.
+ *
+ * `cache` is React's per-request memo, so a page asking five guards in a row
+ * reads the table once. The table is tiny — a row only where something
+ * differs from the code — and reading all of it is cheaper than asking it
+ * five separate questions.
+ *
+ * A read that fails hands back no overrides rather than throwing, which
+ * leaves every guard on the rule in the code. The alternative is a database
+ * hiccup locking everybody out of an app they have every right to use.
+ */
+const readOverrides = cache(async (): Promise<Map<string, boolean>> => {
+  try {
+    const rows = await prisma.rolePermission.findMany({
+      select: { role: true, capability: true, allowed: true },
+    });
+    return new Map(
+      rows.map((row) => [`${row.role}:${row.capability}`, row.allowed]),
+    );
+  } catch {
+    return new Map();
+  }
+});
+
+/**
+ * Who may do this, now.
+ *
+ * The one place a capability turns back into roles, and the only place the
+ * stored rules are read. Every guard, every hidden button and every tab goes
+ * through it.
+ *
+ * A fixed capability ignores the table outright. Refusing to store one is
+ * the first guard and this is the second: a row written before it was fixed,
+ * or by anything that bypassed the server action, still cannot take away the
+ * way back in.
+ */
+export async function rolesFor(key: CapabilityKey): Promise<ProjectRole[]> {
+  const fallback = defaultRolesFor(key);
+  if (BY_KEY.get(key)!.fixed === true) {
+    return fallback;
+  }
+  const overrides = await readOverrides();
+  if (overrides.size === 0) {
+    return fallback;
+  }
+  return ALL_MEMBER_ROLES.filter(
+    (role) => overrides.get(`${role}:${key}`) ?? fallback.includes(role),
+  );
+}
+
 /** Whether a role holds a capability. For drawing a menu, never for a
  *  guard — see the note on `NON_DEV_ROLES`: hiding is not protecting. */
-export function can(
+export async function can(
   role: ProjectRole | null | undefined,
   key: CapabilityKey,
-): boolean {
-  return role !== null && role !== undefined && rolesFor(key).includes(role);
+): Promise<boolean> {
+  if (role === null || role === undefined) {
+    return false;
+  }
+  return (await rolesFor(key)).includes(role);
+}
+
+/** The same question for the whole catalogue, so a page drawing a menu asks
+ *  once rather than once per tab. */
+export async function heldBy(
+  role: ProjectRole | null | undefined,
+): Promise<CapabilityKey[]> {
+  if (role === null || role === undefined) {
+    return [];
+  }
+  const held: CapabilityKey[] = [];
+  for (const capability of CAPABILITIES) {
+    const key = capability.key as CapabilityKey;
+    if ((await rolesFor(key)).includes(role)) {
+      held.push(key);
+    }
+  }
+  return held;
 }
 
 /** The roles the page lists, in the order it lists them: most access first,
@@ -340,5 +420,5 @@ export async function requireCapabilityOrNotFound(
   projectId: string,
   capability: CapabilityKey,
 ) {
-  return requireProjectRoleOrNotFound(userId, projectId, rolesFor(capability));
+  return requireProjectRoleOrNotFound(userId, projectId, await rolesFor(capability));
 }

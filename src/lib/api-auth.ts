@@ -109,12 +109,17 @@ export async function checkCapability(
   projectId: string,
   capability: CapabilityKey,
 ) {
-  return checkProjectRole(userId, projectId, rolesFor(capability));
+  return checkProjectRole(userId, projectId, await rolesFor(capability));
 }
 
 /** `withProjectRole` asked by capability. */
 export function withCapability(capability: CapabilityKey, handler: ProjectRouteHandler) {
-  return withProjectRole(rolesFor(capability), handler);
+  return async (request: NextRequest, context: ProjectRouteContext) => {
+    /* Resolved per request, not when the module loads: the rules can be
+       changed while the app is running, and a handler built once would
+       keep answering with whatever they were at boot. */
+    return withProjectRole(await rolesFor(capability), handler)(request, context);
+  };
 }
 
 /** `withEntityProjectRole` asked by capability. */
@@ -123,5 +128,11 @@ export function withEntityCapability<T extends { projectId: string }>(
   resolveEntity: (id: string) => Promise<T | null>,
   handler: EntityRouteHandler<T>,
 ) {
-  return withEntityProjectRole(rolesFor(capability), resolveEntity, handler);
+  return async (request: NextRequest, context: EntityRouteContext) => {
+    return withEntityProjectRole(
+      await rolesFor(capability),
+      resolveEntity,
+      handler,
+    )(request, context);
+  };
 }

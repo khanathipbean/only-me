@@ -125,7 +125,7 @@ export default async function ScenariosPage({
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = can(membership.role, "authoring.edit");
+  const canEdit = await can(membership.role, "authoring.edit");
 
   const [project, requirement] = await Promise.all([
     getProjectById(projectId),
@@ -163,7 +163,7 @@ export default async function ScenariosPage({
   // trips to a remote database.
   const [descendantCounts, editableProjects, requirements] = await Promise.all([
     getScenarioDescendantCountsForMany(scenarios.map((scenario) => scenario.id)),
-    listProjectsForUserWithRole(session!.user.id, rolesFor("authoring.edit")),
+    listProjectsForUserWithRole(session!.user.id, await rolesFor("authoring.edit")),
     listRequirementsForProject(projectId),
   ]);
   const requirementOptions = requirements.map((requirement) => ({

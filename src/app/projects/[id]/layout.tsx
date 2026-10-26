@@ -1,7 +1,7 @@
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { auth } from "@/auth";
 import { getProjectMembership } from "@/lib/rbac";
-import { CAPABILITIES, can, type CapabilityKey } from "@/lib/permissions";
+import { heldBy } from "@/lib/permissions";
 
 export default async function ProjectLayout({ children, params }: LayoutProps<"/projects/[id]">) {
   const { id } = await params;
@@ -14,9 +14,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
    * client component and the rules sit beside a database connection. Every
    * capability rather than the ten the menu uses: the list is short, and a
    * subset here would be a second place to keep in step. */
-  const allowed = CAPABILITIES.filter((capability) =>
-    can(membership?.role, capability.key as CapabilityKey),
-  ).map((capability) => capability.key as CapabilityKey);
+  const allowed = await heldBy(membership?.role);
 
   return (
     <div className="flex flex-col">
