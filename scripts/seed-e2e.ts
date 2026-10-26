@@ -243,7 +243,7 @@ export async function seedBaseline() {
   /* One that went round the loop and came back green. Without it the
    * Finished tab has nothing in it, and a test that only ever sees the empty
    * state is a test of the empty state. */
-  await fixtureCase(E2E_FINISHED_CASE, async () => {
+  const fixed = await fixtureCase(E2E_FINISHED_CASE, async () => {
     /* Under a chain of its own, named the way the real ones are.
      *
      * The table that lists this row prints requirement, scenario and group
@@ -294,6 +294,37 @@ export async function seedBaseline() {
       where: { projectId_name: { projectId: project.id, name: E2E_HANDOFF_RUN } },
     })) ?? (await createRun(project.id, { name: E2E_HANDOFF_RUN }, user.id));
   // Adds only what is missing; a case already in the round is left alone.
+  /* And sent round until it has been handed over three times, each with a
+   * different claim that it was fixed.
+   *
+   * A case that goes round once proves the tab draws a row; a case that goes
+   * round three times is what the panel under the row is for — three claims
+   * that it was fixed, two of which did not hold. Topped up rather than
+   * created in one go, so a database the suite has already run against ends
+   * in the same place as a fresh one. */
+  const attempts = await prisma.workEvent.findMany({
+    where: { testCaseId: fixed.id, toState: "ASSIGNED" },
+    select: { actorId: true, assigneeId: true },
+  });
+  let rounds = attempts.filter((move) => move.actorId !== move.assigneeId).length;
+  /* Each round starts with its own failure, because the panel names the
+   * failure that sent each hand-off out and a fixture whose rounds are
+   * identical cannot tell one that names the right one from one that names
+   * the newest. Recorded on the case rather than in the round, which is what
+   * keeps this row's answer "outside a round" — the reading the Finished
+   * tab's own test is written against. */
+  while (rounds < 3) {
+    rounds += 1;
+    await updateTestResultAndNotes(
+      fixed.id,
+      { testResult: "FAILED", notes: `Round ${rounds}: the filter still ignores the Domain.` },
+      user.id,
+    );
+    await assignCase(fixed.id, dev.id, user.id, `Round ${rounds}: over to you.`);
+    await setWorkState(fixed.id, "READY_TO_RETEST", dev.id, `Round ${rounds}: fixed the filter.`);
+    await updateTestResultAndNotes(fixed.id, { testResult: "PASSED" }, user.id);
+  }
+
   /* A second Module in the round, named the way the real ones are.
    *
    * The round's own line names every Module it reaches, so a round drawing on

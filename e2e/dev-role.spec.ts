@@ -239,6 +239,31 @@ test("keeps what it finished, instead of losing it when the tester passes it", a
   await expect(row).toBeVisible();
   // What ended it, as it stood that day.
   await expect(row.getByText("PASSED")).toBeVisible();
+  /* And where it was answered. "It passed in Sprint 3" and "somebody marked
+     it passed on Tuesday" are different claims, and the app draws that line
+     on its other pages too. Either wording will do here — what must not
+     happen is the line going missing. */
+  /* Scoped to the Closed by cell. A loose match across the row started
+     catching the Dev's own note once that said "Round 3: …", which is the
+     kind of collision a regex over a whole row invites. The seeded case is
+     answered on its own page, so it reads "outside a round". */
+  await expect(row.locator("td").nth(3)).toContainText("outside a round");
+
+  /* What the Dev wrote when they said it was fixed, on the row itself — the
+     half of the answer that went with the card when the loop closed. */
+  await expect(row.getByText(/Round 3: fixed the filter/)).toBeVisible();
+  // And how many times it has been round, beside who had it.
+  await expect(row.getByText("3 hand-offs")).toBeVisible();
+
+  /* And every move behind the row's own toggle, the way the round's table
+     opens a case. A case that went round three times has three claims that
+     it was fixed, and reading them together is how anybody sees that the
+     first two did not hold. */
+  await row.getByRole("button", { name: `Show details for ${E2E_FINISHED_CASE}` }).click();
+  /* Three claims that it was fixed, two of which did not hold — which is
+     the thing a single row cannot say. */
+  await expect(page.getByText(/Fixed the predicate/)).toBeVisible();
+  await expect(page.getByText(/Round 2: fixed the filter/)).toBeVisible();
 
   // And back, without the filter being lost on the way.
   await page.getByRole("link", { name: "Open", exact: true }).click();

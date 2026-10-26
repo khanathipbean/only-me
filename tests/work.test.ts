@@ -580,6 +580,286 @@ describe("the hand-offs that are over", () => {
     ).toHaveLength(0);
   });
 
+  it("says which round ended it, or that no round did", async () => {
+    /* "It passed in Sprint 3" and "somebody marked it passed on Tuesday" are
+       different claims, and the app already draws that line on the Test Case
+       page and in Problem Cases. Here it is the evidence that closed
+       somebody's work. */
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+
+    // Recorded straight on the case, which is what `roundTrip` does.
+    const loose = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(loose.items[0].closedIn).toBeNull();
+
+    // And again, this time answered inside a round.
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id);
+    const run = await createRun(project.id, { name: "Sprint 9" }, owner.id);
+    await addCasesToRun(run.id, [testCase.id], owner.id);
+    await setRunCaseResult(run.id, testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const inRound = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(inRound.items[0].closedIn).toBe("Sprint 9");
+  });
+
+  it("counts how many times a case has been round", async () => {
+    /* One row per case is right for "have I worked on this", and it hides
+       the thing worth knowing about a case that keeps coming back. */
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+    await roundTrip(testCase.id, dev.id, owner.id, "BLOCKED");
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items).toHaveLength(1);
+    expect(finished.items[0].handOffs).toBe(3);
+  });
+
+  it("does not count a Dev moving their own card as a hand-off", async () => {
+    /* "To fix" writes an event reading ASSIGNED with the Dev at both ends.
+       Counting those made the number whatever the week's clicking added up
+       to — one fixture row reached 116. */
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "IN_PROGRESS", dev.id);
+    await setWorkState(testCase.id, "ASSIGNED", dev.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id);
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items[0].handOffs).toBe(1);
+  });
+
+  it("counts the hand-off that is still open too", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await roundTrip(testCase.id, dev.id, owner.id, "PASSED");
+    // Handed straight back out: three endings would be a lie, three
+    // hand-offs is not.
+    await assignCase(testCase.id, dev.id, owner.id);
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items[0].handOffs).toBe(2);
+  });
+
+  it("keeps a case that was only just handed out on one tab", async () => {
+    /* The question asked in plain words: a failed case is handed to a Dev —
+       it shows up as open. Hand it to the same Dev again. Does it now show
+       on both? */
+    const { owner, dev, project, testCase } = await seed();
+    await updateTestResultAndNotes(testCase.id, { testResult: "FAILED" }, owner.id);
+
+    await assignCase(testCase.id, dev.id, owner.id);
+    expect(await listMyWork(project.id, dev.id)).toHaveLength(1);
+    expect((await listFinishedWork(project.id, dev.id, "me", {})).items).toHaveLength(0);
+
+    await assignCase(testCase.id, dev.id, owner.id);
+    expect(await listMyWork(project.id, dev.id)).toHaveLength(1);
+    // Nothing has ended, so nothing is finished.
+    expect((await listFinishedWork(project.id, dev.id, "me", {})).items).toHaveLength(0);
+  });
+
+  it("does not count saving the same person twice as two hand-offs", async () => {
+    /* A control that saves on every change makes this one press, and nothing
+       about the case moved. */
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id);
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items[0].handOffs).toBe(1);
+  });
+
+  it("keeps what the Dev wrote when they said it was fixed", async () => {
+    /* The result says a hand-off ended; this says what was done to end it.
+       It lived on the open card and went with the card when the loop closed,
+       which is the same hole one floor down. */
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "fixed in abc123");
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items[0].fixedNote).toBe("fixed in abc123");
+    /* And the moves worth reading, for the panel under the row: the ending,
+       the claim, and the hand-off that started the round — that last one
+       even though nobody wrote a word on it, because it is what the count
+       beside the row counts. */
+    expect(finished.items[0].history.map((move) => move.toState)).toEqual([
+      null,
+      "READY_TO_RETEST",
+      "ASSIGNED",
+    ]);
+  });
+
+  it("leaves out the moves nobody wrote anything on", async () => {
+    /* A repair that goes round a few times leaves a dozen events, most of
+       them a step with nothing attached — and several of those are the Dev
+       pressing a button on their own card. Drawing them all buried the
+       claims that the thing was fixed. */
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id, "over to you");
+    await setWorkState(testCase.id, "IN_PROGRESS", dev.id);
+    await setWorkState(testCase.id, "ASSIGNED", dev.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "fixed it");
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    const shown = finished.items[0].history;
+
+    /* The hand-over, the claim and the ending. The two bare presses in
+       between are gone. */
+    expect(shown.map((move) => move.toState)).toEqual([
+      null,
+      "READY_TO_RETEST",
+      "ASSIGNED",
+    ]);
+    expect(shown.map((move) => move.note)).toEqual([null, "fixed it", "over to you"]);
+  });
+
+  it("shows the hand-offs the count counts, so the two can be checked against each other", async () => {
+    /* The hand-offs were hidden when nobody wrote anything on them, so "3
+       hand-offs" sat above a panel showing one, and there was no way to check
+       the number against the account below it. */
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "first");
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "second");
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const [row] = (await listFinishedWork(project.id, dev.id, "me", {})).items;
+    expect(row.handOffs).toBe(2);
+    expect(row.history.filter((move) => move.startsRound)).toHaveLength(2);
+  });
+
+  it("does not start a round where nothing changed hands", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    // The Dev's own presses write events of the same shape.
+    await setWorkState(testCase.id, "IN_PROGRESS", dev.id, "looking");
+    await setWorkState(testCase.id, "ASSIGNED", dev.id, "back to it");
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "done");
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const [row] = (await listFinishedWork(project.id, dev.id, "me", {})).items;
+    expect(row.handOffs).toBe(1);
+    expect(row.history.filter((move) => move.startsRound)).toHaveLength(1);
+  });
+
+  it("names the failure that sent each hand-off out", async () => {
+    /* Three rounds leave three "To fix" rows that read identically, and the
+       only thing telling them apart — what the tester saw each time — was
+       recorded on the result and never carried to the move it explains. */
+    const { owner, dev, project, testCase } = await seed();
+    await updateTestResultAndNotes(
+      testCase.id,
+      { testResult: "FAILED", notes: "Filter is ignored" },
+      owner.id,
+    );
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "fixed the predicate");
+    await updateTestResultAndNotes(
+      testCase.id,
+      { testResult: "FAILED", notes: "Now it filters twice" },
+      owner.id,
+    );
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "deduped it");
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const [row] = (await listFinishedWork(project.id, dev.id, "me", {})).items;
+    /* Newest first, so the second failure is on the hand-off above the
+       first — the bounce the retest wrote. */
+    expect(
+      row.history.filter((move) => move.startsRound).map((move) => move.cause?.notes),
+    ).toEqual(["Now it filters twice", "Filter is ignored"]);
+  });
+
+  it("does not repeat one failure under a second hand-off", async () => {
+    /* Pressing the picker again without retesting in between is one failure,
+       not two. Repeating the line would say the case broke twice. */
+    const { owner, dev, project, testCase } = await seed();
+    const other = await createUser(uniqueEmail("work-dev5"));
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: other.id, role: "DEV" },
+    });
+    await updateTestResultAndNotes(
+      testCase.id,
+      { testResult: "FAILED", notes: "Filter is ignored" },
+      owner.id,
+    );
+    await assignCase(testCase.id, dev.id, owner.id);
+    await assignCase(testCase.id, other.id, owner.id);
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const [row] = (await listFinishedWork(project.id, other.id, "me", {})).items;
+    const handOffs = row.history.filter((move) => move.startsRound);
+    expect(handOffs).toHaveLength(2);
+    /* The first one out carries it; the second has nothing new behind it. */
+    expect(handOffs.map((move) => move.cause?.notes ?? null)).toEqual([
+      null,
+      "Filter is ignored",
+    ]);
+  });
+
+  it("says nothing where the hand-off came before anybody recorded a failure", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await updateTestResultAndNotes(
+      testCase.id,
+      { testResult: "FAILED", notes: "seen afterwards" },
+      owner.id,
+    );
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const [row] = (await listFinishedWork(project.id, dev.id, "me", {})).items;
+    expect(row.history.filter((move) => move.startsRound)[0].cause).toBeNull();
+  });
+
+  it("carries the failure onto the open card's account as well", async () => {
+    /* One story about a hand-off, not two: the fold on the card and the
+       panel on the other tab are the same list by the same rules. */
+    const { owner, dev, project, testCase } = await seed();
+    await updateTestResultAndNotes(
+      testCase.id,
+      { testResult: "FAILED", notes: "Filter is ignored" },
+      owner.id,
+    );
+    await assignCase(testCase.id, dev.id, owner.id);
+
+    const [card] = await listMyWork(project.id, dev.id);
+    expect(card.workEvents.find((move) => move.startsRound)?.cause?.notes).toBe(
+      "Filter is ignored",
+    );
+  });
+
+  it("takes the claim from the round that ended, not a later one", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "first attempt");
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    // Round two, still open: its claim has not closed anything yet.
+    await assignCase(testCase.id, dev.id, owner.id);
+    await setWorkState(testCase.id, "READY_TO_RETEST", dev.id, "second attempt");
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items[0].fixedNote).toBe("first attempt");
+  });
+
+  it("says nothing when nobody ever claimed it was fixed", async () => {
+    const { owner, dev, project, testCase } = await seed();
+    await assignCase(testCase.id, dev.id, owner.id);
+    // A tester can record a pass without the case being handed back.
+    await updateTestResultAndNotes(testCase.id, { testResult: "PASSED" }, owner.id);
+
+    const finished = await listFinishedWork(project.id, dev.id, "me", {});
+    expect(finished.items[0].fixedNote).toBeNull();
+  });
+
   it("does not call taking a case back a finished repair", async () => {
     /* Both write an event with no next state. One is "a tester answered and
        the loop closed", the other is "never mind, give it here" — and the

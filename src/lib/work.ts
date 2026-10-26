@@ -88,6 +88,19 @@ export async function assignCase(
    * date, because there is no promise left to keep. */
   const changedHands = assigneeId !== before.assigneeId;
   const startsRepair = before.workState === null;
+
+  /* Saving the same name onto a repair that is already running is not a
+   * move. A control that writes on every change makes it one press, and
+   * recording it put an event in the history saying nothing happened, a line
+   * in the audit log to match, and — once the Finished tab started counting
+   * hand-offs — turned "handed over once" into "handed over twice".
+   *
+   * Early, before anything is written: the case already holds every value
+   * this call would set. */
+  if (!changedHands && !startsRepair) {
+    return prisma.testCase.findUniqueOrThrow({ where: { id: testCaseId } });
+  }
+
   const dueAt = assigneeId
     ? changedHands || startsRepair
       ? addWorkingDays(new Date(), WORK_DAYS_BY_PRIORITY[before.priority])
@@ -334,6 +347,112 @@ export async function notifyBounced(
   });
 }
 
+/**
+ * Somebody putting a case into another person's hands — the move that starts
+ * a round. A Dev pressing "To fix" on their own card writes an event of the
+ * same shape with themselves at both ends, and that is not a hand-off by any
+ * reading: nothing changed hands.
+ */
+function startsHandOff(move: { toState: WorkState | null; actorId: string | null; assigneeId: string | null }) {
+  return move.toState === "ASSIGNED" && move.actorId !== move.assigneeId;
+}
+
+/**
+ * The moves worth drawing in a history.
+ *
+ * Something somebody wrote, the end of a round, or the start of one. The rest
+ * is a step with nothing attached — and a repair that went round three times
+ * leaves a dozen of those, which buried the three claims that it was fixed.
+ *
+ * Hand-offs earn their place even with nothing written on them, because they
+ * are what the count beside the row counts: with them hidden, "3 hand-offs"
+ * sat above a panel showing one, and there was no way to check the number
+ * against the account below it.
+ */
+export function worthShowing(move: {
+  toState: WorkState | null;
+  note: string | null;
+  actorId: string | null;
+  assigneeId: string | null;
+}) {
+  return move.note !== null || move.toState === null || startsHandOff(move);
+}
+
+/**
+ * What the tester saw, for the hand-off it sent out.
+ *
+ * The actual result lives on the result event — the schema says so in as many
+ * words — and this carries it to the move it explains rather than copying it
+ * into the move, so a result corrected later corrects the history too.
+ */
+export type HandOffCause = {
+  /** The tester's words. Null is not worth drawing: there is nothing to say. */
+  notes: string | null;
+  /** The round it was seen in; null for a result recorded outside any. */
+  runId: string | null;
+  runName: string | null;
+};
+
+type FailureRecord = {
+  recordedAt: Date;
+  notes: string | null;
+  testRunCase: { testRun: { id: string; name: string } } | null;
+};
+
+/**
+ * Attaches to each hand-off the failure that sent it out.
+ *
+ * Oldest hand-off first, each taking the newest failure recorded at or before
+ * it that no earlier hand-off has taken. Two rules in one sentence, and both
+ * were asked for:
+ *
+ * - *Newest at or before* is what "the reason this went out" means, and it
+ *   survives the clocks being close together. A tester recording a result and
+ *   the bounce it triggers are written in one transaction microseconds apart,
+ *   so anything looser than "at or before" reaches past the failure it wants.
+ * - *Not taken already* is what keeps a re-assign quiet. Pressing the picker
+ *   twice without retesting in between is one failure, not two, and repeating
+ *   the same line under both rows would say the case broke twice.
+ *
+ * A hand-off with nothing left to take gets null — which is most of them on a
+ * case where somebody assigned first and recorded the failure afterwards, and
+ * drawing "no reason given" under every one of those is noise, not an answer.
+ */
+export function withCauses<
+  T extends {
+    toState: WorkState | null;
+    actorId: string | null;
+    assigneeId: string | null;
+    occurredAt: Date;
+  },
+>(moves: T[], failures: FailureRecord[]): (T & { cause: HandOffCause | null })[] {
+  const taken = new Set<FailureRecord>();
+  const causes = new Map<T, HandOffCause>();
+
+  /* The arguments arrive newest first, the order every list here reads in.
+   * This one walks the other way, because the earliest hand-off has the first
+   * claim on the failure behind it. */
+  for (const move of [...moves].reverse()) {
+    if (!startsHandOff(move)) {
+      continue;
+    }
+    const failure = failures.find(
+      (candidate) => !taken.has(candidate) && candidate.recordedAt <= move.occurredAt,
+    );
+    if (!failure) {
+      continue;
+    }
+    taken.add(failure);
+    causes.set(move, {
+      notes: failure.notes,
+      runId: failure.testRunCase?.testRun.id ?? null,
+      runName: failure.testRunCase?.testRun.name ?? null,
+    });
+  }
+
+  return moves.map((move) => ({ ...move, cause: causes.get(move) ?? null }));
+}
+
 /** Where a case lives, which is also what identifies it in a notification. */
 function testCaseHref(projectId: string, c: {
   id: string;
@@ -506,7 +625,7 @@ export async function listMyWork(
   /** One person's share of it, chosen from the strip above the list. */
   person?: string,
 ) {
-  return prisma.testCase.findMany({
+  const cases = await prisma.testCase.findMany({
     where: {
       ...scopeFilter(userId, scope),
       ...(person ? { assigneeId: person } : {}),
@@ -552,11 +671,20 @@ export async function listMyWork(
       /* Who said it was broken, so a question has somewhere to go. The last
        * failure rather than the last answer: a case handed over has failed,
        * and whoever recorded that failure is the person to ask. */
+      /* Enough of them for the fold below as well as the headline: each
+       * hand-off in the history names the failure that sent it out, and a
+       * case that went round three times needs three. The first is still the
+       * newest, which is the one the card itself reads. */
       resultEvents: {
         where: { testResult: "FAILED" },
         orderBy: { recordedAt: "desc" },
-        take: 1,
-        select: { recordedAt: true, notes: true, recordedBy: { select: { name: true } } },
+        take: 10,
+        select: {
+          recordedAt: true,
+          notes: true,
+          recordedBy: { select: { name: true } },
+          testRunCase: { select: { testRun: { select: { id: true, name: true } } } },
+        },
       },
       /* How the case got here — the hand-off history, on the card rather
        * than behind a link, because "who gave me this and what did they say"
@@ -564,13 +692,19 @@ export async function listMyWork(
        * realistically makes; a case with more than that has a problem the
        * list is not going to solve. */
       workEvents: {
+        /* Trimmed to the same rule the Finished tab's panel follows, but in
+         * memory rather than in the query: "somebody handed it to somebody
+         * else" compares two columns, which a `where` cannot do. Fetched a
+         * little wide and cut below. */
         orderBy: { occurredAt: "desc" },
-        take: 10,
+        take: 30,
         select: {
           id: true,
           occurredAt: true,
           note: true,
           toState: true,
+          actorId: true,
+          assigneeId: true,
           actor: { select: { name: true } },
           assignee: { select: { name: true } },
         },
@@ -586,6 +720,21 @@ export async function listMyWork(
       { updatedAt: "asc" },
     ],
   });
+
+  /* The fold on each card shows the same account the Finished tab's panel
+   * does, by the same rule — one of them drawing a move the other hides
+   * would be two stories about one hand-off. Cut to ten after the trimming,
+   * so the limit is spent on lines that will be drawn. */
+  return cases.map((testCase) => ({
+    ...testCase,
+    workEvents: withCauses(
+      testCase.workEvents
+        .filter(worthShowing)
+        .slice(0, 10)
+        .map((move) => ({ ...move, startsRound: startsHandOff(move) })),
+      testCase.resultEvents,
+    ),
+  }));
 }
 
 export type MyWorkCase = Awaited<ReturnType<typeof listMyWork>>[number];
@@ -731,19 +880,118 @@ export async function listFinishedWork(
   const answers = await prisma.testResultEvent.findMany({
     where: { testCaseId: { in: closedCaseIds }, testResult: { not: "NOT_RUN" } },
     orderBy: { recordedAt: "desc" },
-    select: { testCaseId: true, testResult: true, recordedAt: true },
+    select: {
+      testCaseId: true,
+      testResult: true,
+      recordedAt: true,
+      /* What the tester saw, which the UI asks for as the Actual Result. Read
+       * here as well as on the open card, because a case that went round
+       * three times failed for three reasons and the panel that shows the
+       * rounds could not tell them apart. */
+      notes: true,
+      /* And where it was given. A result recorded in a round is part of a
+       * test cycle that has a name, a scope and a progress bar; one recorded
+       * straight on the case is somebody checking. The app already draws that
+       * line on the Test Case page and in Problem Cases, and here it is the
+       * evidence that closed somebody's work — "it passed in Sprint 3" and
+       * "somebody marked it passed on Tuesday" are different claims. */
+      testRunCase: { select: { testRun: { select: { id: true, name: true } } } },
+    },
   });
+
+  /* How many times each case has been round. One query for the page, like
+   * the answers above — a case handed over four times in a day is saying
+   * something the single row it gets here cannot.
+   *
+   * Counted in memory rather than by `groupBy`, because the rule compares two
+   * columns and a group-by cannot: a hand-off is somebody putting the case in
+   * *another* person's hands. A Dev pressing "To fix" on their own card
+   * writes an event that reads `ASSIGNED` with themselves at both ends, and
+   * counting those turned "3 hand-offs" into whatever the week's clicking
+   * added up to. */
+  const assignEvents = await prisma.workEvent.findMany({
+    where: { testCaseId: { in: closedCaseIds }, toState: "ASSIGNED" },
+    select: { testCaseId: true, actorId: true, assigneeId: true },
+  });
+  /* Every move each case made, for the panel under the row — and for the
+   * one line of it worth printing without opening anything: what the Dev
+   * wrote when they said it was fixed.
+   *
+   * That note is the other half of the answer this tab exists to give. The
+   * result says a hand-off ended; the note says what was done to end it, and
+   * it is the thing that makes a pass worth believing. It lived on the open
+   * card and went with the card when the loop closed, which is the same hole
+   * one floor down. */
+  const moves = await prisma.workEvent.findMany({
+    where: { testCaseId: { in: closedCaseIds } },
+    orderBy: { occurredAt: "desc" },
+    select: {
+      id: true,
+      testCaseId: true,
+      occurredAt: true,
+      toState: true,
+      note: true,
+      actorId: true,
+      assigneeId: true,
+      actor: { select: { name: true } },
+      assignee: { select: { name: true } },
+    },
+  });
+
+  const handOffCounts = new Map<string, number>();
+  for (const event of assignEvents) {
+    if (event.actorId && event.assigneeId && event.actorId === event.assigneeId) {
+      continue;
+    }
+    handOffCounts.set(event.testCaseId, (handOffCounts.get(event.testCaseId) ?? 0) + 1);
+  }
 
   return {
     ...page,
-    items: page.items.map((event) => ({
-      ...event,
-      closedBy:
-        answers.find(
-          (answer) =>
-            answer.testCaseId === event.testCase.id && answer.recordedAt <= event.occurredAt,
-        )?.testResult ?? null,
-    })),
+    items: page.items.map((event) => {
+      const answer = answers.find(
+        (candidate) =>
+          candidate.testCaseId === event.testCase.id &&
+          candidate.recordedAt <= event.occurredAt,
+      );
+      return {
+        ...event,
+        closedBy: answer?.testResult ?? null,
+        /** The round it was answered in, or null for one recorded outside any. */
+        closedIn: answer?.testRunCase?.testRun.name ?? null,
+        /** Every time it has been handed to somebody, the open one included. */
+        handOffs: handOffCounts.get(event.testCase.id) ?? 1,
+        /* The moves worth reading: the ones somebody wrote something on, and
+         * the ones that ended a round.
+         *
+         * A repair that went round three times leaves a dozen events, most of
+         * them a step with nothing attached — and several of those are the
+         * Dev pressing "To fix" on their own card, which is not even a
+         * hand-off by the count beside it. Drawing them all buried the three
+         * claims that the thing was fixed, which is the only reason to open
+         * this panel. */
+        history: withCauses(
+          moves
+            .filter((move) => move.testCaseId === event.testCase.id && worthShowing(move))
+            .map((move) => ({ ...move, startsRound: startsHandOff(move) })),
+          answers.filter(
+            (candidate) =>
+              candidate.testCaseId === event.testCase.id && candidate.testResult === "FAILED",
+          ),
+        ),
+        /* What the Dev wrote when they said it was fixed, for the round that
+         * ended here: the newest "ready to retest" at or before the ending.
+         * Null when nobody ever claimed it — a tester can record a pass on a
+         * case that was never handed back. */
+        fixedNote:
+          moves.find(
+            (move) =>
+              move.testCaseId === event.testCase.id &&
+              move.toState === "READY_TO_RETEST" &&
+              move.occurredAt <= event.occurredAt,
+          )?.note ?? null,
+      };
+    }),
   };
 }
 

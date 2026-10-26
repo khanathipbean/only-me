@@ -13,6 +13,7 @@ import {
   listFinishedWork,
   listMyWork,
   setWorkState,
+  type FinishedWork,
   type MyWorkCase,
   type WorkScope,
 } from "@/lib/work";
@@ -28,6 +29,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { ViewTabs } from "@/components/ui/ViewTabs";
 import { ClockIcon, ListChecksIcon } from "@/components/icons";
 import { Pagination } from "@/components/ui/Pagination";
+import { ExpandableRow } from "@/components/ui/ExpandableRow";
 import { RunHistoryList } from "@/components/RunHistoryList";
 import Link from "next/link";
 import { Badge, priorityTone, testResultTone } from "@/components/ui/Badge";
@@ -51,7 +53,6 @@ import {
   tdClass,
   thCenterClass,
   thClass,
-  trHoverClass,
 } from "@/lib/ui";
 import type { WorkState } from "@/generated/prisma/client";
 
@@ -458,6 +459,112 @@ function AssigneeStrip({
 }
 
 /**
+ * One step of a repair, in the colour that step wears everywhere else.
+ *
+ * Both accounts of a hand-off's history — the panel on the Finished tab and
+ * the fold on an open card — draw it, so the same move cannot end up looking
+ * like two different things.
+ */
+function StepBadge({ toState }: { toState: WorkState | null }) {
+  if (!toState) {
+    return <Badge tone="gray">Retested — ended</Badge>;
+  }
+  return <Badge tone={SECTION_TONE[toState]}>{WORK_STATE_LABELS[toState]}</Badge>;
+}
+
+/**
+ * The failure a hand-off was sent out on, under the move it explains.
+ *
+ * The round is a link rather than a name: the evidence is a screenshot and a
+ * set of steps on that page, and somebody reading "it broke on the filter"
+ * three rounds later wants to see it, not be told where it is. A result
+ * recorded outside any round has nowhere to send them, so it is named in
+ * plain text — the same line the Test Case page and Problem Cases draw.
+ */
+function WhatWentWrong({
+  cause,
+  projectId,
+}: {
+  cause: { notes: string | null; runId: string | null; runName: string | null } | null;
+  projectId: string;
+}) {
+  if (!cause?.notes) {
+    return null;
+  }
+  return (
+    /* `block` as well as the full width: the panel on the other tab lays its
+       moves out with flex, where a full-width item wraps onto its own line,
+       but the card's account is ordinary flow — and there an inline span ran
+       straight on from the date, "25 Oct 2026Actual result: …". */
+    <span className="block w-full text-xs text-muted">
+      Actual result: “{cause.notes}”
+      {cause.runName && (
+        <>
+          {" · "}
+          {cause.runId ? (
+            <a href={`/projects/${projectId}/runs/${cause.runId}`} className="hover:underline">
+              {cause.runName}
+            </a>
+          ) : (
+            cause.runName
+          )}
+        </>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Every move a case made, with what was said at each one.
+ *
+ * The same account the open card gives under "How it got here", kept for the
+ * cases that are no longer open. A case that went round three times has three
+ * claims that it was fixed, and reading them together is how anybody sees
+ * that the first two did not hold.
+ */
+function HandOffHistory({
+  moves,
+  projectId,
+}: {
+  moves: FinishedWork["history"];
+  projectId: string;
+}) {
+  return (
+    <ol className="flex flex-col gap-2 px-1 text-sm">
+      {moves.map((move, index) => (
+        <li
+          key={move.id}
+          /* A rule under each hand-off, so the account reads as rounds rather
+             than as one run of moves — and so the count beside the row can be
+             checked against it by eye. Newest first, so the hand-off is the
+             last line of the round it started: the rule belongs above the
+             line after it, not above the hand-off itself. */
+          className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 ${
+            moves[index - 1]?.startsRound ? "mt-2 border-t border-border pt-3" : ""
+          }`}
+        >
+          {/* The same three colours the sections on the other tab wear, so a
+              run of a dozen moves reads as a shape rather than as a dozen
+              identical lines. Grey for the ending, which is not a step the
+              repair sat at — it is the moment it stopped. */}
+          <StepBadge toState={move.toState} />
+          {move.assignee?.name && <span className="text-xs text-muted">{move.assignee.name}</span>}
+          {move.actor?.name && <span className="text-xs text-muted">· by {move.actor.name}</span>}
+          <span className="text-xs text-muted">· {formatDate(move.occurredAt)}</span>
+          {move.note && <span className="w-full text-foreground">“{move.note}”</span>}
+          {/* What the tester saw that sent this out — the other half of the
+              Dev's own note two lines up. Drawn only where there is something
+              to read: a hand-off made before anybody recorded a failure has
+              no reason attached, and "no reason given" under every such row
+              would be a longer panel saying nothing. */}
+          <WhatWentWrong cause={move.cause} projectId={projectId} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
  * The hand-offs that are over.
  *
  * A table rather than the cards above it: nothing here needs doing, so the
@@ -497,10 +604,11 @@ function FinishedList({
               the chain is there to tell two of the same name apart, and
               truncating it costs nothing it was doing. */}
           <colgroup>
-            <col className="w-[52%]" />
-            <col className="w-[16%]" />
-            <col className="w-[16%]" />
-            <col className="w-[16%]" />
+            <col className="w-[48%]" />
+            <col className="w-[15%]" />
+            <col className="w-[15%]" />
+            <col className="w-[15%]" />
+            <col className="w-[7%]" />
           </colgroup>
           <thead>
             <tr>
@@ -508,6 +616,9 @@ function FinishedList({
               <th className={thClass}>Was with</th>
               <th className={thCenterClass}>Ended</th>
               <th className={thCenterClass}>Closed by</th>
+              {/* The expand toggle's own column, the way the round's table
+                  carries one. */}
+              <th className={thCenterClass} />
             </tr>
           </thead>
           <tbody>
@@ -519,7 +630,13 @@ function FinishedList({
                 `/requirements/${requirement.id}/scenarios/${scenario.id}` +
                 `/test-groups/${event.testCase.testGroup.id}/test-cases/${event.testCase.id}`;
               return (
-                <tr key={event.id} className={trHoverClass}>
+                <ExpandableRow
+                  key={event.id}
+                  colSpan={5}
+                  detailLabel={event.testCase.name}
+                  detail={<HandOffHistory moves={event.history} projectId={projectId} />}
+                  cells={
+                    <>
                   <td className={tdClass}>
                     <Link
                       href={href}
@@ -530,9 +647,28 @@ function FinishedList({
                     <p className="mt-0.5 truncate text-xs text-muted">
                       {requirement.name} › {scenario.name} › {event.testCase.testGroup.name}
                     </p>
+                    {/* What the Dev wrote when they said it was fixed. The
+                        result says a hand-off ended; this says what was done
+                        to end it, which is what makes a pass worth believing
+                        — and it is the half that went with the card when the
+                        loop closed. One line here, all of them in the panel. */}
+                    {event.fixedNote && (
+                      <p className="mt-0.5 truncate text-xs text-foreground" title={event.fixedNote}>
+                        “{event.fixedNote}”
+                      </p>
+                    )}
                   </td>
                   <td className={`${tdClass} text-sm text-muted`}>
                     {event.assignee?.name || event.assignee?.email || "—"}
+                    {/* Only when it has been round more than once. A case
+                        handed over four times in a day is saying something
+                        the single row it gets here cannot, and "1 hand-off"
+                        on every other row would bury it. */}
+                    {event.handOffs > 1 && (
+                      <div className="text-[11px] text-muted">
+                        {event.handOffs} hand-offs
+                      </div>
+                    )}
                   </td>
                   <td className={`${tdCenterClass} text-xs text-muted`}>
                     {formatDate(event.occurredAt)}
@@ -544,14 +680,25 @@ function FinishedList({
                         retest is blocked or skipped, and leaving those out
                         would take them off both tabs at once. */}
                     {event.closedBy ? (
-                      <Badge tone={testResultTone(event.closedBy)}>
-                        {event.closedBy.replace(/_/g, " ")}
-                      </Badge>
+                      <>
+                        <Badge tone={testResultTone(event.closedBy)}>
+                          {event.closedBy.replace(/_/g, " ")}
+                        </Badge>
+                        {/* And where it was answered. Not a link to the round:
+                            a DEV may read this page and may not open Test
+                            Runs, so it would hand them a 404 — the name is
+                            what the line is for. */}
+                        <div className="mt-1 text-[11px] text-muted">
+                          {event.closedIn ?? "outside a round"}
+                        </div>
+                      </>
                     ) : (
                       <span className="text-xs text-muted">—</span>
                     )}
                   </td>
-                </tr>
+                    </>
+                  }
+                />
               );
             })}
           </tbody>
@@ -817,14 +964,20 @@ function WorkCard({
             How it got here
           </summary>
           <ul className="mt-2 flex flex-col gap-1.5 text-xs text-muted">
-            {row.workEvents.map((event) => (
-              <li key={event.id}>
-                <span className="text-foreground">
-                  {event.toState ? WORK_STATE_LABELS[event.toState] : "Retested — closed"}
-                </span>
+            {row.workEvents.map((event, index) => (
+              <li
+                key={event.id}
+                className={
+                  row.workEvents[index - 1]?.startsRound
+                    ? "mt-1.5 border-t border-border pt-2"
+                    : ""
+                }
+              >
+                <StepBadge toState={event.toState} />
                 {event.assignee?.name && <> · {event.assignee.name}</>}
                 {event.actor?.name && <> · by {event.actor.name}</>} · {formatDate(event.occurredAt)}
                 {event.note && <div className="text-foreground">“{event.note}”</div>}
+                <WhatWentWrong cause={event.cause} projectId={projectId} />
               </li>
             ))}
           </ul>
