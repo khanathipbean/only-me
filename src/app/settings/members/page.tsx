@@ -48,6 +48,7 @@ import {
   trHoverClass,
 } from "@/lib/ui";
 import type { ProjectRole } from "@/generated/prisma/client";
+import { describeAccountEvent } from "@/lib/account-activity";
 import { invalidateRouteCache } from "@/lib/revalidate";
 import { errorHref } from "@/lib/hrefs";
 import { readLockStates } from "@/lib/login-throttle";
@@ -60,13 +61,6 @@ export const metadata = { title: "Users" };
 // Color identifies the Project, not the role on it — otherwise the same
 // Project's tag shifts color from row to row as the role differs, reading
 // as a different project each time instead of the same one throughout.
-/** The stored action strings, in the words a reader would use. */
-const ACCOUNT_ACTION_LABELS: Record<string, string> = {
-  "set-password": "Password set by an administrator",
-  unlock: "Account unlocked",
-  delete: "Account deleted",
-};
-
 const PROJECT_TONE_PALETTE: Tone[] = ["blue", "purple", "indigo", "cyan", "green", "amber", "gray", "red"];
 
 type PickerProject = { id: string; code: string; name: string };
@@ -384,9 +378,11 @@ export default async function MembersPage({
       {onActivity ? (
         <>
           <p className={mutedTextClass}>
-            What has been done to accounts themselves — a password set by an
-            administrator, an account unlocked, an account deleted. Everything that happens
-            inside a Project is on that Project&apos;s own Audit Trail.
+            Everything that has happened to an account — made, given access to a Project,
+            moved to a different role, had access taken away, had a password set, been
+            unlocked, been deleted. The ones that name a Project are on that
+            Project&apos;s own Audit Trail as well, where they answer the other question:
+            what has been done in there.
           </p>
 
           {activity!.entries.length === 0 ? (
@@ -416,7 +412,7 @@ export default async function MembersPage({
                       <td className={`${tdClass} ${entry.actor ? "" : "text-muted italic"}`}>
                         {entry.actor?.name ?? "Deleted user"}
                       </td>
-                      <td className={tdClass}>{ACCOUNT_ACTION_LABELS[entry.action] ?? entry.action}</td>
+                      <td className={tdClass}>{describeAccountEvent(entry)}</td>
                       {/* And so can the subject — deleting an account is one of
                           the three things listed here. */}
                       <td className={`${tdClass} ${entry.subject ? "" : "text-muted italic"}`}>
@@ -561,6 +557,10 @@ export default async function MembersPage({
                       <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-5">
                         <DialogCloseButton />
                         <Button type="submit" form={`edit-access-${member.userId}`}>
+                          Save
+                        </Button>
+                      </div>
+                    </Modal>
                     {/* Deleting sits in the row, not in the dialog it used to
                         hide at the bottom of. That dialog is for editing one
                         account, and a button that destroys it was both the
@@ -585,10 +585,6 @@ export default async function MembersPage({
                         <TrashIcon />
                       </IconButton>
                     </ConfirmForm>
-                          Save
-                        </Button>
-                      </div>
-                    </Modal>
                     </span>
                   </td>
                 </tr>

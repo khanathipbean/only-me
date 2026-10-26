@@ -180,8 +180,12 @@ export async function updateUserProjectAccess(
       action: "update",
       actorId,
       projectId: entry.projectId,
-      oldValue: { role: previous.role },
-      newValue: { role: entry.role },
+      /* Whose membership, written into the entry rather than left to be
+       * looked up from `entityId` later. The row it names can be removed
+       * afterwards, and then nothing says which account the role belonged
+       * to — which is exactly what the account's own activity list needs. */
+      oldValue: { userId, role: previous.role },
+      newValue: { userId, role: entry.role },
     });
   }
   for (const entry of toAdd) {
@@ -285,6 +289,20 @@ export async function createUserWithAccess(
       data: access.map((entry) => ({ userId: created.id, projectId: entry.projectId, role: entry.role })),
     });
     return created;
+  });
+
+  /* The account itself, before the access it was given.
+   *
+   * Deleting one has been recorded since accounts had a log at all; creating
+   * one never was, so "when did this account appear, and who made it" was
+   * the one question about an account the log could not answer. No project,
+   * because an account does not belong to one. */
+  await writeAuditLog({
+    entityType: "User",
+    entityId: user.id,
+    action: "create",
+    actorId,
+    newValue: { email: input.email, name: input.name },
   });
 
   for (const entry of access) {
