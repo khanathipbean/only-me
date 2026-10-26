@@ -86,7 +86,7 @@ describe("breadcrumb path builders", () => {
     expect(membersBreadcrumb()).toEqual([
       PROJECTS,
       { label: "Settings", href: "/settings" },
-      { label: "Members", href: "/settings/members" },
+      { label: "Users", href: "/settings/members" },
     ]);
   });
 

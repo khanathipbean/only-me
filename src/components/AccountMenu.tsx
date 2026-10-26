@@ -135,7 +135,7 @@ export function AccountMenu({
                   className={`sm:hidden ${itemClass}`}
                 >
                   <UsersIcon />
-                  Members
+                  Users
                 </Link>
               )}
               {/* The same three choices as the header's own picker, which is

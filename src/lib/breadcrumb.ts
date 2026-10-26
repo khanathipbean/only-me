@@ -57,11 +57,17 @@ export function settingsBreadcrumb(): BreadcrumbSegment[] {
   return [PROJECTS_ROOT, { label: "Settings", href: "/settings" }];
 }
 
-/** Members lives under Settings, so the trail says so: going up from it
+/** Users lives under Settings, so the trail says so: going up from it
  * lands on the other things set for the whole install, not back at the
- * Projects list two floors down. */
+ * Projects list two floors down.
+ *
+ * "Users" rather than "Members", which is what this page was called until
+ * the Settings section gave it a neighbour to be consistent with. A member
+ * is somebody's place in one Project — the thing the chips on this page's
+ * own rows name. What the page lists is accounts, and calling both by one
+ * word made the page look like a list of the former. */
 export function membersBreadcrumb(): BreadcrumbSegment[] {
-  return [...settingsBreadcrumb(), { label: "Members", href: "/settings/members" }];
+  return [...settingsBreadcrumb(), { label: "Users", href: "/settings/members" }];
 }
 
 export function profileBreadcrumb(): BreadcrumbSegment[] {

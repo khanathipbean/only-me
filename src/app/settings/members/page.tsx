@@ -55,7 +55,7 @@ import { listUserAuditLog } from "@/lib/audit-log";
 import { Pagination } from "@/components/ui/Pagination";
 import { formatTimestamp } from "@/lib/dates";
 
-export const metadata = { title: "Members" };
+export const metadata = { title: "Users" };
 
 // Color identifies the Project, not the role on it — otherwise the same
 // Project's tag shifts color from row to row as the role differs, reading
@@ -296,7 +296,7 @@ export default async function MembersPage({
     <main className={pageClass}>
       <Breadcrumb segments={membersBreadcrumb()} />
       <PageHeader
-        title="Members"
+        title="Users"
         subtitle={
           <span className="inline-flex items-center gap-1.5">
             Accounts created here belong only to the Projects you give them access to.
@@ -364,7 +364,7 @@ export default async function MembersPage({
           in. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ViewTabs
-          label="Members view"
+          label="Users view"
           tabs={[
             { label: "People", href: "/settings/members", active: !onActivity, icon: UsersIcon },
             {
@@ -439,7 +439,7 @@ export default async function MembersPage({
       ) : (
         <>
       {members.length === 0 ? (
-        <p className={mutedTextClass}>No members yet.</p>
+        <p className={mutedTextClass}>No users yet.</p>
       ) : (
         <div className={tableWrapClass}>
           <table className={tableClass}>

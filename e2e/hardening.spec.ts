@@ -182,7 +182,7 @@ test("the app menu leads to Settings and stands aside inside a Project", async (
   // The card is the way in, and it is the card that is the link.
   await page.getByRole("link", { name: "Users" }).click();
   await page.waitForURL(/\/settings\/members$/);
-  await expect(page.getByRole("heading", { name: "Members", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Users", level: 1 })).toBeVisible();
   // Still inside the section, three clicks down.
   await expect(
     page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Settings" }),

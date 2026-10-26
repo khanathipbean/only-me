@@ -283,10 +283,10 @@ test("keeps a round's actions on the title's row on a desk-sized screen", async 
  *
  * It started in the header's right-hand slot on My Work, which is where the
  * actions live — and changing which view you are looking at is navigation,
- * not an action. Members had it right: its own row under the title, with
+ * not an action. The Users page had it right: its own row under the title,
  * whatever belongs to the open view on the right of that row.
  */
-test("puts the view switch where Members puts it", async ({ page }) => {
+test("puts the view switch where the Users page puts it", async ({ page }) => {
   async function tabRow(url: string, label: string) {
     await page.goto(url);
     const heading = await page.getByRole("heading", { level: 1 }).boundingBox();
@@ -300,10 +300,10 @@ test("puts the view switch where Members puts it", async ({ page }) => {
   const projectId = page.url().split("/projects/")[1].split("/")[0];
 
   const mine = await tabRow(`/projects/${projectId}/my-work`, "My Work view");
-  const members = await tabRow("/members", "Members view");
+  const users = await tabRow("/settings/members", "Users view");
 
   expect(mine.below, "My Work's tabs should sit under the title").toBe(true);
-  expect(members.below).toBe(true);
+  expect(users.below).toBe(true);
   // And starting at the same edge, so the eye finds them in the same place.
-  expect(mine.left).toBe(members.left);
+  expect(mine.left).toBe(users.left);
 });
