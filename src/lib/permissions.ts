@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { ProjectRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ASSIGNABLE_PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import {
   ADMIN_ROLES,
   ALL_MEMBER_ROLES,
@@ -387,15 +388,18 @@ export async function heldBy(
   return held;
 }
 
-/** The roles the page lists, in the order it lists them: most access first,
- *  so the list reads as a ladder rather than as the enum's own order. */
-export const ROLES_BY_REACH: ProjectRole[] = [
-  "ADMIN",
-  "QA_LEAD",
-  "TESTER",
-  "VIEWER",
-  "DEV",
-];
+/**
+ * The roles the page lists, strongest first.
+ *
+ * Read off the roles anybody can actually be given rather than written out
+ * again: the enum still carries QA_LEAD and VIEWER so a membership made
+ * before they were retired still renders, but neither is offered for a new
+ * assignment — and a page of permissions for a role nobody can hold is a
+ * page nobody needs. One list, so the two cannot drift.
+ */
+export const ROLES_BY_REACH: ProjectRole[] = ASSIGNABLE_PROJECT_ROLE_OPTIONS.map(
+  (option) => option.value as ProjectRole,
+);
 
 export function holds(capability: Capability, role: ProjectRole): boolean {
   return capability.roles.includes(role);

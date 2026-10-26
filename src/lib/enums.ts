@@ -66,7 +66,7 @@ export const PROJECT_ROLE_OPTIONS = [
   { value: "QA_LEAD", label: "QA Lead" },
   { value: "TESTER", label: "Tester" },
   { value: "VIEWER", label: "Viewer" },
-  { value: "DEV", label: "Dev" },
+  { value: "DEV", label: "Developer" },
 ];
 
 /** QA_LEAD and VIEWER hidden for now: TESTER covers everything QA_LEAD did

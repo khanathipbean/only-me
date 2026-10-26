@@ -228,7 +228,15 @@ test("deleting a user is offered in the row, and asks first", async ({ page }) =
     .filter({ has: page.getByRole("cell", { name: E2E_VIEWER_EMAIL, exact: true }) });
 
   await expect(row.getByRole("button", { name: "Edit access" })).toBeVisible();
-  await row.getByRole("button", { name: /^Delete / }).click();
+
+  /* Enabled only once the page is running. `ConfirmForm` disables itself
+     until then, because a Next server-action form posts without JavaScript
+     while the question it asks does not exist until React has hydrated —
+     clicking inside that window used to delete the account outright, which
+     is how this was found. */
+  const remove = row.getByRole("button", { name: /^Delete / });
+  await expect(remove).toBeEnabled();
+  await remove.click();
 
   const confirm = page.locator("dialog[open]");
   await expect(confirm).toHaveCount(1);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type FormEvent, type ReactNode } from "react";
+import { useRef, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import { Button, type ButtonVariant } from "@/components/ui/Button";
 import { dialogClass } from "@/lib/ui";
 
@@ -11,6 +11,13 @@ import { dialogClass } from "@/lib/ui";
  * (via `requestSubmit`) so every field already inside it — e.g. a "Target
  * Project ID" input — is included, exactly as a native submit would.
  */
+/* Hydration, asked without an effect: the server snapshot is false and the
+ * client snapshot is true, so this reads false through the render that has
+ * to match the server's HTML and true from the next one on. */
+const subscribeToNothing = () => () => {};
+const onTheClient = () => true;
+const onTheServer = () => false;
+
 export function ConfirmForm({
   id,
   action,
@@ -28,6 +35,19 @@ export function ConfirmForm({
   variant?: ButtonVariant;
   children: ReactNode;
 }) {
+  /* Nothing inside here may be pressed until this component is running.
+   *
+   * A Next server-action form posts without JavaScript — that is the point
+   * of them — while the confirmation lives in `onSubmit`, which exists only
+   * once React has hydrated. Press the button inside that window and the
+   * action runs with nothing asked. It was unreachable while every one of
+   * these sat inside a modal that JavaScript had to open; the moment one was
+   * put in a table row it became a real click, and the e2e suite found it by
+   * deleting the account the other specs sign in as.
+   *
+   * Disabled rather than caught on the server, which cannot tell a press
+   * that skipped the question from one that answered it. */
+  const ready = useSyncExternalStore(subscribeToNothing, onTheClient, onTheServer);
   const formRef = useRef<HTMLFormElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmedRef = useRef(false);
@@ -48,7 +68,11 @@ export function ConfirmForm({
   return (
     <>
       <form id={id} ref={formRef} action={action} onSubmit={handleSubmit}>
-        {children}
+        {/* `contents` so the guard changes what can be pressed and nothing
+            about how the children are laid out. */}
+        <fieldset disabled={!ready} className="contents">
+          {children}
+        </fieldset>
       </form>
 
       <dialog

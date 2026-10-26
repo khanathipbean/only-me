@@ -6,6 +6,7 @@ import {
   NON_DEV_ROLES,
   WORK_STATE_ROLES,
 } from "@/lib/rbac";
+import { ASSIGNABLE_PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import {
   CAPABILITIES,
   CAPABILITY_GROUPS,
@@ -63,8 +64,17 @@ describe("the permission catalogue", () => {
     expect(new Set(groupKeys).size).toBe(groupKeys.length);
   });
 
-  it("lists every role the app has, strongest first", () => {
-    expect([...ROLES_BY_REACH].sort()).toEqual([...ALL_MEMBER_ROLES].sort());
+  it("lists the roles anybody can be given, strongest first", () => {
+    /* Not every role the enum carries: QA_LEAD and VIEWER are retired, kept
+       only so a membership made before that still renders. A page of
+       permissions for a role nobody can hold is a page nobody needs — and
+       the two lists are one list, so they cannot drift. */
+    expect([...ROLES_BY_REACH].sort()).toEqual(
+      ASSIGNABLE_PROJECT_ROLE_OPTIONS.map((option) => option.value).sort(),
+    );
+    for (const role of ROLES_BY_REACH) {
+      expect(ALL_MEMBER_ROLES).toContain(role);
+    }
     /* The order is the page's ladder, and a ladder that is not sorted by
        reach reads as an arbitrary list. */
     const counts = ROLES_BY_REACH.map((role) => countFor(role));

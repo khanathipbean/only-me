@@ -250,7 +250,7 @@ describe("how an account's activity reads", () => {
         newValue: { userId: "u1", role: "DEV" },
         project,
       }),
-    ).toBe("Added to PROM as Dev");
+    ).toBe("Added to PROM as Developer");
     /* Entries written before the role was recorded, and entries whose
        Project has since gone: both still happened, so both still read. */
     expect(
