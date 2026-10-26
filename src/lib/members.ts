@@ -42,7 +42,13 @@ export async function listAllMembers(filters: { projectId?: string } = {}) {
     where: filters.projectId ? { projectId: filters.projectId } : {},
     include: {
       user: { select: { id: true, name: true, email: true } },
-      project: { select: { id: true, code: true, name: true } },
+      /* Archived Projects included, which is not an oversight: the people to
+       * tell that a Project has been archived are its members, and by the
+       * time that notification is written the Project is already archived.
+       * Filtering here once left that message with nobody to send it to.
+       * Whoever wants only live Projects says so — see
+       * `listMembersGroupedByUser`. */
+      project: { select: { id: true, code: true, name: true, deletedAt: true } },
     },
     orderBy: [{ project: { code: "asc" } }, { createdAt: "asc" }],
   });
@@ -65,6 +71,15 @@ export async function listMembersGroupedByUser() {
   >();
 
   for (const member of members) {
+    /* Archived Projects left off, the same line `listAllProjectsForPicker`
+     * draws for the checklist beside these chips. Archiving does not remove
+     * anybody's membership — and should not, so restoring the Project gives
+     * everyone their access back — but the two lists disagreeing put a
+     * Project on somebody's row that the checklist no longer offered, with
+     * no way to take it off. */
+    if (member.project.deletedAt !== null) {
+      continue;
+    }
     const existing = byUser.get(member.userId);
     const membership = {
       projectId: member.projectId,

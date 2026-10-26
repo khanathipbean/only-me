@@ -15,7 +15,9 @@ import {
   LastAdminError,
   UserInUseError,
   deleteUser,
+  listMembersGroupedByUser,
 } from "@/lib/members";
+import { archiveProject } from "@/lib/projects";
 import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./support/fixtures";
 
 const mockAuth = vi.mocked(auth);
@@ -477,5 +479,31 @@ describe("member routes", () => {
       await prisma.projectMember.findMany({ where: { userId: owner.id } }),
     ).toHaveLength(1);
     void ownedProject;
+  });
+
+  it("stops listing a membership once its Project is archived", async () => {
+    /* Archiving leaves the memberships in place on purpose — restoring the
+       Project should give everyone their access back. But the Members page
+       read them without that filter while the checklist beside them read it
+       with one, so an archived Project sat on somebody's row as a chip the
+       checklist no longer offered and nothing could take off. */
+    const { admin, project } = await setupAsAdmin();
+
+    expect(
+      (await listMembersGroupedByUser()).find((row) => row.userId === admin.id)?.memberships,
+    ).toContainEqual(expect.objectContaining({ projectId: project.id }));
+
+    await archiveProject(project.id, admin.id);
+
+    const after = (await listMembersGroupedByUser()).find((row) => row.userId === admin.id);
+    expect(after?.memberships ?? []).not.toContainEqual(
+      expect.objectContaining({ projectId: project.id }),
+    );
+    // And the row itself is still there to be read — the membership survives.
+    expect(
+      await prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId: project.id, userId: admin.id } },
+      }),
+    ).not.toBeNull();
   });
 });
