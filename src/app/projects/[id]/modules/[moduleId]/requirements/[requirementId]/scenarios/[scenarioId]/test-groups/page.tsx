@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import {
   getScenarioById,
   getScenarioLocation,
@@ -119,16 +119,16 @@ export default async function TestGroupsPage({
     notFound();
   }
 
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "authoring.view",
   );
   /* Every action below already refuses a non-editor; this is so the page
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = EDITOR_ROLES.includes(membership.role);
+  const canEdit = can(membership.role, "authoring.edit");
 
   const result = await listTestGroupsForScenarioPage(scenarioId, {
     search,
@@ -174,7 +174,7 @@ export default async function TestGroupsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         const targetScenarioId = formData.get("targetScenarioId") as string;
         const target = targetScenarioId ? await getScenarioById(targetScenarioId) : null;
@@ -189,7 +189,7 @@ export default async function TestGroupsPage({
             ),
           );
         }
-        await requireProjectRoleOrNotFound(actorId, target.projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(actorId, target.projectId, "authoring.edit");
         await moveTestGroup(testGroupId, targetScenarioId, actorId);
         // The target Scenario may sit under a different Requirement, so its
         // path is resolved rather than rebuilt from this page's ids.
@@ -205,7 +205,7 @@ export default async function TestGroupsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         await duplicateTestGroup(testGroupId, actorId);
         // The copy takes its own place in the order, which on a paged list is
@@ -216,7 +216,7 @@ export default async function TestGroupsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         try {
           await archiveTestGroup(testGroupId, actorId);
@@ -234,7 +234,7 @@ export default async function TestGroupsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         await restoreTestGroup(testGroupId, actorId);
         redirect(withToast(listHref, "Test Group restored"));
@@ -243,7 +243,7 @@ export default async function TestGroupsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         await deleteTestGroup(testGroupId, actorId, true);
         redirect(withToast(listHref, "Test Group deleted"));
@@ -259,7 +259,7 @@ export default async function TestGroupsPage({
       invalidateRouteCache();
 
       const session = await auth();
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
       try {
         await updateTestGroup(
@@ -291,7 +291,7 @@ export default async function TestGroupsPage({
     invalidateRouteCache();
 
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
     try {
       await createTestGroup(
@@ -320,7 +320,7 @@ export default async function TestGroupsPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
     const current = await listTestGroupsForScenario(scenarioId);
     const index = current.findIndex((tg) => tg.id === id);

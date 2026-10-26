@@ -74,3 +74,28 @@ test("a viewer gets no Settings tab and no Settings page", async ({ page }) => {
   expect((await page.goto("/settings/roles"))?.status()).toBe(404);
   await expect(page.getByRole("navigation", { name: "Roles" })).toHaveCount(0);
 });
+
+/**
+ * The menu and the page have to agree about Import.
+ *
+ * They did not: the tab was shown to anybody who was not a DEV, while the
+ * page itself asks for an editor — so a VIEWER was offered a link and met a
+ * 404 at the end of it. Each tab names the capability its own page checks
+ * now, which is what closed it.
+ */
+test("a viewer is not offered the Import tab it cannot open", async ({ page }) => {
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  const nav = page.getByRole("navigation", { name: "Project" });
+  await expect(nav).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Import" })).toHaveCount(0);
+  // The tabs a VIEWER may open are still there.
+  await expect(nav.getByRole("link", { name: "Modules" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Audit Trail" })).toBeVisible();
+
+  // And the address behind it was never open to them anyway.
+  expect((await page.goto(`/projects/${projectId}/import`))?.status()).toBe(404);
+});

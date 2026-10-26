@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/auth";
-import { EDITOR_ROLES, ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getTestGroupWithProjectId } from "@/lib/test-groups";
 import {
   ValidationError,
@@ -111,16 +111,16 @@ export default async function TestCasesPage({
     notFound();
   }
 
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "authoring.view",
   );
   /* Every action below already refuses a non-editor; this is so the page
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = EDITOR_ROLES.includes(membership.role);
+  const canEdit = can(membership.role, "authoring.edit");
 
   const [project, scenario, requirement, testCasePage] = await Promise.all([
     getProjectById(projectId),
@@ -178,7 +178,7 @@ export default async function TestCasesPage({
       invalidateRouteCache();
 
       const session = await auth();
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
       try {
         await updateTestCase(
@@ -221,7 +221,7 @@ export default async function TestCasesPage({
       "use server";
       invalidateRouteCache();
       const session = await auth();
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
       /* The note only when one was actually written. Sending an empty string
        * on every pass would wipe the note explaining the failure before it,
        * and leaving the field out is how this function is told to leave it
@@ -250,7 +250,7 @@ export default async function TestCasesPage({
       "use server";
       invalidateRouteCache();
       const session = await auth();
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
       await updateTestCaseStatus(
         testCaseId,
         formData.get("status") as WorkflowStatus,
@@ -264,7 +264,7 @@ export default async function TestCasesPage({
     invalidateRouteCache();
 
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
     let testCase;
     try {
@@ -299,7 +299,7 @@ export default async function TestCasesPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     /* Which cases this touches. The row checkboxes send their ids; "Select all
      * N that match" sends a marker instead and the set is read from the same
      * filters the list was drawn with, so what is archived is what the reader

@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, WORK_STATE_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import {
   WORK_STATES,
@@ -153,10 +153,10 @@ export default async function MyWorkPage({
   /* Everybody, not only a DEV. A tester who hands themselves a case to look
    * at should be able to find it again, and a page that refused them would
    * be refusing them their own work. */
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "handoff.view",
   );
 
   /* The default follows what the reader does with this page, because "my
@@ -222,7 +222,7 @@ export default async function MyWorkPage({
       /* The one write outside `EDITOR_ROLES` in the whole app. A VIEWER is not
        * in this group: being able to see a case is not being able to say work
        * has been done on it. */
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, WORK_STATE_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "handoff.state");
 
       const toState = String(formData.get("workState") ?? "") as WorkState;
       const note = String(formData.get("note") ?? "").trim();

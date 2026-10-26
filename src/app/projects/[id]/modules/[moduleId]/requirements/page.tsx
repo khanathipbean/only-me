@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import { getModuleById, listModulesForProject } from "@/lib/modules";
 import {
@@ -92,16 +92,16 @@ export default async function RequirementsPage({
     await searchParams;
   const session = await auth();
 
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "authoring.view",
   );
   /* Every action below already refuses a non-editor; this is so the page
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = EDITOR_ROLES.includes(membership.role);
+  const canEdit = can(membership.role, "authoring.edit");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || feature || status || priority || showArchived);
@@ -150,7 +150,7 @@ export default async function RequirementsPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     try {
       await createRequirement(
         projectId,
@@ -183,7 +183,7 @@ export default async function RequirementsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         try {
           await updateRequirement(
             requirementId,
@@ -227,7 +227,7 @@ export default async function RequirementsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         await duplicateRequirement(requirementId, session!.user.id);
         redirect(withToast(listHref, "Requirement duplicated"));
       },
@@ -235,7 +235,7 @@ export default async function RequirementsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         try {
           await archiveRequirement(requirementId, session!.user.id);
         } catch (err) {
@@ -254,7 +254,7 @@ export default async function RequirementsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         await restoreRequirement(requirementId, session!.user.id);
         redirect(withToast(listHref, "Requirement restored"));
       },
@@ -262,7 +262,7 @@ export default async function RequirementsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         try {
           await deleteRequirement(requirementId, session!.user.id, true);
         } catch (err) {

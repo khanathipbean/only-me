@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { listFeaturesForModule, listFeaturesForProjectNotes } from "@/lib/requirements";
@@ -88,16 +88,16 @@ export default async function NotesPage({
     await searchParams;
   const session = await auth();
 
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "notes.view",
   );
   /* Every action below already refuses a non-editor; this is so the page
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = EDITOR_ROLES.includes(membership.role);
+  const canEdit = can(membership.role, "notes.write");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || moduleId || feature || showArchived);
@@ -149,7 +149,7 @@ export default async function NotesPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "notes.write");
     try {
       await createNote(
         projectId,
@@ -180,7 +180,7 @@ export default async function NotesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "notes.write");
         try {
           await updateNote(
             noteId,
@@ -208,7 +208,7 @@ export default async function NotesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "notes.write");
         await archiveNote(noteId, session!.user.id);
         redirect(withToast(listHref, "Note archived"));
       },
@@ -216,7 +216,7 @@ export default async function NotesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "notes.write");
         await restoreNote(noteId, session!.user.id);
         redirect(withToast(listHref, "Note restored"));
       },

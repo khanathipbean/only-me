@@ -10,12 +10,8 @@ import {
 } from "@/lib/enums";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import {
-  ALL_MEMBER_ROLES,
-  EDITOR_ROLES,
-  getProjectMembership,
-  requireProjectRoleOrNotFound,
-} from "@/lib/rbac";
+import { getProjectMembership } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import {
   ValidationError,
   archiveTestCase,
@@ -100,9 +96,9 @@ export default async function TestCaseDetailPage({
   }
   const projectId = testCase.projectId;
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.view");
   const membership = await getProjectMembership(session!.user.id, projectId);
-  const canEditFully = !!membership && EDITOR_ROLES.includes(membership.role);
+  const canEditFully = !!membership && can(membership.role, "authoring.edit");
   const [project, scenario, requirement, allTestGroups, historyByCase, members] =
     await Promise.all([
       getProjectById(projectId),
@@ -151,7 +147,7 @@ export default async function TestCaseDetailPage({
     invalidateRouteCache();
 
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
     try {
       await updateTestCase(
@@ -185,7 +181,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     const assigneeId = String(formData.get("assigneeId") ?? "") || null;
     try {
       await assignCase(testCaseId, assigneeId, session!.user.id);
@@ -202,7 +198,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     await updateTestResultAndNotes(
       testCaseId,
       {
@@ -218,7 +214,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     const file = formData.get("file");
     if (!(file instanceof File)) {
       redirect(
@@ -245,7 +241,7 @@ export default async function TestCaseDetailPage({
       "use server";
       invalidateRouteCache();
       const session = await auth();
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
       // Checked against this Test Case too: an id from another Test Case
       // must not be deletable just because the caller belongs to this project.
       const attachment = await getAttachmentWithProjectId(attachmentId);
@@ -260,7 +256,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     const targetTestGroupId = formData.get("targetTestGroupId") as string;
     const targetTestGroup = targetTestGroupId ? await getTestGroupWithProjectId(targetTestGroupId) : null;
     if (!targetTestGroup || targetTestGroup.deletedAt) {
@@ -268,7 +264,7 @@ export default async function TestCaseDetailPage({
         errorHref(`${basePath}/${testCaseId}`, "", "Target Test Group not found or archived", {}, "moveError"),
       );
     }
-    await requireProjectRoleOrNotFound(session!.user.id, targetTestGroup.projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, targetTestGroup.projectId, "authoring.edit");
     await moveTestCase(testCaseId, targetTestGroupId, session!.user.id);
     const location = await getScenarioLocation(targetTestGroup.scenarioId);
     // The page looks the same either way — only the breadcrumb changes — so
@@ -288,7 +284,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     const copy = await duplicateTestCase(testCaseId, session!.user.id);
     // The copy is identical to what was on screen a moment ago, so without
     // this the user has no way to tell they are now editing the copy.
@@ -299,7 +295,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     await archiveTestCase(testCaseId, session!.user.id);
     redirect(`${basePath}/${testCaseId}`);
   }
@@ -308,7 +304,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     await restoreTestCase(testCaseId, session!.user.id);
     redirect(`${basePath}/${testCaseId}`);
   }
@@ -317,7 +313,7 @@ export default async function TestCaseDetailPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     await deleteTestCase(testCaseId, session!.user.id, true);
     redirect(withToast(basePath, "Test Case deleted"));
   }

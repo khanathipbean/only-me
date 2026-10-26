@@ -1,6 +1,6 @@
 import { getProjectById } from "@/lib/projects";
 import { auth } from "@/auth";
-import { EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { importBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { ImportWizard } from "@/components/ImportWizard";
@@ -21,7 +21,7 @@ export default async function ImportPage({
   const { id: projectId } = await params;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+  await requireCapabilityOrNotFound(session!.user.id, projectId, "project.import");
   const project = await getProjectById(projectId);
 
   return (

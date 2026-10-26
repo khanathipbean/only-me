@@ -1,6 +1,6 @@
 import { getProjectById } from "@/lib/projects";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { dashboardBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { DashboardView } from "@/components/DashboardView";
@@ -21,7 +21,7 @@ export default async function DashboardPage({
   const { id: projectId } = await params;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, ALL_MEMBER_ROLES);
+  await requireCapabilityOrNotFound(session!.user.id, projectId, "reading.dashboard");
   const project = await getProjectById(projectId);
 
   return (

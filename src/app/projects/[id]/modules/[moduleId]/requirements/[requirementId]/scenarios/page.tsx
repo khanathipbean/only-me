@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { rolesFor, can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import {
   ValidationError,
   archiveScenario,
@@ -116,16 +116,16 @@ export default async function ScenariosPage({
   } = await searchParams;
   const session = await auth();
 
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "authoring.view",
   );
   /* Every action below already refuses a non-editor; this is so the page
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = EDITOR_ROLES.includes(membership.role);
+  const canEdit = can(membership.role, "authoring.edit");
 
   const [project, requirement] = await Promise.all([
     getProjectById(projectId),
@@ -163,7 +163,7 @@ export default async function ScenariosPage({
   // trips to a remote database.
   const [descendantCounts, editableProjects, requirements] = await Promise.all([
     getScenarioDescendantCountsForMany(scenarios.map((scenario) => scenario.id)),
-    listProjectsForUserWithRole(session!.user.id, EDITOR_ROLES),
+    listProjectsForUserWithRole(session!.user.id, rolesFor("authoring.edit")),
     listRequirementsForProject(projectId),
   ]);
   const requirementOptions = requirements.map((requirement) => ({
@@ -208,7 +208,7 @@ export default async function ScenariosPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         const targetProjectId = formData.get("targetProjectId") as string;
         const targetProject = targetProjectId ? await getProjectById(targetProjectId) : null;
@@ -218,7 +218,7 @@ export default async function ScenariosPage({
           query.set("editId", scenarioId);
           redirect(`${listPath}?${query}`);
         }
-        await requireProjectRoleOrNotFound(actorId, targetProjectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(actorId, targetProjectId, "authoring.edit");
         await moveScenario(scenarioId, targetProjectId, actorId);
         // Re-filed on arrival, so its new home is that project's Modules list.
         // A different project's Modules list looks nothing like where the user
@@ -234,7 +234,7 @@ export default async function ScenariosPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         await duplicateScenario(scenarioId, actorId);
         // The copy sorts wherever its name puts it, which on a filtered or
@@ -245,7 +245,7 @@ export default async function ScenariosPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         try {
           await archiveScenario(scenarioId, actorId);
@@ -265,7 +265,7 @@ export default async function ScenariosPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         await restoreScenario(scenarioId, actorId);
         redirect(withToast(listHref, "Scenario restored"));
@@ -274,7 +274,7 @@ export default async function ScenariosPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         const actorId = session!.user.id;
         await deleteScenario(scenarioId, actorId, true);
         redirect(withToast(listHref, "Scenario deleted"));
@@ -290,7 +290,7 @@ export default async function ScenariosPage({
       invalidateRouteCache();
 
       const session = await auth();
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
       const tags = (formData.get("tags") as string)
         .split(",")
@@ -348,7 +348,7 @@ export default async function ScenariosPage({
     invalidateRouteCache();
 
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
 
     const tags = (formData.get("tags") as string)
       .split(",")

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { errorHref } from "@/lib/hrefs";
 import { auth } from "@/auth";
 import { toDateInputValue } from "@/lib/dates";
-import { EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import {
   DuplicateCodeError,
   ValidationError,
@@ -33,7 +33,7 @@ export default async function EditProjectPage({
   const { error } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
+  await requireCapabilityOrNotFound(session!.user.id, id, "project.edit");
 
   const project = await getProjectById(id);
   if (!project) {
@@ -45,7 +45,7 @@ export default async function EditProjectPage({
     invalidateRouteCache();
 
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, id, "project.edit");
 
     const startDate = formData.get("startDate") as string;
     const endDate = formData.get("endDate") as string;

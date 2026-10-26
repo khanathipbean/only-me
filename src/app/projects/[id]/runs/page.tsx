@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { EDITOR_ROLES, NON_DEV_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import {
   TestRunValidationError,
@@ -83,7 +83,7 @@ export default async function TestRunsPage({
   const { search, status, archived, overdue, page, pageSize, error, editId } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, NON_DEV_ROLES);
+  await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.view");
 
   const showArchived = archived === "1";
   const showOverdue = overdue === "1";
@@ -119,7 +119,7 @@ export default async function TestRunsPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
     try {
       await createRun(
         projectId,
@@ -149,7 +149,7 @@ export default async function TestRunsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         try {
           await updateRun(
             runId,
@@ -176,7 +176,7 @@ export default async function TestRunsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         await setRunStatus(runId, "CLOSED", session!.user.id);
         redirect(listHref);
       },
@@ -184,7 +184,7 @@ export default async function TestRunsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         await setRunStatus(runId, "OPEN", session!.user.id);
         redirect(listHref);
       },
@@ -192,7 +192,7 @@ export default async function TestRunsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         await setRunDeletedAt(runId, new Date(), session!.user.id);
         redirect(listHref);
       },
@@ -200,7 +200,7 @@ export default async function TestRunsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         await setRunDeletedAt(runId, null, session!.user.id);
         redirect(listHref);
       },

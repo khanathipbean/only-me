@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { ForbiddenError, requireProjectRole } from "@/lib/rbac";
+import { rolesFor, type CapabilityKey } from "@/lib/permissions";
 import type { ProjectMember, ProjectRole } from "@/generated/prisma/client";
 
 export async function requireApiSession() {
@@ -100,4 +101,27 @@ export function withEntityProjectRole<T extends { projectId: string }>(
       membership: membership!,
     });
   };
+}
+
+/** `checkProjectRole` asked by capability — see `requireCapabilityOrNotFound`. */
+export async function checkCapability(
+  userId: string,
+  projectId: string,
+  capability: CapabilityKey,
+) {
+  return checkProjectRole(userId, projectId, rolesFor(capability));
+}
+
+/** `withProjectRole` asked by capability. */
+export function withCapability(capability: CapabilityKey, handler: ProjectRouteHandler) {
+  return withProjectRole(rolesFor(capability), handler);
+}
+
+/** `withEntityProjectRole` asked by capability. */
+export function withEntityCapability<T extends { projectId: string }>(
+  capability: CapabilityKey,
+  resolveEntity: (id: string) => Promise<T | null>,
+  handler: EntityRouteHandler<T>,
+) {
+  return withEntityProjectRole(rolesFor(capability), resolveEntity, handler);
 }

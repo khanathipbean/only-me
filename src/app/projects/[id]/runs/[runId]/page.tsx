@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { EDITOR_ROLES, NON_DEV_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { listRequirementsForProject } from "@/lib/requirements";
@@ -132,7 +132,7 @@ export default async function TestRunPage({
   } = await searchParams;
   const session = await auth();
 
-  await requireProjectRoleOrNotFound(session!.user.id, projectId, NON_DEV_ROLES);
+  await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.view");
 
   const [project, run] = await Promise.all([getProjectById(projectId), getRunById(runId)]);
   if (!run || run.projectId !== projectId) {
@@ -256,7 +256,7 @@ export default async function TestRunPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
     const ids = formData.getAll("testCaseId").map(String).filter(Boolean);
     let added = 0;
     try {
@@ -287,7 +287,7 @@ export default async function TestRunPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
     /* Which cases this touches. "Select all on this page" sends its ids;
      * "Select all N that match" sends a marker instead, and the set is read
      * from the same filters the list was drawn with — so what is touched is
@@ -331,7 +331,7 @@ export default async function TestRunPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
     /* Which cases this touches — see the note in `recordSelected`, which
      * this follows exactly, down to being written out rather than shared. */
     const ids =
@@ -361,7 +361,7 @@ export default async function TestRunPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
     /* Which cases this touches. "Select all on this page" sends its ids;
      * "Select all N that match" sends a marker instead, and the set is read
      * from the same filters the list was drawn with — so what is touched is
@@ -409,7 +409,7 @@ export default async function TestRunPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
     await setRunStatus(runId, "CLOSED", session!.user.id);
     redirect(basePath);
   }
@@ -418,7 +418,7 @@ export default async function TestRunPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
     await setRunStatus(runId, "OPEN", session!.user.id);
     redirect(basePath);
   }
@@ -430,7 +430,7 @@ export default async function TestRunPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         let mirrorHeldBy: string | null = null;
         try {
           ({ mirrorHeldBy } = await setRunCaseResult(
@@ -467,7 +467,7 @@ export default async function TestRunPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         const assigneeId = String(formData.get("assigneeId") ?? "") || null;
         try {
           await assignCase(testCaseId, assigneeId, session!.user.id);
@@ -486,7 +486,7 @@ export default async function TestRunPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         try {
           await updateRunCaseNote(
             runId,
@@ -507,7 +507,7 @@ export default async function TestRunPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         try {
           /* The button only sends this when the case has a result, and its
              confirmation says what goes with it. */
@@ -536,7 +536,7 @@ export default async function TestRunPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
         const file = formData.get("file");
         if (!(file instanceof File)) {
           redirect(errorHref(basePath, listQueryString, "Choose a file first", {}, "attachmentError"));
@@ -556,7 +556,7 @@ export default async function TestRunPage({
           "use server";
           invalidateRouteCache();
           const session = await auth();
-          await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+          await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
           const attachment = await getRunCaseAttachmentWithProjectId(attachmentId);
           if (attachment && attachment.runCaseId === runCaseId) {
             try {

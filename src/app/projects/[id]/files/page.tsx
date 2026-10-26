@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import {
   FileValidationError,
@@ -57,16 +57,16 @@ export default async function ProjectFilesPage({
   const session = await auth();
   const hasFilters = Boolean(search || moduleId);
 
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "files.view",
   );
   /* Every action below already refuses a non-editor; this is so the page
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = EDITOR_ROLES.includes(membership.role);
+  const canEdit = can(membership.role, "files.manage");
   const [project, groups, modules] = await Promise.all([
     getProjectById(projectId),
     listProjectFilesByModule(projectId, { search, moduleId }),
@@ -88,7 +88,7 @@ export default async function ProjectFilesPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "files.manage");
 
     const file = formData.get("file");
     if (!(file instanceof File)) {
@@ -115,7 +115,7 @@ export default async function ProjectFilesPage({
       "use server";
       invalidateRouteCache();
       const session = await auth();
-      await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+      await requireCapabilityOrNotFound(session!.user.id, projectId, "files.manage");
       // Checked against this project so an id from elsewhere can't be deleted.
       const file = await getProjectFile(fileId);
       if (file && file.projectId === projectId) {

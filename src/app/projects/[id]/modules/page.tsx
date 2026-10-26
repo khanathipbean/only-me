@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import {
   ModuleValidationError,
@@ -71,16 +71,16 @@ export default async function ModulesPage({
   const { search, archived, page, pageSize, error, editId } = await searchParams;
   const session = await auth();
 
-  const membership = await requireProjectRoleOrNotFound(
+  const membership = await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
-    ALL_MEMBER_ROLES,
+    "authoring.view",
   );
   /* Every action below already refuses a non-editor; this is so the page
    * stops offering them. A control that answers 404 is worse than one that
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
-  const canEdit = EDITOR_ROLES.includes(membership.role);
+  const canEdit = can(membership.role, "authoring.edit");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || showArchived);
@@ -111,7 +111,7 @@ export default async function ModulesPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
     try {
       await createModule(projectId, formData.get("name") as string, session!.user.id);
     } catch (err) {
@@ -132,7 +132,7 @@ export default async function ModulesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         try {
           await renameModule(moduleId, formData.get("name") as string, session!.user.id);
         } catch (err) {
@@ -150,7 +150,7 @@ export default async function ModulesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         await duplicateModule(moduleId, session!.user.id);
         redirect(withToast(listHref, "Module duplicated"));
       },
@@ -158,7 +158,7 @@ export default async function ModulesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         try {
           await archiveModule(moduleId, session!.user.id);
         } catch (err) {
@@ -178,7 +178,7 @@ export default async function ModulesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         await restoreModule(moduleId, session!.user.id);
         redirect(withToast(listHref, "Module restored"));
       },
@@ -186,7 +186,7 @@ export default async function ModulesPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, projectId, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, projectId, "authoring.edit");
         try {
           await deleteModule(moduleId, session!.user.id, true);
         } catch (err) {

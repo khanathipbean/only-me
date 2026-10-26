@@ -12,7 +12,8 @@ import {
   updateProject,
 } from "@/lib/projects";
 import { withToast } from "@/lib/toast";
-import { EDITOR_ROLES, isAdminAnywhere, requireProjectRoleOrNotFound } from "@/lib/rbac";
+import { isAdminAnywhere } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { ResultCount } from "@/components/ui/ResultCount";
@@ -155,7 +156,7 @@ export default async function ProjectsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, id, "project.edit");
         const startDate = formData.get("startDate") as string;
         const endDate = formData.get("endDate") as string;
 
@@ -184,7 +185,7 @@ export default async function ProjectsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, id, "project.edit");
         await archiveProject(id, session!.user.id);
         redirect(listHref);
       },
@@ -192,7 +193,7 @@ export default async function ProjectsPage({
         "use server";
         invalidateRouteCache();
         const session = await auth();
-        await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
+        await requireCapabilityOrNotFound(session!.user.id, id, "project.edit");
         await restoreProject(id, session!.user.id);
         redirect(listHref);
       },
@@ -311,7 +312,7 @@ export default async function ProjectsPage({
               {projects.map((project) => {
                 const actions = rowActions(project.id);
                 const role = project.members[0]?.role;
-                const canEdit = !!role && EDITOR_ROLES.includes(role);
+                const canEdit = !!role && can(role, "project.edit");
                 return (
                   <ExpandableRow
                     key={project.id}

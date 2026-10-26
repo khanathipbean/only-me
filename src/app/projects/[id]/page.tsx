@@ -1,12 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import {
-  EDITOR_ROLES,
-  NON_DEV_ROLES,
-  getProjectMembership,
-  requireProjectRoleOrNotFound,
-} from "@/lib/rbac";
+import { getProjectMembership } from "@/lib/rbac";
+import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
 import { archiveProject, getProjectById, restoreProject } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { getProjectOverviewSummary } from "@/lib/project-overview";
@@ -49,7 +45,7 @@ export default async function ProjectOverviewPage({
     redirect(`/projects/${id}/my-work`);
   }
 
-  await requireProjectRoleOrNotFound(session!.user.id, id, NON_DEV_ROLES);
+  await requireCapabilityOrNotFound(session!.user.id, id, "reading.overview");
 
   const [project, modules] = await Promise.all([
     getProjectById(id),
@@ -62,13 +58,13 @@ export default async function ProjectOverviewPage({
   // Only fetched once there's something to summarize — an empty Project has
   // nothing for any of these queries to find.
   const summary = hasModules ? await getProjectOverviewSummary(id) : null;
-  const canEdit = !!membership && EDITOR_ROLES.includes(membership.role);
+  const canEdit = !!membership && can(membership.role, "project.edit");
 
   async function archive() {
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, id, "project.edit");
     await archiveProject(id, session!.user.id);
     redirect(withToast("/projects", "Project archived"));
   }
@@ -77,7 +73,7 @@ export default async function ProjectOverviewPage({
     "use server";
     invalidateRouteCache();
     const session = await auth();
-    await requireProjectRoleOrNotFound(session!.user.id, id, EDITOR_ROLES);
+    await requireCapabilityOrNotFound(session!.user.id, id, "project.edit");
     await restoreProject(id, session!.user.id);
     redirect(withToast(`/projects/${id}`, "Project restored"));
   }

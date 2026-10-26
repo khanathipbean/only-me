@@ -5,6 +5,7 @@ import {
   EDITOR_ROLES,
   NON_DEV_ROLES,
   WORK_STATE_ROLES,
+  requireProjectRoleOrNotFound,
 } from "@/lib/rbac";
 
 /**
@@ -38,7 +39,7 @@ export type CapabilityGroup = {
   capabilities: Capability[];
 };
 
-export const CAPABILITY_GROUPS: CapabilityGroup[] = [
+export const CAPABILITY_GROUPS = [
   {
     key: "authoring",
     label: "Test authoring",
@@ -205,16 +206,59 @@ export const CAPABILITY_GROUPS: CapabilityGroup[] = [
       },
     ],
   },
-];
+] as const satisfies readonly CapabilityGroup[];
 
 /** Every capability, flat — for counting and for looking one up by key. */
-export const CAPABILITIES: Capability[] = CAPABILITY_GROUPS.flatMap(
-  (group) => group.capabilities,
+export const CAPABILITIES: readonly Capability[] = CAPABILITY_GROUPS.flatMap(
+  (group): readonly Capability[] => group.capabilities,
 );
+
+/**
+ * The name of a capability, as a type.
+ *
+ * `as const` on the catalogue is what makes this a union of the real keys
+ * rather than `string`, so a guard asking for a capability that does not
+ * exist — a typo, or one renamed out from under it — stops the build instead
+ * of quietly refusing everybody or letting everybody through.
+ */
+export type CapabilityKey =
+  (typeof CAPABILITY_GROUPS)[number]["capabilities"][number]["key"];
+
+const BY_KEY = new Map<string, Capability>(
+  CAPABILITIES.map((capability) => [capability.key, capability]),
+);
+
+/**
+ * Who may do this, as the array the code has always checked.
+ *
+ * The one place a capability turns back into roles. When the rules move into
+ * the database this is where they will be read from, and every guard in the
+ * app already goes through it.
+ */
+export function rolesFor(key: CapabilityKey): ProjectRole[] {
+  /* Non-null because `CapabilityKey` is the catalogue's own keys — an
+   * unknown one cannot be written, so this cannot be missing. */
+  return BY_KEY.get(key)!.roles;
+}
+
+/** Whether a role holds a capability. For drawing a menu, never for a
+ *  guard — see the note on `NON_DEV_ROLES`: hiding is not protecting. */
+export function can(
+  role: ProjectRole | null | undefined,
+  key: CapabilityKey,
+): boolean {
+  return role !== null && role !== undefined && rolesFor(key).includes(role);
+}
 
 /** The roles the page lists, in the order it lists them: most access first,
  *  so the list reads as a ladder rather than as the enum's own order. */
-export const ROLES_BY_REACH: ProjectRole[] = ["ADMIN", "QA_LEAD", "TESTER", "VIEWER", "DEV"];
+export const ROLES_BY_REACH: ProjectRole[] = [
+  "ADMIN",
+  "QA_LEAD",
+  "TESTER",
+  "VIEWER",
+  "DEV",
+];
 
 export function holds(capability: Capability, role: ProjectRole): boolean {
   return capability.roles.includes(role);
@@ -222,4 +266,22 @@ export function holds(capability: Capability, role: ProjectRole): boolean {
 
 export function countFor(role: ProjectRole): number {
   return CAPABILITIES.filter((capability) => holds(capability, role)).length;
+}
+/**
+ * The guard a page uses: "may this account do X here", not "is it one of
+ * these roles".
+ *
+ * Every page asked the second question, which meant the answer lived at 85
+ * call sites and the rules behind them could only be read by grepping for an
+ * array name. Asking the first puts the rule in one place — `rolesFor` — and
+ * that is the place the stored rules will be read from when they move into
+ * the database. Nothing changes today: the capability hands back the very
+ * array the call site used to name.
+ */
+export async function requireCapabilityOrNotFound(
+  userId: string,
+  projectId: string,
+  capability: CapabilityKey,
+) {
+  return requireProjectRoleOrNotFound(userId, projectId, rolesFor(capability));
 }
