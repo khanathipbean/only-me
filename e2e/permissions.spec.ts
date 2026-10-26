@@ -53,3 +53,20 @@ test("a viewer is not offered controls that would refuse them", async ({ page })
     await expect(page.getByRole("button", { name: /^Upload/ })).toHaveCount(0);
   }
 });
+
+/**
+ * Settings holds what is set once for the whole install, and the same rule
+ * that has always gated Members gates the section around it: ADMIN of some
+ * Project. A VIEWER should not see the tab, and typing the address should
+ * not get round it — hiding a link has never been the guard here.
+ */
+test("a viewer gets no Settings tab and no Settings page", async ({ page }) => {
+  await expect(page.getByRole("navigation", { name: "Sections" })).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Settings" }),
+  ).toHaveCount(0);
+
+  const response = await page.goto("/settings");
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole("link", { name: "Users" })).toHaveCount(0);
+});

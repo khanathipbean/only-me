@@ -123,13 +123,14 @@ export function AccountMenu({
                 <EditIcon />
                 Edit Profile
               </Link>
-              {/* Below sm: only, same as the theme toggle right after it —
-                  the header carries its own standalone icon for this on
-                  wider screens (see layout.tsx). */}
+              {/* Below sm: only, same as the theme toggle right after it.
+                  Wider screens reach it through Settings on the tab row
+                  under the header; this stays because that row scrolls
+                  sideways on a phone and the second tab can be off-screen. */}
               {canManageMembers && (
                 <Link
                   role="menuitem"
-                  href="/members"
+                  href="/settings/members"
                   onClick={() => setOpen(false)}
                   className={`sm:hidden ${itemClass}`}
                 >

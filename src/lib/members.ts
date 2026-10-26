@@ -206,7 +206,7 @@ export async function updateUserProjectAccess(
         type: "MEMBER_ADDED",
         title: "New member added",
         body: `${addedUser.name} was added as ${roleLabel(entry.role)}.`,
-        link: "/members",
+        link: "/settings/members",
         actorId,
         excludeUserId: actorId,
       });
@@ -304,7 +304,7 @@ export async function createUserWithAccess(
       type: "MEMBER_ADDED",
       title: "New member added",
       body: `${input.name} was added as ${roleLabel(entry.role)}.`,
-      link: "/members",
+      link: "/settings/members",
       actorId,
       excludeUserId: actorId,
     });

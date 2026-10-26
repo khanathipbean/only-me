@@ -107,7 +107,7 @@ test("the session cookie cannot be read by script and does not travel cross-site
  * This asks the rendered page instead, which is also how the unnamed
  * `<dialog>` turned up.
  */
-for (const path of ["/projects", "/members"]) {
+for (const path of ["/projects", "/settings", "/settings/members"]) {
   test(`every control on ${path} has an accessible name`, async ({ page }) => {
     await page.goto(path);
 
@@ -163,4 +163,44 @@ test("the site's own address goes somewhere", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/projects$/);
   await expect(page.getByRole("heading", { name: /projects/i })).toBeVisible();
+});
+
+/**
+ * The app's own menu, for the half of it that is not inside a Project.
+ *
+ * Members used to be reachable only through an icon in the header, and the
+ * Projects list had no menu at all. The row that fixes that must not show up
+ * on a Project page, which has its own — two rows of tabs under one header
+ * is two menus arguing about where the reader is.
+ */
+test("the app menu leads to Settings and stands aside inside a Project", async ({ page }) => {
+  await page.goto("/settings");
+  await expect(
+    page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Settings" }),
+  ).toHaveAttribute("aria-current", "page");
+
+  // The card is the way in, and it is the card that is the link.
+  await page.getByRole("link", { name: "Users" }).click();
+  await page.waitForURL(/\/settings\/members$/);
+  await expect(page.getByRole("heading", { name: "Members", level: 1 })).toBeVisible();
+  // Still inside the section, three clicks down.
+  await expect(
+    page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Settings" }),
+  ).toHaveAttribute("aria-current", "page");
+
+  /* The address Members used to live at, with whatever was on the end of it.
+     It is in bookmarks and in every notification written before the move. */
+  await page.goto("/members?tab=activity");
+  await page.waitForURL(/\/settings\/members\?tab=activity$/);
+  await expect(page.getByRole("link", { name: "Account activity" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+
+  // And a Project keeps one row, not two.
+  await page.goto("/projects?search=E2E-FIXTURE");
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Project" })).toBeVisible();
 });

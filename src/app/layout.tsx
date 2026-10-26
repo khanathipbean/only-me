@@ -12,10 +12,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemeSync } from "@/components/ThemeSync";
 import { ToastListener } from "@/components/ToastListener";
 import { ProjectPicker } from "@/components/ProjectPicker";
+import { AppTabs } from "@/components/AppTabs";
 import { NotificationBell } from "@/components/NotificationBell";
 import { listProjectsForUser } from "@/lib/projects";
-import { IconLinkButton } from "@/components/ui/Button";
-import { UserPlusIcon } from "@/components/icons";
 import "./globals.css";
 import { invalidateRouteCache } from "@/lib/revalidate";
 
@@ -51,7 +50,8 @@ export const metadata: Metadata = {
     default: "Bull Terrier",
     template: "%s · Bull Terrier",
   },
-  description: "Manage Modules, Requirements, Scenarios, Test Groups, and Test Cases",
+  description:
+    "Manage Modules, Requirements, Scenarios, Test Groups, and Test Cases",
   icons: { icon: "/logo.png" },
 };
 
@@ -64,7 +64,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const currentUser = session?.user ? await getUserById(session.user.id) : null;
   /* ADMIN on at least one Project. Gates the Members page and "New Project"
    * alike — one predicate, so one query rather than the same one twice. */
-  const isAdmin = session?.user ? await isAdminAnywhere(session.user.id) : false;
+  const isAdmin = session?.user
+    ? await isAdminAnywhere(session.user.id)
+    : false;
   /* For the header's Project picker. Only what it needs, and only the
    * Projects this person is a member of, so it can never offer one they'd be
    * bounced straight out of. Archived ones are already excluded upstream —
@@ -134,47 +136,65 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         </div>
 
         {session?.user && (
-          <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur">
-            <div className="flex w-full flex-wrap items-center gap-3 px-6 py-3 sm:px-8 lg:px-12 xl:px-16">
-              <Link href="/projects" className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
-                <Image src="/logo.png" alt="Bull Terrier" width={28} height={28} unoptimized />
-                {/* Hidden below sm: the name plus a usable search bar don't
+          <>
+            <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur">
+              <div className="flex w-full flex-wrap items-center gap-3 px-6 py-3 sm:px-8 lg:px-12 xl:px-16">
+                <Link
+                  href="/projects"
+                  className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight text-foreground"
+                >
+                  <Image
+                    src="/logo.png"
+                    alt="Bull Terrier"
+                    width={28}
+                    height={28}
+                    unoptimized
+                  />
+                  {/* Hidden below sm: the name plus a usable search bar don't
                     both fit at phone widths — the logo alone still reads as
                     "home", so it's what stays. */}
-                <span className="hidden sm:inline">Bull Terrier</span>
-              </Link>
+                  <span className="hidden sm:inline">Bull Terrier</span>
+                </Link>
 
-              <HeaderSearch className="min-w-48 flex-1" />
+                <HeaderSearch className="min-w-48 flex-1" />
 
-              {/* Right after the search box, so the two things that say "what
+                {/* Right after the search box, so the two things that say "what
                   am I looking at" sit together. It renders nothing off a
                   Project page, and nothing when there is only one Project. */}
-              <ProjectPicker projects={pickerProjects} canCreateProject={isAdmin} />
+                <ProjectPicker
+                  projects={pickerProjects}
+                  canCreateProject={isAdmin}
+                />
 
-              <NotificationBell />
+                <NotificationBell />
 
-              {/* Hidden below sm: AccountMenu folds the same links into its
-                  own menu there, so the header doesn't need to fit an admin
-                  icon, a theme icon, and the avatar in a phone's width. */}
-              {isAdmin && (
+                {/* No Members icon here any more: Settings is a tab on the
+                    row below, with Users the first card inside it. An icon in
+                    the corner that only an admin ever saw was a shortcut
+                    nobody found without being told, and keeping it beside a
+                    menu that now says the same thing twice over is two ways
+                    in that have to agree forever. */}
                 <div className="hidden sm:flex">
-                  <IconLinkButton href="/members" aria-label="Members" title="Members">
-                    <UserPlusIcon />
-                  </IconLinkButton>
+                  <ThemeToggle />
                 </div>
-              )}
-              <div className="hidden sm:flex">
-                <ThemeToggle />
+                <AccountMenu
+                  name={currentUser?.name ?? session.user.email ?? "Account"}
+                  email={currentUser?.email ?? session.user.email ?? ""}
+                  avatarUrl={
+                    currentUser?.avatarKey
+                      ? `/api/users/${currentUser.id}/avatar`
+                      : null
+                  }
+                  logout={logout}
+                  canManageMembers={isAdmin}
+                />
               </div>
-              <AccountMenu
-                name={currentUser?.name ?? session.user.email ?? "Account"}
-                email={currentUser?.email ?? session.user.email ?? ""}
-                avatarUrl={currentUser?.avatarKey ? `/api/users/${currentUser.id}/avatar` : null}
-                logout={logout}
-                canManageMembers={isAdmin}
-              />
-            </div>
-          </header>
+            </header>
+            {/* The other half of the app's menu, under the header the way a
+              Project's own tabs sit under it. It draws nothing on a Project
+              page, where `ProjectTabs` has the row. */}
+            <AppTabs canManage={isAdmin} />
+          </>
         )}
         {children}
       </body>

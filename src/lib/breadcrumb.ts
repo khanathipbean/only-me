@@ -51,11 +51,17 @@ export function projectBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [PROJECTS_ROOT, { label: project.name, href: `/projects/${project.id}` }];
 }
 
-/** Members and Profile sit outside any one Project, reached from the account
- * menu rather than a Project tab — Projects is still the nearest thing this
- * app has to a home page, so it's the path back from either. */
+/** Settings and Profile sit outside any one Project — Projects is still the
+ * nearest thing this app has to a home page, so it's the path back. */
+export function settingsBreadcrumb(): BreadcrumbSegment[] {
+  return [PROJECTS_ROOT, { label: "Settings", href: "/settings" }];
+}
+
+/** Members lives under Settings, so the trail says so: going up from it
+ * lands on the other things set for the whole install, not back at the
+ * Projects list two floors down. */
 export function membersBreadcrumb(): BreadcrumbSegment[] {
-  return [PROJECTS_ROOT, { label: "Members", href: "/members" }];
+  return [...settingsBreadcrumb(), { label: "Members", href: "/settings/members" }];
 }
 
 export function profileBreadcrumb(): BreadcrumbSegment[] {
