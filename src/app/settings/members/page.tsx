@@ -558,27 +558,35 @@ export default async function MembersPage({
                         </div>
                       </form>
 
-                      <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-5">
-                        <ConfirmForm
-                          action={deleteMemberAction(member.userId)}
-                          confirmMessage={`Delete ${member.name}? This removes the account and every Project membership it has. This cannot be undone.`}
-                          variant="danger"
-                        >
-                          <IconButton
-                            type="submit"
-                            variant="danger"
-                            aria-label={`Delete ${member.name}`}
-                            title="Delete user"
-                          >
-                            <TrashIcon />
-                          </IconButton>
-                        </ConfirmForm>
-                        <div className="flex items-center gap-2">
-                          <DialogCloseButton />
-                          <Button type="submit" form={`edit-access-${member.userId}`}>
-                            Save
-                          </Button>
-                        </div>
+                      <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-5">
+                        <DialogCloseButton />
+                        <Button type="submit" form={`edit-access-${member.userId}`}>
+                    {/* Deleting sits in the row, not in the dialog it used to
+                        hide at the bottom of. That dialog is for editing one
+                        account, and a button that destroys it was both the
+                        wrong thing to meet while changing a role and three
+                        clicks away from the list where somebody decides an
+                        account should go.
+
+                        Safe in a row because it was never the dialog keeping
+                        it safe: `ConfirmForm` opens one of its own and names
+                        the account in the question. */}
+                    <ConfirmForm
+                      action={deleteMemberAction(member.userId)}
+                      confirmMessage={`Delete ${member.name}? This removes the account and every Project membership it has. This cannot be undone.`}
+                      variant="danger"
+                    >
+                      <IconButton
+                        type="submit"
+                        variant="danger"
+                        aria-label={`Delete ${member.name}`}
+                        title="Delete user"
+                      >
+                        <TrashIcon />
+                      </IconButton>
+                    </ConfirmForm>
+                          Save
+                        </Button>
                       </div>
                     </Modal>
                     </span>

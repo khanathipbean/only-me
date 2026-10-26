@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { E2E_VIEWER_EMAIL } from "./support/credentials";
 
 /**
  * The headers and the error pages: two things that are only true if a browser
@@ -203,4 +204,40 @@ test("the app menu leads to Settings and stands aside inside a Project", async (
   await page.waitForURL(/\/projects\/[^/]+$/);
   await expect(page.getByRole("navigation", { name: "Sections" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Project" })).toBeVisible();
+});
+
+/**
+ * Deleting an account is a row action, not something buried at the bottom of
+ * the dialog for editing one.
+ *
+ * The confirmation is the whole reason that is safe, so this presses the
+ * button and checks the question names the right account — and then backs
+ * out, because a test that deletes a fixture account is a test that breaks
+ * the next one.
+ *
+ * Located by the email cell. A first pass filtered rows on a name and caught
+ * the admin's row instead, which carries a chip for every Project in the
+ * database — and so nearly asked to delete the account the suite signs in
+ * with. The email is the one cell on this page that is unique by
+ * construction.
+ */
+test("deleting a user is offered in the row, and asks first", async ({ page }) => {
+  await page.goto("/settings/members");
+  const row = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: E2E_VIEWER_EMAIL, exact: true }) });
+
+  await expect(row.getByRole("button", { name: "Edit access" })).toBeVisible();
+  await row.getByRole("button", { name: /^Delete / }).click();
+
+  const confirm = page.locator("dialog[open]");
+  await expect(confirm).toHaveCount(1);
+  await expect(confirm).toContainText("This cannot be undone");
+  /* The question has to name the account, or it is a confirmation of
+     nothing in particular. Case-insensitive: the address is lower-case
+     and the display name is not. */
+  await expect(confirm).toContainText(new RegExp(E2E_VIEWER_EMAIL.split("@")[0], "i"));
+
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("cell", { name: E2E_VIEWER_EMAIL, exact: true })).toBeVisible();
 });
