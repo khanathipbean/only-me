@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { withProjectRole } from "@/lib/api-auth";
-import { EDITOR_ROLES } from "@/lib/rbac";
+import { withCapability } from "@/lib/api-auth";
 import { getProjectById } from "@/lib/projects";
 import { isSupportedImportFile, parseImportFile } from "@/lib/import/parse";
 import { MAX_IMPORT_FILE_SIZE_BYTES, previewImport } from "@/lib/import/service";
 
-export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId }) => {
+export const POST = withCapability("project.import", async (request, { projectId }) => {
   const formData = await request.formData();
   const file = formData.get("file");
 

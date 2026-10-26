@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import {
   ValidationError,
   archiveTestGroup,
   getTestGroupWithProjectId,
 } from "@/lib/test-groups";
 
-export const POST = withEntityProjectRole(
-  EDITOR_ROLES,
+export const POST = withEntityCapability(
+  "authoring.edit",
   getTestGroupWithProjectId,
   async (_request, { entityId, userId }) => {
     try {

@@ -7,8 +7,7 @@ import {
   readChoice,
   readChoiceIfPresent,
 } from "@/lib/enums";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import { getTestGroupWithProjectId } from "@/lib/test-groups";
 import {
   ValidationError,
@@ -16,8 +15,8 @@ import {
   listTestCasesForTestGroup,
 } from "@/lib/test-cases";
 
-export const GET = withEntityProjectRole(
-  ALL_MEMBER_ROLES,
+export const GET = withEntityCapability(
+  "authoring.view",
   getTestGroupWithProjectId,
   async (_request, { entityId }) => {
     const testCases = await listTestCasesForTestGroup(entityId);
@@ -25,8 +24,8 @@ export const GET = withEntityProjectRole(
   },
 );
 
-export const POST = withEntityProjectRole(
-  EDITOR_ROLES,
+export const POST = withEntityCapability(
+  "authoring.edit",
   getTestGroupWithProjectId,
   async (request, { entityId, userId }) => {
     const body = await request.json();

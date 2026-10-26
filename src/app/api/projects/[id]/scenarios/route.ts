@@ -7,8 +7,7 @@ import {
   readChoiceIfPresent,
   readFilterChoice,
 } from "@/lib/enums";
-import { withProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { withCapability } from "@/lib/api-auth";
 import {
   ValidationError,
   createScenario,
@@ -16,7 +15,7 @@ import {
   listScenariosForProject,
 } from "@/lib/scenarios";
 
-export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId }) => {
+export const GET = withCapability("authoring.view", async (request, { projectId }) => {
   const { searchParams } = new URL(request.url);
   const sortBy = searchParams.get("sortBy");
   const sortOrder = searchParams.get("sortOrder");
@@ -30,7 +29,7 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId
   return NextResponse.json(scenarios);
 });
 
-export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, userId }) => {
+export const POST = withCapability("authoring.edit", async (request, { projectId, userId }) => {
   const body = await request.json();
 
   try {

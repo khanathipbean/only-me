@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkProjectRole, requireApiSession } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES } from "@/lib/rbac";
+import { checkCapability, requireApiSession } from "@/lib/api-auth";
 import { getProjectById } from "@/lib/projects";
 import { getProjectDashboard } from "@/lib/dashboard";
 import { generateDashboardSummaryCsv } from "@/lib/export";
@@ -12,7 +11,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   }
 
   const { id: projectId } = await context.params;
-  const { forbidden } = await checkProjectRole(userId!, projectId, ALL_MEMBER_ROLES);
+  const { forbidden } = await checkCapability(userId!, projectId, "reading.dashboard");
   if (forbidden) {
     return forbidden;
   }

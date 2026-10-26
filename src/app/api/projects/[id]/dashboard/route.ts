@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { withProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES } from "@/lib/rbac";
+import { withCapability } from "@/lib/api-auth";
 import { getProjectDashboard } from "@/lib/dashboard";
 import { PRIORITY_VALUES, TEST_RESULT_VALUES, WORKFLOW_STATUS_VALUES } from "@/lib/enums";
 import type { Priority, TestResult, WorkflowStatus } from "@/generated/prisma/client";
@@ -9,7 +8,7 @@ function asEnumOrUndefined<T extends string>(value: string | null, allowed: T[])
   return value && (allowed as string[]).includes(value) ? (value as T) : undefined;
 }
 
-export const GET = withProjectRole(ALL_MEMBER_ROLES, async (request, { projectId }) => {
+export const GET = withCapability("reading.dashboard", async (request, { projectId }) => {
   const { searchParams } = new URL(request.url);
   const tags = searchParams.get("tags");
 

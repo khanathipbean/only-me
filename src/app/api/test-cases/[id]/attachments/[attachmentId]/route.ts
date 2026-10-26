@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkProjectRole, requireApiSession } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { checkCapability, requireApiSession } from "@/lib/api-auth";
 import { canPreview } from "@/lib/project-files";
 import { deleteAttachment, getAttachmentWithProjectId, readAttachmentBytes } from "@/lib/attachments";
 
@@ -28,7 +27,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { forbidden } = await checkProjectRole(userId!, attachment.projectId, ALL_MEMBER_ROLES);
+  const { forbidden } = await checkCapability(userId!, attachment.projectId, "authoring.view");
   if (forbidden) {
     return forbidden;
   }
@@ -68,7 +67,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const { forbidden } = await checkProjectRole(userId!, attachment.projectId, EDITOR_ROLES);
+  const { forbidden } = await checkCapability(userId!, attachment.projectId, "authoring.edit");
   if (forbidden) {
     return forbidden;
   }

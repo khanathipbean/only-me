@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { ChoiceError, WORKFLOW_STATUS_VALUES, readChoiceIfPresent } from "@/lib/enums";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import { getScenarioById } from "@/lib/scenarios";
 import {
   ValidationError,
@@ -9,8 +8,8 @@ import {
   listTestGroupsForScenario,
 } from "@/lib/test-groups";
 
-export const GET = withEntityProjectRole(
-  ALL_MEMBER_ROLES,
+export const GET = withEntityCapability(
+  "authoring.view",
   getScenarioById,
   async (_request, { entityId }) => {
     const testGroups = await listTestGroupsForScenario(entityId);
@@ -18,8 +17,8 @@ export const GET = withEntityProjectRole(
   },
 );
 
-export const POST = withEntityProjectRole(
-  EDITOR_ROLES,
+export const POST = withEntityCapability(
+  "authoring.edit",
   getScenarioById,
   async (request, { entityId, userId }) => {
     const body = await request.json();

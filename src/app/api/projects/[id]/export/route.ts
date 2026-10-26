@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkProjectRole, requireApiSession } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES } from "@/lib/rbac";
+import { checkCapability, requireApiSession } from "@/lib/api-auth";
 import { getProjectById } from "@/lib/projects";
 import {
   generateProjectHierarchyCsv,
@@ -17,7 +16,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const { id: projectId } = await context.params;
-  const { forbidden } = await checkProjectRole(userId!, projectId, ALL_MEMBER_ROLES);
+  const { forbidden } = await checkCapability(userId!, projectId, "project.export");
   if (forbidden) {
     return forbidden;
   }

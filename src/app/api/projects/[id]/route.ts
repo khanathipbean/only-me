@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { ChoiceError, PROJECT_STATUS_VALUES, readChoice } from "@/lib/enums";
-import { withProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { withCapability } from "@/lib/api-auth";
 import {
   DuplicateCodeError,
   ValidationError,
@@ -9,7 +8,7 @@ import {
   updateProject,
 } from "@/lib/projects";
 
-export const GET = withProjectRole(ALL_MEMBER_ROLES, async (_request, { projectId }) => {
+export const GET = withCapability("project.read", async (_request, { projectId }) => {
   const project = await getProjectById(projectId);
   if (!project) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -17,7 +16,7 @@ export const GET = withProjectRole(ALL_MEMBER_ROLES, async (_request, { projectI
   return NextResponse.json(project);
 });
 
-export const PATCH = withProjectRole(EDITOR_ROLES, async (request, { projectId, userId }) => {
+export const PATCH = withCapability("project.edit", async (request, { projectId, userId }) => {
   const body = await request.json();
 
   try {

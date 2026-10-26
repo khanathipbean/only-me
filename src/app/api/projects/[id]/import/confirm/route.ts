@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { withProjectRole } from "@/lib/api-auth";
-import { EDITOR_ROLES } from "@/lib/rbac";
+import { withCapability } from "@/lib/api-auth";
 import { getProjectById } from "@/lib/projects";
 import { ImportRowFailedError, confirmImport } from "@/lib/import/service";
 import { notifyProject } from "@/lib/notifications";
@@ -54,7 +53,7 @@ function describeCounts(
   return sentences.length > 0 ? sentences.join(" ") : "No new items were created.";
 }
 
-export const POST = withProjectRole(EDITOR_ROLES, async (request, { projectId, userId }) => {
+export const POST = withCapability("project.import", async (request, { projectId, userId }) => {
   const body = await request.json();
   const rows = body.rows;
 

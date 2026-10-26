@@ -41,44 +41,20 @@ export type CapabilityGroup = {
 
 export const CAPABILITY_GROUPS = [
   {
-    key: "authoring",
-    label: "Test authoring",
+    key: "overview",
+    label: "Overview",
     capabilities: [
       {
-        key: "authoring.view",
-        label: "View Modules, Requirements, Scenarios and Test Cases",
-        detail: "access menu & view data",
-        roles: ALL_MEMBER_ROLES,
-      },
-      {
-        key: "authoring.edit",
-        label: "Create and edit them",
-        detail: "add, rename, reorder, move, archive",
-        roles: EDITOR_ROLES,
-      },
-    ],
-  },
-  {
-    key: "runs",
-    label: "Test runs",
-    capabilities: [
-      {
-        key: "runs.view",
-        label: "View Test Runs",
+        key: "reading.overview",
+        label: "View a Project's Overview",
         detail: "access menu & view data",
         roles: NON_DEV_ROLES,
       },
-      {
-        key: "runs.manage",
-        label: "Run and close a round",
-        detail: "record results, add cases, reopen, close",
-        roles: EDITOR_ROLES,
-      },
     ],
   },
   {
-    key: "handoff",
-    label: "Hand-off",
+    key: "my-work",
+    label: "My Work",
     capabilities: [
       {
         key: "handoff.view",
@@ -101,21 +77,21 @@ export const CAPABILITY_GROUPS = [
     ],
   },
   {
-    key: "reading",
-    label: "Reading the numbers",
+    key: "dashboard",
+    label: "Dashboard",
     capabilities: [
-      {
-        key: "reading.overview",
-        label: "View a Project's Overview",
-        detail: "access menu & view data",
-        roles: NON_DEV_ROLES,
-      },
       {
         key: "reading.dashboard",
         label: "View the Dashboard",
         detail: "access menu & view data",
         roles: ALL_MEMBER_ROLES,
       },
+    ],
+  },
+  {
+    key: "problem-cases",
+    label: "Problem Cases",
+    capabilities: [
       {
         key: "reading.problems",
         label: "View Problem Cases",
@@ -125,8 +101,59 @@ export const CAPABILITY_GROUPS = [
     ],
   },
   {
-    key: "material",
-    label: "Notes and files",
+    key: "modules",
+    label: "Modules",
+    capabilities: [
+      {
+        key: "authoring.view",
+        label: "View Modules, Requirements, Scenarios and Test Cases",
+        detail: "access menu & view data",
+        roles: ALL_MEMBER_ROLES,
+      },
+      {
+        key: "authoring.edit",
+        label: "Create and edit them",
+        detail: "add, rename, reorder, move, archive",
+        roles: EDITOR_ROLES,
+      },
+    ],
+  },
+  {
+    key: "test-runs",
+    label: "Test Runs",
+    capabilities: [
+      {
+        key: "runs.view",
+        label: "View Test Runs",
+        detail: "access menu & view data",
+        roles: NON_DEV_ROLES,
+      },
+      {
+        key: "runs.manage",
+        label: "Run and close a round",
+        detail: "record results, add cases, reopen, close",
+        roles: EDITOR_ROLES,
+      },
+      /* Wider than viewing the round itself, and on purpose: the screenshot
+       * of what went wrong is attached to the case in the round, and a DEV
+       * who cannot open Test Runs still has to be able to see it. */
+      {
+        key: "runs.evidence",
+        label: "See files attached inside a round",
+        detail: "the evidence on a case, over the API",
+        roles: ALL_MEMBER_ROLES,
+      },
+      {
+        key: "runs.export",
+        label: "Export a round's results",
+        detail: "export data, over the API",
+        roles: ALL_MEMBER_ROLES,
+      },
+    ],
+  },
+  {
+    key: "notes",
+    label: "Notes",
     capabilities: [
       {
         key: "notes.view",
@@ -140,6 +167,12 @@ export const CAPABILITY_GROUPS = [
         detail: "manage or setting data",
         roles: EDITOR_ROLES,
       },
+    ],
+  },
+  {
+    key: "files",
+    label: "Files",
+    capabilities: [
       {
         key: "files.view",
         label: "See and download Files",
@@ -155,21 +188,21 @@ export const CAPABILITY_GROUPS = [
     ],
   },
   {
-    key: "project-admin",
-    label: "Running a Project",
+    key: "import",
+    label: "Import",
     capabilities: [
-      {
-        key: "project.edit",
-        label: "Change a Project's settings",
-        detail: "name, dates, status, archive",
-        roles: EDITOR_ROLES,
-      },
       {
         key: "project.import",
         label: "Import Test Cases from a file",
         detail: "manage or setting data",
         roles: EDITOR_ROLES,
       },
+    ],
+  },
+  {
+    key: "audit-trail",
+    label: "Audit Trail",
+    capabilities: [
       {
         key: "project.audit",
         label: "Read the Audit Trail",
@@ -179,19 +212,33 @@ export const CAPABILITY_GROUPS = [
     ],
   },
   {
-    key: "install",
-    label: "The whole install",
+    key: "project",
+    label: "Project",
     capabilities: [
-      /* Not read off a membership like the rest: `isAdminAnywhere` asks
-       * whether the account holds ADMIN on any Project at all, because
-       * neither of these belongs to one — somebody has to be able to add
-       * members to a Project that does not exist yet. */
       {
-        key: "install.project-create",
-        label: "Create a Project",
-        detail: "ADMIN on any Project, not this one",
-        roles: ADMIN_ROLES,
+        key: "project.read",
+        label: "Read a Project's own record",
+        detail: "over the API, not the Overview page",
+        roles: ALL_MEMBER_ROLES,
       },
+      {
+        key: "project.edit",
+        label: "Change a Project's settings",
+        detail: "name, dates, status, archive",
+        roles: EDITOR_ROLES,
+      },
+      {
+        key: "project.export",
+        label: "Export a Project",
+        detail: "export data, over the API",
+        roles: ALL_MEMBER_ROLES,
+      },
+    ],
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    capabilities: [
       {
         key: "install.settings",
         label: "Open Settings",
@@ -201,6 +248,16 @@ export const CAPABILITY_GROUPS = [
       {
         key: "install.users",
         label: "Add users and set what they can reach",
+        detail: "ADMIN on any Project, not this one",
+        roles: ADMIN_ROLES,
+      },
+      /* Not read off a membership like the rest: `isAdminAnywhere` asks
+       * whether the account holds ADMIN on any Project at all, because
+       * neither of these belongs to one — somebody has to be able to add
+       * members to a Project that does not exist yet. */
+      {
+        key: "install.project-create",
+        label: "Create a Project",
         detail: "ADMIN on any Project, not this one",
         roles: ADMIN_ROLES,
       },

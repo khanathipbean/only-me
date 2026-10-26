@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import { TestRunValidationError, getRunCaseWithProjectId } from "@/lib/test-runs";
 import {
   AttachmentValidationError,
@@ -8,8 +7,8 @@ import {
   saveRunCaseAttachment,
 } from "@/lib/attachments";
 
-export const GET = withEntityProjectRole(
-  ALL_MEMBER_ROLES,
+export const GET = withEntityCapability(
+  "runs.evidence",
   getRunCaseWithProjectId,
   async (_request, { entityId }) => {
     const attachments = await listAttachmentsForRunCase(entityId);
@@ -17,8 +16,8 @@ export const GET = withEntityProjectRole(
   },
 );
 
-export const POST = withEntityProjectRole(
-  EDITOR_ROLES,
+export const POST = withEntityCapability(
+  "runs.manage",
   getRunCaseWithProjectId,
   async (request, { entityId, userId }) => {
     const formData = await request.formData();

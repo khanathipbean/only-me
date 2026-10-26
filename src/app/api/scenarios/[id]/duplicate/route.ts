@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import { duplicateScenario, getScenarioById } from "@/lib/scenarios";
 
-export const POST = withEntityProjectRole(
-  EDITOR_ROLES,
+export const POST = withEntityCapability(
+  "authoring.edit",
   getScenarioById,
   async (_request, { entityId, userId }) => {
     const copy = await duplicateScenario(entityId, userId);

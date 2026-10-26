@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import { getTestCaseWithProjectId } from "@/lib/test-cases";
 import {
   AttachmentValidationError,
@@ -8,8 +7,8 @@ import {
   saveAttachment,
 } from "@/lib/attachments";
 
-export const GET = withEntityProjectRole(
-  ALL_MEMBER_ROLES,
+export const GET = withEntityCapability(
+  "authoring.view",
   getTestCaseWithProjectId,
   async (_request, { entityId }) => {
     const attachments = await listAttachmentsForTestCase(entityId);
@@ -17,8 +16,8 @@ export const GET = withEntityProjectRole(
   },
 );
 
-export const POST = withEntityProjectRole(
-  EDITOR_ROLES,
+export const POST = withEntityCapability(
+  "authoring.edit",
   getTestCaseWithProjectId,
   async (request, { entityId, userId }) => {
     const formData = await request.formData();

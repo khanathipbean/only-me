@@ -6,8 +6,7 @@ import {
   readChoice,
   readChoiceIfPresent,
 } from "@/lib/enums";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES, EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import {
   ConfirmRequiredError,
   ValidationError,
@@ -16,14 +15,14 @@ import {
   updateScenario,
 } from "@/lib/scenarios";
 
-export const GET = withEntityProjectRole(
-  ALL_MEMBER_ROLES,
+export const GET = withEntityCapability(
+  "authoring.view",
   getScenarioById,
   async (_request, { entity }) => NextResponse.json(entity),
 );
 
-export const PATCH = withEntityProjectRole(
-  EDITOR_ROLES,
+export const PATCH = withEntityCapability(
+  "authoring.edit",
   getScenarioById,
   async (request, { entityId, userId }) => {
     const body = await request.json();
@@ -56,8 +55,8 @@ export const PATCH = withEntityProjectRole(
   },
 );
 
-export const DELETE = withEntityProjectRole(
-  EDITOR_ROLES,
+export const DELETE = withEntityCapability(
+  "authoring.edit",
   getScenarioById,
   async (request, { entityId, userId }) => {
     const body = await request.json().catch(() => ({}));

@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { withEntityProjectRole } from "@/lib/api-auth";
-import { EDITOR_ROLES } from "@/lib/rbac";
+import { withEntityCapability } from "@/lib/api-auth";
 import { getTestCaseWithProjectId, updateAssignee } from "@/lib/test-cases";
 
-export const PATCH = withEntityProjectRole(
-  EDITOR_ROLES,
+export const PATCH = withEntityCapability(
+  "handoff.assign",
   getTestCaseWithProjectId,
   async (request, { entityId, userId }) => {
     const body = await request.json();

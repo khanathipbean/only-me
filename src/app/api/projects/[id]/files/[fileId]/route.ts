@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkProjectRole, requireApiSession } from "@/lib/api-auth";
-import { ALL_MEMBER_ROLES } from "@/lib/rbac";
+import { checkCapability, requireApiSession } from "@/lib/api-auth";
 import { canPreview, getProjectFile, readProjectFileBytes } from "@/lib/project-files";
 
 /**
@@ -22,7 +21,7 @@ export async function GET(
   }
 
   const { id: projectId, fileId } = await context.params;
-  const { forbidden } = await checkProjectRole(userId!, projectId, ALL_MEMBER_ROLES);
+  const { forbidden } = await checkCapability(userId!, projectId, "files.view");
   if (forbidden) {
     return forbidden;
   }

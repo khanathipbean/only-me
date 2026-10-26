@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { checkProjectRole, withEntityProjectRole } from "@/lib/api-auth";
-import { EDITOR_ROLES } from "@/lib/rbac";
+import { checkCapability, withEntityCapability } from "@/lib/api-auth";
 import { getScenarioById } from "@/lib/scenarios";
 import { getTestGroupWithProjectId, moveTestGroup } from "@/lib/test-groups";
 
-export const POST = withEntityProjectRole(
-  EDITOR_ROLES,
+export const POST = withEntityCapability(
+  "authoring.edit",
   getTestGroupWithProjectId,
   async (request, { entityId, userId }) => {
     const body = await request.json();
@@ -19,7 +18,7 @@ export const POST = withEntityProjectRole(
       );
     }
 
-    const { forbidden } = await checkProjectRole(userId, targetScenario.projectId, EDITOR_ROLES);
+    const { forbidden } = await checkCapability(userId, targetScenario.projectId, "authoring.edit");
     if (forbidden) {
       return forbidden;
     }
