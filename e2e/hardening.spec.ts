@@ -309,8 +309,18 @@ test("a permission can be given and taken back", async ({ page }) => {
   // A DEV holds this one, and it must survive a save that is about another.
   await expect(authoring).toBeChecked();
 
+  /* Nothing to save on arrival, and nothing to save again once a tick is put
+     back: the button is measured against what the server sent, not against
+     whether anything was touched. */
+  const save = page.getByRole("button", { name: /Save Changes/ });
+  await expect(save).toBeDisabled();
   await notes.check();
-  await page.getByRole("button", { name: /Save Changes/ }).click();
+  await expect(save).toBeEnabled();
+  await notes.uncheck();
+  await expect(save).toBeDisabled();
+
+  await notes.check();
+  await save.click();
   await page.waitForURL(/toast=/);
 
   await page.goto("/settings/roles?role=DEV");
@@ -318,7 +328,7 @@ test("a permission can be given and taken back", async ({ page }) => {
   await expect(authoring).toBeChecked();
 
   await notes.uncheck();
-  await page.getByRole("button", { name: /Save Changes/ }).click();
+  await save.click();
   await page.waitForURL(/toast=/);
   await page.goto("/settings/roles?role=DEV");
   await expect(notes).not.toBeChecked();

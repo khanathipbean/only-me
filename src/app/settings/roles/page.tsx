@@ -9,7 +9,7 @@ import { rolesBreadcrumb } from "@/lib/breadcrumb";
 import { PROJECT_ROLE_OPTIONS } from "@/lib/enums";
 import { redirect } from "next/navigation";
 import { pageClass } from "@/lib/ui";
-import { SubmitButton } from "@/components/SubmitButton";
+import { SubmitWhenChanged } from "@/components/SubmitButton";
 import { withToast } from "@/lib/toast";
 import { errorHref } from "@/lib/hrefs";
 import { invalidateRouteCache } from "@/lib/revalidate";
@@ -155,7 +155,7 @@ export default async function RolesPage({ searchParams }: PageProps<"/settings/r
                 {held.size} of {CAPABILITIES.length} capabilities
               </p>
             </div>
-            <SubmitButton pendingLabel="Saving…">Save Changes</SubmitButton>
+            <SubmitWhenChanged pendingLabel="Saving…">Save Changes</SubmitWhenChanged>
           </div>
 
           <div className="flex flex-col gap-3">
