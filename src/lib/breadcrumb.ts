@@ -118,7 +118,7 @@ export function importBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
 }
 
 export function notesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
-  return [...projectBreadcrumb(project), { label: "Notes", href: notesListHref(project.id) }];
+  return [...projectBreadcrumb(project), { label: "Resources", href: notesListHref(project.id) }];
 }
 
 export function modulesListBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {

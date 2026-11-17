@@ -13,6 +13,7 @@ import {
   updateNote,
 } from "@/lib/notes";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { ResourceTabs } from "./ResourceTabs";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
@@ -49,7 +50,7 @@ import {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Notes · ${project.name}` : "Notes" };
+  return { title: project ? `Resources · ${project.name}` : "Resources" };
 }
 
 /** Parsed back at UTC midnight: this field is a day, not a moment, and
@@ -315,7 +316,7 @@ export default async function NotesPage({
         segments={notesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
       <PageHeader
-        title="Notes"
+        title="Resources"
         subtitle="What a meeting decided, why a Requirement reads the way it does — filed under a Module or against the Project, visible to everyone on it."
         actions={
           /* No longer hidden while the Project has no Modules. That guard was
@@ -347,6 +348,8 @@ export default async function NotesPage({
       />
 
       {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
+
+      <ResourceTabs projectId={projectId} active="notes" />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">

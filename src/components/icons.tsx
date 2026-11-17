@@ -168,6 +168,17 @@ export function MoreVerticalIcon(props: IconProps) {
   );
 }
 
+/** Two links of a chain. The Links view's own mark, and the one beside a
+ *  row whose address points out of this app. */
+export function LinkIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+      <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+    </IconBase>
+  );
+}
+
 export function ArrowUpRightIcon(props: IconProps) {
   return (
     <IconBase {...props}>

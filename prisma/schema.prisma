@@ -40,6 +40,7 @@ model User {
   performedImports       ImportLog[]
   uploadedFiles          ProjectFile[]
   createdNotes           Note[]
+  createdLinks           Link[]
   createdTestRuns        TestRun[]         @relation("TestRunCreatedBy")
   ranTestRunCases        TestRunCase[]     @relation("TestRunCaseRanBy")
   recordedRunResults     TestResultEvent[] @relation("TestResultEventRecordedBy")
@@ -92,6 +93,7 @@ model Project {
   testRuns      TestRun[]
   notifications Notification[]
   notes         Note[]
+  links         Link[]
 }
 
 /// One capability turned on or off for one role, where somebody has decided
@@ -548,6 +550,45 @@ model ProjectFile {
 /// Prose kept against a Module: what a meeting decided, why a Requirement
 /// reads the way it does — the things that belong to the testing without
 /// belonging to any one Test Case.
+/// Somewhere outside this app that a Project depends on: the ticket a round
+/// was raised from, the sheet the cases came out of, the environment being
+/// tested. Shaped after `Note` on purpose — the two sit on one page, are
+/// filed the same way and are filtered by the same controls, so a reader
+/// moving between them meets one idea, not two.
+model Link {
+  id        String  @id @default(cuid())
+  projectId String
+  /// Optional, for the same reason a Note's is: a link about the whole
+  /// Project has no honest answer here, and requiring one only files it
+  /// under whichever Module was nearest.
+  moduleId  String?
+  /// Sub-area of the Module, the same free-text label a Note and a
+  /// Requirement carry, re-spelled server-side so one group stays one group.
+  feature   String?
+  /// What this is, in the team's words. An address on its own tells the next
+  /// person nothing, so this is required where the Note's body is not.
+  title     String
+  /// Checked before it is stored: `http` and `https` only, so what the page
+  /// renders into an `href` can never be a `javascript:` URL running on this
+  /// app's own origin. See `assertSafeUrl` in src/lib/links.ts.
+  url       String
+
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  project   Project @relation(fields: [projectId], references: [id])
+  module    Module? @relation(fields: [moduleId], references: [id])
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  /// The list is always one Project's, usually narrowed to one Module.
+  @@index([projectId, moduleId])
+  /// Matches `Note`'s, because the Feature filter and the suggestion list
+  /// both read features one Module at a time.
+  @@index([moduleId, feature])
+}
+
 model Note {
   id          String    @id @default(cuid())
   projectId   String
@@ -609,6 +650,7 @@ model Module {
   requirements Requirement[]
   files        ProjectFile[]
   notes        Note[]
+  links        Link[]
 
   @@unique([projectId, name])
 }

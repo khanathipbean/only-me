@@ -166,17 +166,21 @@ export const CAPABILITY_GROUPS = [
   },
   {
     key: "notes",
-    label: "Notes",
+    /* "Resources", because the page these two open now holds the Links list
+       beside the Notes one. The keys stay `notes.*`: a stored override names
+       a capability by key, and renaming one would quietly leave whatever an
+       admin had set behind, pointing at a capability that no longer exists. */
+    label: "Resources",
     capabilities: [
       {
         key: "notes.view",
-        label: "Read Notes",
+        label: "Read Notes and Links",
         detail: "access menu & view data",
         roles: ALL_MEMBER_ROLES,
       },
       {
         key: "notes.write",
-        label: "Write and archive Notes",
+        label: "Write and archive Notes and Links",
         detail: "manage or setting data",
         roles: EDITOR_ROLES,
       },
