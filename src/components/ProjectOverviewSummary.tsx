@@ -33,8 +33,16 @@ const panelHeaderClass =
   "flex items-center justify-between gap-2 border-b border-border pb-3";
 const panelTitleClass = "flex items-center gap-2 text-sm font-semibold text-foreground";
 const viewAllClass = "flex items-center gap-1 text-xs font-medium text-brand hover:underline";
+/* `min-h-16` so a row is the same height in all three panels. Without it the
+   height was whatever the tallest thing in the row happened to be, which is
+   the icon — and Recent files draws a bigger one on purpose, because its icon
+   carries a "PDF"/"CSV" label inside it. That left files on 64px rows beside
+   notes and runs on 56px ones, three panels side by side that did not line up.
+   Stating the height here keeps that deliberate icon and settles the question
+   in one place: a panel that later wants a different icon cannot quietly take
+   the row size with it. */
 const rowClass =
-  "flex items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-black/[.03] dark:hover:bg-white/[.05]";
+  "flex min-h-16 items-center gap-2.5 rounded-md px-2 py-2 text-sm hover:bg-black/[.03] dark:hover:bg-white/[.05]";
 
 function Panel({
   icon,
