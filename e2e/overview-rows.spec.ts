@@ -19,6 +19,24 @@ test("a row is the same height in all three Overview panels", async ({ page }, t
   await page.goto("/projects?search=E2E-FIXTURE");
   await page.getByRole("link", { name: "E2E Fixture" }).click();
   await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  /* A note first, because the fixture has none and an empty panel cannot be
+     measured. Test runs the seed makes, and it also fabricates a file row —
+     so notes are the only one of the three this has to put there itself.
+     (The first version of this spec asserted the fixture seeded all three.
+     It does not, and the assertion said so rather than quietly measuring two
+     panels and calling them equal.) */
+  await page.goto(`/projects/${projectId}/notes`);
+  await page.getByRole("button", { name: "+ New Note" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog
+    .getByPlaceholder("e.g. Sprint 6 planning")
+    .fill(`Row height ${Date.now().toString().slice(-6)}`);
+  await dialog.getByRole("button", { name: "Add note" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.goto(`/projects/${projectId}`);
 
   /* By href rather than by panel heading: each panel's rows link somewhere
      only that panel links to, and the "View all" link above them goes to the
@@ -34,7 +52,7 @@ test("a row is the same height in all three Overview panels", async ({ page }, t
     const count = await rows.count();
     /* A panel with nothing in it draws an empty-state line instead of rows,
        and three empty panels would agree with each other perfectly while
-       proving nothing. The fixture seeds all three. */
+       proving nothing. */
     expect(count, `${panel} has no rows to measure`).toBeGreaterThan(0);
     for (let index = 0; index < count; index += 1) {
       const box = await rows.nth(index).boundingBox();

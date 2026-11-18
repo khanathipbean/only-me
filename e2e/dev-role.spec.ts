@@ -62,7 +62,10 @@ test("is offered only the five pages it may open", async ({ page }) => {
   await page.goto(`/projects/${projectId}/my-work`);
   const tabs = page.getByRole("navigation", { name: "Project" });
 
-  for (const label of ["My Work", "Dashboard", "Modules", "Notes", "Files"]) {
+  /* "Resources", not "Notes": that page holds the Links list beside the
+     notes now, and the tab was renamed with it. Still one tab and still the
+     same `notes.view` behind it — only the word changed. */
+  for (const label of ["My Work", "Dashboard", "Modules", "Resources", "Files"]) {
     await expect(tabs.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
   /* First for a DEV, who has no Overview in front of it. */
