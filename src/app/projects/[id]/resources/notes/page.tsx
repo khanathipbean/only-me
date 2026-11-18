@@ -13,13 +13,13 @@ import {
   updateNote,
 } from "@/lib/notes";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { ResourceTabs } from "./ResourceTabs";
+import { ResourceTabs } from "../ResourceTabs";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { ExpandableRow } from "@/components/ui/ExpandableRow";
-import { notesBreadcrumb, nameOr } from "@/lib/breadcrumb";
+import { resourcesBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { formatDate, formatTimestamp, toDateInputValue } from "@/lib/dates";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -99,6 +99,9 @@ export default async function NotesPage({
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
   const canEdit = await can(membership.role, "notes.write");
+  /* Only to decide whether the switcher offers a Files pill. The Files
+     view checks this for itself; hiding a link is not the guard. */
+  const canSeeFiles = await can(membership.role, "files.view");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || moduleId || feature || showArchived);
@@ -134,7 +137,7 @@ export default async function NotesPage({
   /* Plain strings only: a server action may close over serialisable values,
    * and capturing a helper function stops React encoding the action at all,
    * which leaves the form working only once JS has loaded. */
-  const listPath = `/projects/${projectId}/notes`;
+  const listPath = `/projects/${projectId}/resources/notes`;
   const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
     search,
     moduleId,
@@ -313,7 +316,7 @@ export default async function NotesPage({
   return (
     <main className={pageClass}>
       <Breadcrumb
-        segments={notesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
+        segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
       <PageHeader
         title="Resources"
@@ -349,7 +352,7 @@ export default async function NotesPage({
 
       {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
 
-      <ResourceTabs projectId={projectId} active="notes" />
+      <ResourceTabs projectId={projectId} active="notes" canSeeFiles={canSeeFiles} />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">

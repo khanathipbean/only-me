@@ -143,7 +143,7 @@ export function ProjectOverviewSummary({
     {
       label: "Upload files",
       description: "Add project documents",
-      href: `${base}/files`,
+      href: `${base}/resources/files`,
       icon: <FileTextIcon />,
       tone: "blue" as const,
     },
@@ -247,7 +247,7 @@ export function ProjectOverviewSummary({
           label="Notes"
           value={summary.counts.notes}
           tone="purple"
-          href={`${base}/notes`}
+          href={`${base}/resources/notes`}
         />
         <StatTile
           icon={<PlayIcon />}
@@ -261,7 +261,7 @@ export function ProjectOverviewSummary({
           label="Files"
           value={summary.counts.files}
           tone="orange"
-          href={`${base}/files`}
+          href={`${base}/resources/files`}
         />
       </div>
 
@@ -274,7 +274,7 @@ export function ProjectOverviewSummary({
         <Panel
           icon={<ClipboardListIcon className="size-4 text-muted" />}
           title="Recent notes"
-          viewAllHref={`${base}/notes`}
+          viewAllHref={`${base}/resources/notes`}
         >
           {summary.recentNotes.length === 0 ? (
             <EmptyRow>No notes yet.</EmptyRow>
@@ -284,7 +284,7 @@ export function ProjectOverviewSummary({
                  `noteId` is what the list reads to decide which one starts
                  expanded. Opening the body here instead would mean shipping
                  every body to a page that mostly does not show them. */
-              <Link key={note.id} href={`${base}/notes?noteId=${note.id}`} className={rowClass}>
+              <Link key={note.id} href={`${base}/resources/notes?noteId=${note.id}`} className={rowClass}>
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 [&>svg]:size-5">
                   <ClipboardListIcon />
                 </span>
@@ -347,14 +347,14 @@ export function ProjectOverviewSummary({
           )}
         </Panel>
 
-        <Panel icon={<FolderIcon className="size-4 text-muted" />} title="Recent files" viewAllHref={`${base}/files`}>
+        <Panel icon={<FolderIcon className="size-4 text-muted" />} title="Recent files" viewAllHref={`${base}/resources/files`}>
           {summary.recentFiles.length === 0 ? (
             <EmptyRow>No files yet.</EmptyRow>
           ) : (
             summary.recentFiles.map((file) => {
               const { Icon, className } = FILE_KIND_STYLE[file.kind];
               return (
-                <Link key={file.id} href={`${base}/files?fileId=${file.id}`} className={rowClass}>
+                <Link key={file.id} href={`${base}/resources/files?fileId=${file.id}`} className={rowClass}>
                   {/* Bigger than the other rows' plain icons on purpose: this
                       one draws a "PDF"/"CSV"-style label inside itself, which
                       needs more room to stay legible than a bare glyph does. */}

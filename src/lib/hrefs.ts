@@ -89,8 +89,10 @@ export function modulesListHref(projectId: string) {
   return `${projectHref(projectId)}/modules`;
 }
 
-export function notesListHref(projectId: string) {
-  return `${projectHref(projectId)}/notes`;
+/** The All view, and the address the Resources tab points at. The three
+ *  single-kind views hang off it: `/resources/notes`, `/files`, `/links`. */
+export function resourcesListHref(projectId: string) {
+  return `${projectHref(projectId)}/resources`;
 }
 
 export function requirementsListHref(projectId: string, moduleId: string) {

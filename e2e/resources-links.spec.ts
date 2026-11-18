@@ -29,46 +29,90 @@ async function openResources(page: import("@playwright/test").Page) {
     .getByRole("navigation", { name: "Project" })
     .getByRole("link", { name: "Resources" })
     .click();
-  await page.waitForURL(/\/notes$/);
+  await page.waitForURL(/\/resources$/);
   return projectId;
 }
 
-test("the switcher moves between the two lists, and the nav no longer says Notes", async ({
+test("the switcher reaches all four views, and the nav offers neither alone", async ({
   page,
 }) => {
   await openResources(page);
 
-  /* The rename is the user-visible half of this change: the tab bar must say
-     Resources, and must not still offer a Notes tab beside it. */
+  /* The user-visible half of this change: one tab called Resources, and
+     neither of the two it swallowed still sitting beside it. */
   const projectNav = page.getByRole("navigation", { name: "Project" });
   await expect(projectNav.getByRole("link", { name: "Resources" })).toBeVisible();
   await expect(projectNav.getByRole("link", { name: "Notes", exact: true })).toHaveCount(0);
+  await expect(projectNav.getByRole("link", { name: "Files", exact: true })).toHaveCount(0);
 
-  const views = page.getByRole("navigation", { name: "Resources view" });
-  // Notes is the view this page opened on, and says so rather than merely
-  // looking lit: `aria-current` is what a screen reader has to go on.
-  await expect(views.getByRole("link", { name: "Notes" })).toHaveAttribute(
+  const views = () => page.getByRole("navigation", { name: "Resources view" });
+  // All is the view the tab opens on, and says so rather than merely looking
+  // lit: `aria-current` is what a screen reader has to go on.
+  await expect(views().getByRole("link", { name: "All" })).toHaveAttribute(
     "aria-current",
     "page",
   );
 
-  await views.getByRole("link", { name: "Links" }).click();
-  await page.waitForURL(/\/notes\/links$/);
-  await expect(
-    page.getByRole("navigation", { name: "Resources view" }).getByRole("link", { name: "Links" }),
-  ).toHaveAttribute("aria-current", "page");
+  /* Each pill in turn, checking the address it reached and that the pill
+     there knows it is the open one. A tab that looks selected while showing
+     another list is the thing only a real click finds. */
+  for (const [label, path] of [
+    ["Notes", "/resources/notes"],
+    ["Files", "/resources/files"],
+    ["Links", "/resources/links"],
+  ]) {
+    await views().getByRole("link", { name: label }).click();
+    await page.waitForURL(new RegExp(`${path.replace(/\//g, "\\/")}$`));
+    await expect(views().getByRole("link", { name: label })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  }
 
-  // And back, so the pair is a switcher rather than a one-way door.
-  await page
-    .getByRole("navigation", { name: "Resources view" })
-    .getByRole("link", { name: "Notes" })
-    .click();
-  await page.waitForURL(/\/notes$/);
+  // And back to All, so the set is a switcher rather than a one-way door.
+  await views().getByRole("link", { name: "All" }).click();
+  await page.waitForURL(/\/resources$/);
+});
+
+test("All lists notes, files and links together", async ({ page }) => {
+  const projectId = await openResources(page);
+
+  const mark = suffix();
+  await page.goto(`/projects/${projectId}/resources/links`);
+  await page.getByRole("button", { name: "+ New Link" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByPlaceholder("https://").fill(`https://example.com/${mark}`);
+  await dialog.getByPlaceholder("e.g. Jira epic for Policy Center").fill(`Link ${mark}`);
+  await dialog.getByRole("button", { name: "Add link" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.goto(`/projects/${projectId}/resources/notes`);
+  await page.getByRole("button", { name: "+ New Note" }).click();
+  const noteDialog = page.getByRole("dialog");
+  await noteDialog.getByPlaceholder("e.g. Sprint 6 planning").fill(`Note ${mark}`);
+  await noteDialog.getByRole("button", { name: "Add note" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  /* Both kinds in one list, found by the one search box — which is the whole
+     claim the All view makes. The fixture's files are already there, and the
+     kind labels beside the rows are what tells them apart in words rather
+     than by colour alone. */
+  await page.goto(`/projects/${projectId}/resources?search=${mark}`);
+  await expect(page.getByRole("link", { name: new RegExp(`Note ${mark}`) })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: new RegExp(`Link ${mark}`) })).toHaveCount(1);
+  await expect(page.getByText("NOTE", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("LINK", { exact: true })).toHaveCount(1);
+
+  /* The link row still leaves the app safely, even here where it sits beside
+     rows that do not. */
+  const linkRow = page.getByRole("link", { name: new RegExp(`Link ${mark}`) });
+  await expect(linkRow).toHaveAttribute("href", `https://example.com/${mark}`);
+  expect((await linkRow.getAttribute("rel")) ?? "").toContain("noopener");
 });
 
 test("a link is stored and drawn as something safe to click", async ({ page }) => {
   const projectId = await openResources(page);
-  await page.goto(`/projects/${projectId}/notes/links`);
+  await page.goto(`/projects/${projectId}/resources/links`);
 
   const mark = suffix();
   const title = `Jira epic ${mark}`;
@@ -83,7 +127,7 @@ test("a link is stored and drawn as something safe to click", async ({ page }) =
 
   /* Filtered through the URL rather than hoping it landed on page one: the
      fixture project keeps whatever every earlier run left behind. */
-  await page.goto(`/projects/${projectId}/notes/links?search=${mark}`);
+  await page.goto(`/projects/${projectId}/resources/links?search=${mark}`);
   const link = page.getByRole("link", { name: new RegExp(title) });
   await expect(link).toHaveAttribute("href", address);
 
@@ -98,7 +142,7 @@ test("a link is stored and drawn as something safe to click", async ({ page }) =
 
 test("a javascript: address is refused, and nothing is stored", async ({ page }) => {
   const projectId = await openResources(page);
-  await page.goto(`/projects/${projectId}/notes/links`);
+  await page.goto(`/projects/${projectId}/resources/links`);
 
   const mark = suffix();
   const title = `Refused ${mark}`;
@@ -117,13 +161,13 @@ test("a javascript: address is refused, and nothing is stored", async ({ page })
 
   /* And the list is the real check — a message on screen proves what was
      drawn, not what was written. */
-  await page.goto(`/projects/${projectId}/notes/links?search=${mark}`);
+  await page.goto(`/projects/${projectId}/resources/links?search=${mark}`);
   await expect(page.getByRole("link", { name: new RegExp(title) })).toHaveCount(0);
 });
 
 test("archiving takes a link out of the list and the archived view finds it", async ({ page }) => {
   const projectId = await openResources(page);
-  await page.goto(`/projects/${projectId}/notes/links`);
+  await page.goto(`/projects/${projectId}/resources/links`);
 
   const mark = suffix();
   const title = `Sheet ${mark}`;
@@ -135,7 +179,7 @@ test("archiving takes a link out of the list and the archived view finds it", as
   await dialog.getByRole("button", { name: "Add link" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  await page.goto(`/projects/${projectId}/notes/links?search=${mark}`);
+  await page.goto(`/projects/${projectId}/resources/links?search=${mark}`);
   await expect(page.getByRole("link", { name: new RegExp(title) })).toHaveCount(1);
 
   /* One button, not a menu: `RowActions` only grows a menu when the row has
@@ -156,6 +200,6 @@ test("archiving takes a link out of the list and the archived view finds it", as
      or it did not. */
   await expect(page.getByRole("link", { name: new RegExp(title) })).toHaveCount(0);
 
-  await page.goto(`/projects/${projectId}/notes/links?search=${mark}&archived=1`);
+  await page.goto(`/projects/${projectId}/resources/links?search=${mark}&archived=1`);
   await expect(page.getByRole("link", { name: new RegExp(title) })).toHaveCount(1);
 });

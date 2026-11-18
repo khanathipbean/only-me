@@ -58,14 +58,15 @@ test("lands on My Work instead of the Overview it was linked to", async ({ page 
   await expect(page.getByRole("heading", { name: "My Work" })).toBeVisible();
 });
 
-test("is offered only the five pages it may open", async ({ page }) => {
+test("is offered only the four pages it may open", async ({ page }) => {
   await page.goto(`/projects/${projectId}/my-work`);
   const tabs = page.getByRole("navigation", { name: "Project" });
 
-  /* "Resources", not "Notes": that page holds the Links list beside the
-     notes now, and the tab was renamed with it. Still one tab and still the
-     same `notes.view` behind it — only the word changed. */
-  for (const label of ["My Work", "Dashboard", "Modules", "Resources", "Files"]) {
+  /* "Resources", not "Notes" and no longer "Files" beside it: notes, files
+     and links are three views of one page now, reached by the switcher on
+     it. `files.view` is still its own capability — it decides whether that
+     switcher offers a Files pill, not whether this nav entry exists. */
+  for (const label of ["My Work", "Dashboard", "Modules", "Resources"]) {
     await expect(tabs.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
   /* First for a DEV, who has no Overview in front of it. */

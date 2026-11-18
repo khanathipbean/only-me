@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import {
-  notesListHref,
+  resourcesListHref,
   requirementsListHref,
   scenariosListHref,
   testCaseHref,
@@ -243,7 +243,7 @@ export async function searchAll(userId: string, query: string): Promise<SearchRe
        * Project as a whole has none, and says so rather than showing a blank
        * where every other row has a place. */
       position: note.module?.name ?? "No module",
-      href: notesListHref(note.project.id),
+      href: `${resourcesListHref(note.project.id)}/notes`,
     })),
   ];
 

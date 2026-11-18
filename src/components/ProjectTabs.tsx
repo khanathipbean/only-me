@@ -63,12 +63,13 @@ export function ProjectTabs({
     { label: "Problem Cases", href: `${overviewHref}/problem-cases`, needs: "reading.problems" },
     { label: "Modules", href: `${overviewHref}/modules`, needs: "authoring.view" },
     { label: "Test Runs", href: `${overviewHref}/runs`, needs: "runs.view" },
-    /* "Resources", not "Notes": the page holds two lists now — what the team
-       wrote down, and links out to the things that live elsewhere. The
-       address stays `/notes`, which is where every link into it already
-       points, including the Overview's Recent notes card. */
-    { label: "Resources", href: `${overviewHref}/notes`, needs: "notes.view" },
-    { label: "Files", href: `${overviewHref}/files`, needs: "files.view" },
+    /* One tab for the three kinds of material this project keeps: what the
+       team wrote down, the documents it holds, and links out to what lives
+       elsewhere. Files used to sit beside this and is now a view inside it,
+       reached by the switcher on the page — which is why `files.view` is
+       not named here. The Files view checks it for itself, and the All view
+       leaves file rows out for a reader who does not hold it. */
+    { label: "Resources", href: `${overviewHref}/resources`, needs: "notes.view" },
     /* Import writes, so an editor is what the page asks for — the link is
      * dropped here only so the menu does not offer what it will refuse. */
     { label: "Import", href: `${overviewHref}/import`, needs: "project.import" },

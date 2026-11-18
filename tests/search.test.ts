@@ -154,7 +154,7 @@ describe("global search", () => {
       label: "Sprint 6 planning",
       projectId: project.id,
       position: "Policy Search",
-      href: `/projects/${project.id}/notes`,
+      href: `/projects/${project.id}/resources/notes`,
     });
   });
 

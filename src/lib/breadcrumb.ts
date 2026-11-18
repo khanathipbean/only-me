@@ -1,6 +1,6 @@
 import {
   modulesListHref,
-  notesListHref,
+  resourcesListHref,
   requirementsListHref,
   scenariosListHref,
   testCasesListHref,
@@ -109,16 +109,18 @@ export function testRunBreadcrumb(project: NamedEntity, run: NamedEntity): Bread
   ];
 }
 
-export function filesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
-  return [...projectBreadcrumb(project), { label: "Files", href: `/projects/${project.id}/files` }];
-}
 
 export function importBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
   return [...projectBreadcrumb(project), { label: "Import", href: `/projects/${project.id}/import` }];
 }
 
-export function notesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
-  return [...projectBreadcrumb(project), { label: "Resources", href: notesListHref(project.id) }];
+/** One crumb for all four views. The switcher on the page says which of
+ *  them is open, so a second crumb repeating it would only be noise. */
+export function resourcesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
+  return [
+    ...projectBreadcrumb(project),
+    { label: "Resources", href: resourcesListHref(project.id) },
+  ];
 }
 
 export function modulesListBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {

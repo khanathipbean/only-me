@@ -20,6 +20,25 @@ const nextConfig: NextConfig = {
    * `'unsafe-inline'` would look like protection and provide almost none, which
    * is worse than the absence of one. Left as its own piece of work.
    */
+  /**
+   * Notes and Files used to be two tabs of their own. They are two views of
+   * Resources now, and their old addresses are in people's bookmarks, in
+   * chat and in whatever anyone pasted to a colleague — so they keep
+   * working rather than becoming 404s.
+   *
+   * Here rather than in a stub page for each: a redirect declared this way
+   * carries the query string with it, so `?fileId=…` and `?noteId=…` still
+   * open the thing they name, and nothing has to be re-implemented to do it.
+   * Permanent, because this is the address now and a browser may cache it.
+   */
+  async redirects() {
+    return [
+      { source: "/projects/:id/notes", destination: "/projects/:id/resources/notes", permanent: true },
+      { source: "/projects/:id/notes/links", destination: "/projects/:id/resources/links", permanent: true },
+      { source: "/projects/:id/files", destination: "/projects/:id/resources/files", permanent: true },
+    ];
+  },
+
   async headers() {
     return [
       {

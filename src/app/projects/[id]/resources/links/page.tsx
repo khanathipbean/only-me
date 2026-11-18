@@ -18,7 +18,7 @@ import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
 import { ResultCount } from "@/components/ui/ResultCount";
-import { notesBreadcrumb, nameOr } from "@/lib/breadcrumb";
+import { resourcesBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { formatDate } from "@/lib/dates";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -50,7 +50,7 @@ import {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Links · ${project.name}` : "Links" };
+  return { title: project ? `Resources · ${project.name}` : "Resources" };
 }
 
 /**
@@ -93,6 +93,7 @@ export default async function LinksPage({
     "notes.view",
   );
   const canEdit = await can(membership.role, "notes.write");
+  const canSeeFiles = await can(membership.role, "files.view");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || moduleId || feature || showArchived);
@@ -121,7 +122,7 @@ export default async function LinksPage({
         ? await listFeaturesForModule(moduleId)
         : [];
 
-  const listPath = `/projects/${projectId}/notes/links`;
+  const listPath = `/projects/${projectId}/resources/links`;
   const { query: listQueryString, href: listHref } = listHrefWithFilters(listPath, {
     search,
     moduleId,
@@ -292,7 +293,7 @@ export default async function LinksPage({
   return (
     <main className={pageClass}>
       <Breadcrumb
-        segments={notesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
+        segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
       <PageHeader
         title="Resources"
@@ -322,7 +323,7 @@ export default async function LinksPage({
 
       {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
 
-      <ResourceTabs projectId={projectId} active="links" />
+      <ResourceTabs projectId={projectId} active="links" canSeeFiles={canSeeFiles} />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">

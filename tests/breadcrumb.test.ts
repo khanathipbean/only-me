@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   auditLogBreadcrumb,
   dashboardBreadcrumb,
-  filesBreadcrumb,
   importBreadcrumb,
+  resourcesBreadcrumb,
   membersBreadcrumb,
   moduleBreadcrumb,
   modulesListBreadcrumb,
@@ -66,11 +66,13 @@ describe("breadcrumb path builders", () => {
     ]);
   });
 
-  it("renders the Files path", () => {
-    expect(filesBreadcrumb(project)).toEqual([
+  it("renders the Resources path", () => {
+    /* One crumb for all four views — Notes, Files and Links are no longer
+       destinations of their own, they are tabs of this one. */
+    expect(resourcesBreadcrumb(project)).toEqual([
       PROJECTS,
       PROJECT,
-      { label: "Files", href: "/projects/prj1/files" },
+      { label: "Resources", href: "/projects/prj1/resources" },
     ]);
   });
 

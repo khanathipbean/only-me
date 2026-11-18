@@ -42,7 +42,7 @@ test("a refused upload keeps the filters the Files page was showing", async ({ p
   const href = await page.locator('a[href^="/projects/"]').first().getAttribute("href");
   const projectId = href!.split("/")[2];
 
-  await page.goto(`/projects/${projectId}/files?search=quarterly`);
+  await page.goto(`/projects/${projectId}/resources/files?search=quarterly`);
 
   /* Submitting with nothing chosen, which the browser normally refuses: the
      file input is `required`. The server-side guard behind it is not

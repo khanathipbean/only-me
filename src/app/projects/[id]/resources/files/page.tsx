@@ -15,9 +15,10 @@ import {
 } from "@/lib/project-files";
 import { listModulesForProject } from "@/lib/modules";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { ResourceTabs } from "../ResourceTabs";
 import { formatDate } from "@/lib/dates";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
-import { filesBreadcrumb, nameOr } from "@/lib/breadcrumb";
+import { resourcesBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilePreview } from "@/components/FilePreview";
@@ -37,7 +38,7 @@ import { errorHref, listHrefWithFilters } from "@/lib/hrefs";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Files · ${project.name}` : "Files" };
+  return { title: project ? `Resources · ${project.name}` : "Resources" };
 }
 
 export default async function ProjectFilesPage({
@@ -128,12 +129,16 @@ export default async function ProjectFilesPage({
   return (
     <main className={pageClass}>
       <Breadcrumb
-        segments={filesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
+        segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
       <PageHeader
-        title="Files"
+        title="Resources"
         subtitle="Documents kept against this project, grouped by module."
       />
+
+      {/* `canSeeFiles` is true by definition here: this page already
+          refused anybody without `files.view` above. */}
+      <ResourceTabs projectId={projectId} active="files" canSeeFiles />
 
       {canEdit && (
       <Card className="flex flex-col gap-4">

@@ -27,7 +27,7 @@ test("a row is the same height in all three Overview panels", async ({ page }, t
      (The first version of this spec asserted the fixture seeded all three.
      It does not, and the assertion said so rather than quietly measuring two
      panels and calling them equal.) */
-  await page.goto(`/projects/${projectId}/notes`);
+  await page.goto(`/projects/${projectId}/resources/notes`);
   await page.getByRole("button", { name: "+ New Note" }).click();
   const dialog = page.getByRole("dialog");
   await dialog

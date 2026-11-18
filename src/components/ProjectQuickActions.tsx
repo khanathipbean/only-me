@@ -36,7 +36,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
     {
       label: "Upload project files",
       description: "Add documents, specifications and reference materials.",
-      href: `${base}/files`,
+      href: `${base}/resources/files`,
       icon: <FileTextIcon />,
     },
     {

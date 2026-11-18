@@ -19,13 +19,18 @@ test("a file whose object is gone says so, and offers no download", async ({ pag
   await page.getByRole("link", { name: "E2E Fixture" }).click();
   await page.waitForURL(/\/projects\/[^/]+$/);
 
-  /* Inside the project's own tab bar: the same word is a breadcrumb
-     segment and a row link elsewhere on these pages, and the plain
-     query matched all of them. */
+  /* Two steps now: Files is a view of Resources rather than a tab of its
+     own, so the nav opens Resources and the switcher inside it opens Files.
+     Scoped to each navigation by name, because "Files" and "Resources" are
+     also breadcrumb segments and row links on these pages. */
   await page.getByRole("navigation", { name: "Project" })
+    .getByRole("link", { name: "Resources" })
+    .click();
+  await page.waitForURL(/\/resources$/);
+  await page.getByRole("navigation", { name: "Resources view" })
     .getByRole("link", { name: "Files" })
     .click();
-  await page.waitForURL(/\/files/);
+  await page.waitForURL(/\/resources\/files/);
 
   // The card, not the Remove button that also carries the filename.
   await page

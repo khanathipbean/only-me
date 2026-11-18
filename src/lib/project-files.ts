@@ -201,7 +201,7 @@ export async function saveProjectFile(
     body: target
       ? `${file.name} was uploaded to the ${target.name} module.`
       : `${file.name} was uploaded to the project.`,
-    link: `/projects/${projectId}/files`,
+    link: `/projects/${projectId}/resources/files`,
     actorId: uploadedById,
     excludeUserId: uploadedById,
   });

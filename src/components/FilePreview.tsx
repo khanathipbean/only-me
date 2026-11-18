@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Dialog } from "@/components/ui/Modal";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { FILE_KIND_STYLE } from "@/components/fileKindStyle";
+import { formatSize } from "@/lib/file-size";
 import type { FileKind, PreviewMode } from "@/lib/project-files";
 
 export type ProjectFileCard = {
@@ -23,12 +24,6 @@ const NOTICE_CLASS =
 
 const MISSING_CLASS =
   "rounded-md border border-amber-500/30 bg-amber-50 px-3 py-4 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200";
-
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 
 /**
  * A file card that opens a preview.
