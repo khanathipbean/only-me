@@ -42,6 +42,33 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  /**
+   * Hash the build with Node's own crypto rather than webpack's WebAssembly
+   * xxhash64.
+   *
+   * `next build --webpack` kept dying partway through with "Cannot read
+   * properties of undefined (reading 'length')" inside
+   * `WasmHash._updateWithBuffer` — three times in one afternoon, on a fresh
+   * build directory as often as a stale one, which is what rules out the
+   * cache. The reported cause is Node 24 (this machine runs v24.16.0):
+   * the WebAssembly instance's memory buffer is detached between calls, so
+   * the next `update` reads `.length` off nothing. It is intermittent, which
+   * is why it looked like something else twice.
+   *
+   * Webpack is not optional here — Turbopack skips the proxy.js → middleware.js
+   * rename that the Netlify runtime needs (see the `--webpack` flag in
+   * package.json) — so the hash function is the part to change. `sha256` goes
+   * through `node:crypto` and touches no WebAssembly at all. It costs a little
+   * build time and changes the hashes in output filenames; nothing reads those
+   * but the build itself.
+   *
+   * Remove this when the machine moves to a Node where the bug is gone.
+   */
+  webpack: (config) => {
+    config.output = { ...config.output, hashFunction: "sha256" };
+    return config;
+  },
+
   async headers() {
     return [
       {
