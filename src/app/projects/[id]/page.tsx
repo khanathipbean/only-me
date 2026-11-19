@@ -83,16 +83,16 @@ export default async function ProjectOverviewPage({
 
   return (
     <main className={pageClass}>
-      <Breadcrumb segments={projectBreadcrumb(project)} />
-
-      {/* Above the title and at the left edge, as on every other page in
-          this switcher. The project's own actions share the row, which is
-          where they were asked for and where they have height to spare. */}
+      {/* The trail at one end of the row and the project's own actions at
+          the other. They had a row to themselves once the switcher left it,
+          which was a band of empty page between the crumbs and the card
+          below saying nothing. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <Breadcrumb segments={projectBreadcrumb(project)} />
         {summary && canEdit && (
-          /* `ml-auto` as well as the row's `justify-between`: the switcher
-             draws nothing when a reader holds only one of the three views,
-             and a lone Settings button would then slide to the left. */
+          /* `ml-auto` as well as the row's `justify-between`: the buttons
+             stay at the far end whether or not anything else is in the row
+             with them. */
           <div className="flex shrink-0 items-center gap-2 ml-auto">
             <Link
               href={editHref}
