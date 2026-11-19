@@ -5,7 +5,6 @@ import { getProjectById } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { listResourcesPage, type ResourceRow } from "@/lib/resources";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { ResourceTabs } from "./ResourceTabs";
 import { FilterForm } from "@/components/FilterForm";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { resourcesBreadcrumb, nameOr } from "@/lib/breadcrumb";
@@ -143,17 +142,10 @@ export default async function ResourcesPage({ params, searchParams }: PageProps<
         segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
 
-      {/* Above the title and at the left edge: this control changes which
-          page you are on, so it leads the page rather than trailing its
-          name. On the breadcrumb line it sat far from the title it governs
-          and wrapped under the crumbs on a narrow screen. */}
-      <ResourceTabs projectId={projectId} active="all" canSeeFiles={canSeeFiles} />
-
       <PageHeader
         title="Resources"
         subtitle="Notes, files and links for this project, in one place."
       />
-
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         {/* No Feature filter here, and not by oversight: a file has no

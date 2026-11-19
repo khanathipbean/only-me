@@ -24,11 +24,10 @@ test("a file whose object is gone says so, and offers no download", async ({ pag
      Scoped to each navigation by name, because "Files" and "Resources" are
      also breadcrumb segments and row links on these pages. */
   await page.getByRole("navigation", { name: "Project" })
-    .getByRole("link", { name: "Resources" })
+    .getByRole("button", { name: "Resources" })
     .click();
-  await page.waitForURL(/\/resources$/);
-  await page.getByRole("navigation", { name: "Resources view" })
-    .getByRole("link", { name: "Files" })
+  await page.getByRole("menu", { name: "Resources" })
+    .getByRole("menuitem", { name: /^Files/ })
     .click();
   await page.waitForURL(/\/resources\/files/);
 

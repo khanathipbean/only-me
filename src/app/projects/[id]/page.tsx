@@ -7,7 +7,6 @@ import { archiveProject, getProjectById, restoreProject } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { getProjectOverviewSummary } from "@/lib/project-overview";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { OverviewTabs } from "./OverviewTabs";
 import { projectBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { ConfirmForm } from "@/components/ConfirmForm";
@@ -60,13 +59,6 @@ export default async function ProjectOverviewPage({
   // nothing for any of these queries to find.
   const summary = hasModules ? await getProjectOverviewSummary(id) : null;
   const canEdit = await can(membership?.role, "project.edit");
-  /* Only to decide which pills the switcher offers — each page checks
-     for itself. A DEV never reaches here: they are sent to My Work. */
-  const [canSeeDashboard, canSeeProblems, canSeeAudit] = await Promise.all([
-    can(membership?.role, "reading.dashboard"),
-    can(membership?.role, "reading.problems"),
-    can(membership?.role, "project.audit"),
-  ]);
 
   async function archive() {
     "use server";
@@ -97,14 +89,6 @@ export default async function ProjectOverviewPage({
           this switcher. The project's own actions share the row, which is
           where they were asked for and where they have height to spare. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <OverviewTabs
-          projectId={id}
-          active="overview"
-          canSeeOverview
-          canSeeDashboard={canSeeDashboard}
-          canSeeProblems={canSeeProblems}
-          canSeeAudit={canSeeAudit}
-        />
         {summary && canEdit && (
           /* `ml-auto` as well as the row's `justify-between`: the switcher
              draws nothing when a reader holds only one of the three views,

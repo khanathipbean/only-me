@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { auth } from "@/auth";
-import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import { getProjectById } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { listPhasesForProject } from "@/lib/test-runs";
@@ -14,7 +14,6 @@ import {
   type ProblemCase,
 } from "@/lib/run-history";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { OverviewTabs } from "../OverviewTabs";
 import { FilterForm } from "@/components/FilterForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ResultCount } from "@/components/ui/ResultCount";
@@ -210,18 +209,11 @@ export default async function ProblemCasesPage({
   const { phase, moduleId, pattern, search } = query;
   const session = await auth();
 
-  const membership = await requireCapabilityOrNotFound(
+  await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
     "reading.problems",
   );
-  /* Only to decide which pills the switcher offers — each page checks
-     for itself. */
-  const [canSeeOverview, canSeeDashboard, canSeeAudit] = await Promise.all([
-    can(membership.role, "reading.overview"),
-    can(membership.role, "reading.dashboard"),
-    can(membership.role, "project.audit"),
-  ]);
 
   const [project, modules, phases, cases] = await Promise.all([
     getProjectById(projectId),
@@ -249,24 +241,10 @@ export default async function ProblemCasesPage({
         segments={problemCasesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
 
-      {/* Above the title and at the left edge: this control changes which
-          page you are on, so it leads the page rather than trailing its
-          name. On the breadcrumb line it sat far from the title it governs
-          and wrapped under the crumbs on a narrow screen. */}
-      <OverviewTabs
-        projectId={projectId}
-        active="problems"
-        canSeeOverview={canSeeOverview}
-        canSeeDashboard={canSeeDashboard}
-        canSeeProblems
-        canSeeAudit={canSeeAudit}
-      />
-
       <PageHeader
         title="Problem Cases"
         subtitle="Every case anyone has answered for, grouped by the shape its results make — what broke, what cannot be trusted, and what has never given anyone trouble."
       />
-
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className={`${formRowClass} flex-1`} ownLayout>

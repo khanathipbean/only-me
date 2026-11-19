@@ -15,7 +15,6 @@ import {
 } from "@/lib/project-files";
 import { listModulesForProject } from "@/lib/modules";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { ResourceTabs } from "../ResourceTabs";
 import { formatDate } from "@/lib/dates";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { resourcesBreadcrumb, nameOr } from "@/lib/breadcrumb";
@@ -131,12 +130,6 @@ export default async function ProjectFilesPage({
       <Breadcrumb
         segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
-
-      {/* Above the title and at the left edge: this control changes which
-          page you are on, so it leads the page rather than trailing its
-          name. On the breadcrumb line it sat far from the title it governs
-          and wrapped under the crumbs on a narrow screen. */}
-      <ResourceTabs projectId={projectId} active="files" canSeeFiles />
 
       <PageHeader
         title="Files"

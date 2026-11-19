@@ -13,7 +13,6 @@ import {
   updateLink,
 } from "@/lib/links";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { ResourceTabs } from "../ResourceTabs";
 import { DismissibleAlert } from "@/components/DismissibleAlert";
 import { ConfirmForm } from "@/components/ConfirmForm";
 import { FilterForm } from "@/components/FilterForm";
@@ -93,7 +92,6 @@ export default async function LinksPage({
     "notes.view",
   );
   const canEdit = await can(membership.role, "notes.write");
-  const canSeeFiles = await can(membership.role, "files.view");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || moduleId || feature || showArchived);
@@ -296,12 +294,6 @@ export default async function LinksPage({
         segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
 
-      {/* Above the title and at the left edge: this control changes which
-          page you are on, so it leads the page rather than trailing its
-          name. On the breadcrumb line it sat far from the title it governs
-          and wrapped under the crumbs on a narrow screen. */}
-      <ResourceTabs projectId={projectId} active="links" canSeeFiles={canSeeFiles} />
-
       <PageHeader
         title="Links"
         subtitle="Addresses for the things this project depends on that live somewhere else — a ticket, a sheet, a design, the environment under test."
@@ -329,7 +321,6 @@ export default async function LinksPage({
       />
 
       {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
-
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">

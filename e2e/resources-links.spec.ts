@@ -23,56 +23,12 @@ async function openResources(page: import("@playwright/test").Page) {
   await page.getByRole("link", { name: "E2E Fixture" }).click();
   await page.waitForURL(/\/projects\/[^/]+$/);
   const projectId = page.url().split("/projects/")[1].split("/")[0];
-  /* Inside the project's own tab bar: "Resources" is also a breadcrumb
-     segment on these pages, and a plain query matched both. */
-  await page
-    .getByRole("navigation", { name: "Project" })
-    .getByRole("link", { name: "Resources" })
-    .click();
-  await page.waitForURL(/\/resources$/);
+  /* Straight to the address. Reaching it through the menu is what
+     `nav-menus.spec.ts` is for; every test below wants to be on a page,
+     not to prove how it got there. */
+  await page.goto(`/projects/${projectId}/resources/notes`);
   return projectId;
 }
-
-test("the switcher reaches all four views, and the nav offers neither alone", async ({
-  page,
-}) => {
-  await openResources(page);
-
-  /* The user-visible half of this change: one tab called Resources, and
-     neither of the two it swallowed still sitting beside it. */
-  const projectNav = page.getByRole("navigation", { name: "Project" });
-  await expect(projectNav.getByRole("link", { name: "Resources" })).toBeVisible();
-  await expect(projectNav.getByRole("link", { name: "Notes", exact: true })).toHaveCount(0);
-  await expect(projectNav.getByRole("link", { name: "Files", exact: true })).toHaveCount(0);
-
-  const views = () => page.getByRole("navigation", { name: "Resources view" });
-  // All is the view the tab opens on, and says so rather than merely looking
-  // lit: `aria-current` is what a screen reader has to go on.
-  await expect(views().getByRole("link", { name: "All" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-
-  /* Each pill in turn, checking the address it reached and that the pill
-     there knows it is the open one. A tab that looks selected while showing
-     another list is the thing only a real click finds. */
-  for (const [label, path] of [
-    ["Notes", "/resources/notes"],
-    ["Files", "/resources/files"],
-    ["Links", "/resources/links"],
-  ]) {
-    await views().getByRole("link", { name: label }).click();
-    await page.waitForURL(new RegExp(`${path.replace(/\//g, "\\/")}$`));
-    await expect(views().getByRole("link", { name: label })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-  }
-
-  // And back to All, so the set is a switcher rather than a one-way door.
-  await views().getByRole("link", { name: "All" }).click();
-  await page.waitForURL(/\/resources$/);
-});
 
 test("All lists notes, files and links together", async ({ page }) => {
   const projectId = await openResources(page);

@@ -96,14 +96,12 @@ test("a viewer is not offered the Import tab it cannot open", async ({ page }) =
      the Modules page, and a VIEWER must not be offered it. */
   // The tabs a VIEWER may open are still there.
   await expect(nav.getByRole("link", { name: "Test Cases" })).toBeVisible();
-  /* The Audit Trail is a view of Overview now, not a tab, so a VIEWER
-     reaches it through the switcher — which must offer it to them. */
+  /* The Audit Trail is behind the Overview menu now, not a tab of its own,
+     so a VIEWER reaches it by opening that menu — which must offer it. */
   await expect(nav.getByRole("link", { name: "Audit Trail" })).toHaveCount(0);
-  await page.goto(`/projects/${projectId}`);
+  await nav.getByRole("button", { name: "Overview" }).click();
   await expect(
-    page
-      .getByRole("navigation", { name: "Overview view" })
-      .getByRole("link", { name: "Audit Trail" }),
+    page.getByRole("menu", { name: "Overview" }).getByRole("menuitem", { name: /^Audit Trail/ }),
   ).toBeVisible();
 
   await page.goto(`/projects/${projectId}/modules`);

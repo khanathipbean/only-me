@@ -3,6 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { CapabilityKey } from "@/lib/permissions";
+import { NavMenu, type NavMenuItem } from "@/components/ui/NavMenu";
+import {
+  BarChartIcon,
+  ClipboardListIcon,
+  FileIcon,
+  HomeIcon,
+  LinkIcon,
+  PulseIcon,
+  ShieldIcon,
+} from "@/components/icons";
 
 /**
  * `allowed` decides which tabs exist, because a DEV may open five of these
@@ -61,19 +71,52 @@ export function ProjectTabs({
    */
   const everyTab: {
     label: string;
-    views: readonly { href: string; needs: CapabilityKey }[];
+    views: readonly {
+      href: string;
+      needs: CapabilityKey;
+      /** Named only where the entry stands for several pages: those open a
+       *  menu, and a menu item with nothing but a name says no more than
+       *  the pills it replaced. */
+      label?: string;
+      detail?: string;
+      icon?: NavMenuItem["icon"];
+    }[];
   }[] = [
     {
       label: "Overview",
       views: [
-        { href: overviewHref, needs: "reading.overview" },
-        { href: `${overviewHref}/dashboard`, needs: "reading.dashboard" },
-        { href: `${overviewHref}/problem-cases`, needs: "reading.problems" },
+        {
+          href: overviewHref,
+          needs: "reading.overview",
+          label: "Summary",
+          detail: "What this project holds, and what happened lately.",
+          icon: HomeIcon,
+        },
+        {
+          href: `${overviewHref}/dashboard`,
+          needs: "reading.dashboard",
+          label: "Dashboard",
+          detail: "How far each round has got, by result and priority.",
+          icon: BarChartIcon,
+        },
+        {
+          href: `${overviewHref}/problem-cases`,
+          needs: "reading.problems",
+          label: "Problem Cases",
+          detail: "Which cases keep going wrong, and in what shape.",
+          icon: PulseIcon,
+        },
         /* Last of the four, and it was a tab of its own until it joined
            them: it is opened to settle a question about who changed what
            rather than to see how far along a round is, but that is still
            reading the project and changing nothing. */
-        { href: `${overviewHref}/audit-log`, needs: "project.audit" },
+        {
+          href: `${overviewHref}/audit-log`,
+          needs: "project.audit",
+          label: "Audit Trail",
+          detail: "Who changed what, and when.",
+          icon: ShieldIcon,
+        },
       ],
     },
     /* After Overview, and first for a DEV — who has no Overview, so the
@@ -96,7 +139,36 @@ export function ProjectTabs({
        reached by the switcher on the page — which is why `files.view` is
        not named here. The Files view checks it for itself, and the All view
        leaves file rows out for a reader who does not hold it. */
-    { label: "Resources", views: [{ href: `${overviewHref}/resources`, needs: "notes.view" }] },
+    {
+      label: "Resources",
+      views: [
+        /* The All view is left off this menu rather than deleted: with each
+           kind a line of its own, a fourth item for "the three together"
+           reads as a fourth kind. Its page and its address still work, so
+           bringing it back is this entry rather than a rewrite. */
+        {
+          href: `${overviewHref}/resources/notes`,
+          needs: "notes.view",
+          label: "Notes",
+          detail: "What a meeting decided, and why something reads as it does.",
+          icon: ClipboardListIcon,
+        },
+        {
+          href: `${overviewHref}/resources/files`,
+          needs: "files.view",
+          label: "Files",
+          detail: "Documents kept against this project, grouped by module.",
+          icon: FileIcon,
+        },
+        {
+          href: `${overviewHref}/resources/links`,
+          needs: "notes.view",
+          label: "Links",
+          detail: "Addresses for the things that live somewhere else.",
+          icon: LinkIcon,
+        },
+      ],
+    },
   ];
 
   /* Only the ones this membership can open — a link to a 404 is worse than
@@ -107,31 +179,58 @@ export function ProjectTabs({
     return open.length === 0 ? [] : [{ label: tab.label, href: open[0].href, views: open }];
   });
 
+  /* The same chrome whether the entry is a link or a menu trigger, so the
+     bar reads as one row of tabs rather than two kinds of control. */
+  const entryClass =
+    "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors";
+  const restingClass = "border-transparent text-muted hover:text-foreground";
+  const litClass = "border-brand text-brand";
+
+  /** Where the reader is, for any of an entry's views. The project root is
+   *  an exact match because every other address starts with it. */
+  const isOn = (href: string) =>
+    href === overviewHref ? pathname === overviewHref : pathname.startsWith(href);
+
   return (
     <nav aria-label="Project" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
       {tabs.map((tab) => {
         /* Any of the tab's views lights it, not only the one it points at:
            a DEV sent to the Dashboard must still see Overview marked, and so
-           must anybody who switched to Problem Cases. The project root is an
-           exact match because every other address starts with it. */
-        const isActive = tab.views.some((view) =>
-          view.href === overviewHref
-            ? pathname === overviewHref
-            : pathname.startsWith(view.href),
-        );
+           must anybody who switched to Problem Cases. */
+        const isActive = tab.views.some((view) => isOn(view.href));
+
+        /* One view left open to this reader is a link, however many the
+           entry stands for: a menu holding a single item costs a hover and
+           a click to do what one click already does. A DEV, who holds one
+           of Overview's four, gets a plain link to it. */
+        if (tab.views.length < 2) {
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={isActive ? "page" : undefined}
+              className={`${entryClass} ${isActive ? litClass : restingClass}`}
+            >
+              {tab.label}
+            </Link>
+          );
+        }
+
         return (
-          <Link
+          <NavMenu
             key={tab.href}
-            href={tab.href}
-            aria-current={isActive ? "page" : undefined}
-            className={`shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-              isActive
-                ? "border-brand text-brand"
-                : "border-transparent text-muted hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </Link>
+            label={tab.label}
+            active={isActive}
+            className={`${entryClass} ${restingClass}`}
+            activeClassName={litClass}
+            items={tab.views.map((view) => ({
+              label: view.label ?? tab.label,
+              href: view.href,
+              detail: view.detail ?? "",
+              active: isOn(view.href),
+              icon: view.icon,
+            }))}
+          />
         );
       })}
     </nav>

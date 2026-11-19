@@ -1,13 +1,12 @@
 import { getProjectById } from "@/lib/projects";
 import { auth } from "@/auth";
-import { can, requireCapabilityOrNotFound } from "@/lib/permissions";
+import { requireCapabilityOrNotFound } from "@/lib/permissions";
 import {
   AUDIT_ACTION_GROUPS,
   listAuditLogForProject,
   parseUtcDateTimeLocal,
 } from "@/lib/audit-log";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { OverviewTabs } from "../OverviewTabs";
 import { auditLogBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -54,18 +53,11 @@ export default async function AuditLogPage({
   const { actorId, actorName, action, entityType, from, to, page, pageSize } = await searchParams;
   const session = await auth();
 
-  const membership = await requireCapabilityOrNotFound(
+  await requireCapabilityOrNotFound(
     session!.user.id,
     projectId,
     "project.audit",
   );
-  /* Only to decide which pills the switcher offers — each page checks
-     for itself. */
-  const [canSeeOverview, canSeeDashboard, canSeeProblems] = await Promise.all([
-    can(membership.role, "reading.overview"),
-    can(membership.role, "reading.dashboard"),
-    can(membership.role, "reading.problems"),
-  ]);
 
   // `page`/`pageSize` are paging, not filtering, so clearing shouldn't be
   // offered for them alone.
@@ -89,16 +81,6 @@ export default async function AuditLogPage({
     <main className={pageClass}>
       <Breadcrumb
         segments={auditLogBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
-      />
-      {/* Above the title and at the left edge, as on the three views
-          beside it. */}
-      <OverviewTabs
-        projectId={projectId}
-        active="audit"
-        canSeeOverview={canSeeOverview}
-        canSeeDashboard={canSeeDashboard}
-        canSeeProblems={canSeeProblems}
-        canSeeAudit
       />
 
       <PageHeader title="Audit Trail" subtitle="All timestamps are shown in UTC." />

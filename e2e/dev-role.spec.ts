@@ -62,13 +62,15 @@ test("is offered only the four pages it may open", async ({ page }) => {
   await page.goto(`/projects/${projectId}/my-work`);
   const tabs = page.getByRole("navigation", { name: "Project" });
 
-  /* "Resources", not "Notes" and no longer "Files" beside it: notes, files
-     and links are three views of one page now, reached by the switcher on
-     it. `files.view` is still its own capability — it decides whether that
-     switcher offers a Files pill, not whether this nav entry exists. */
-  for (const label of ["My Work", "Overview", "Test Cases", "Resources"]) {
+  /* Links where one page is open to this reader, a menu where several are.
+     A DEV holds one of Overview's four — the Dashboard — so that entry is a
+     plain link for them, while Resources, where they hold all three, opens
+     a menu. The difference is not cosmetic: a menu with one item in it
+     would cost a click to do what the link already does. */
+  for (const label of ["My Work", "Overview", "Test Cases"]) {
     await expect(tabs.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
+  await expect(tabs.getByRole("button", { name: "Resources" })).toBeVisible();
   /* Overview leads the row for everybody now, including a DEV — for them it
      opens the Dashboard, the one reading they hold. It used to fall away
      here and leave My Work at the front; that happened because the filter
@@ -90,15 +92,18 @@ test("is sent to the one reading view it holds, not to the Overview", async ({ p
      would bounce them straight back out to My Work. It has to aim at the
      first view they can actually open. */
   await page.goto(`/projects/${projectId}/my-work`);
+  /* A plain link, not a menu trigger: a menu holding one item costs a
+     click to do what one click already does, so an entry with a single open
+     view stays a link. */
   await page
     .getByRole("navigation", { name: "Project" })
     .getByRole("link", { name: "Overview", exact: true })
     .click();
   await page.waitForURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-
-  /* And no switcher, because one pill is a label that looks pressable. */
-  await expect(page.getByRole("navigation", { name: "Overview view" })).toHaveCount(0);
+  await expect(
+    page.getByRole("navigation", { name: "Project" }).getByRole("button", { name: "Overview" }),
+  ).toHaveCount(0);
 });
 
 /* The four addresses, typed in. A page that merely hid its controls would
