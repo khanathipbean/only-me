@@ -115,7 +115,7 @@ export const CAPABILITY_GROUPS = [
   },
   {
     key: "modules",
-    label: "Modules",
+    label: "Test Cases",
     capabilities: [
       {
         key: "authoring.view",

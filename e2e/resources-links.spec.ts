@@ -203,3 +203,20 @@ test("archiving takes a link out of the list and the archived view finds it", as
   await page.goto(`/projects/${projectId}/resources/links?search=${mark}&archived=1`);
   await expect(page.getByRole("link", { name: new RegExp(title) })).toHaveCount(1);
 });
+
+test("each view is titled after itself, not after the section", async ({ page }) => {
+  /* All four said "Resources", so switching changed the list under a title
+     that never moved and the page gave no sign of which view was open
+     except the pill. */
+  const projectId = await openResources(page);
+
+  for (const [path, title] of [
+    [`/projects/${projectId}/resources`, "Resources"],
+    [`/projects/${projectId}/resources/notes`, "Notes"],
+    [`/projects/${projectId}/resources/files`, "Files"],
+    [`/projects/${projectId}/resources/links`, "Links"],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+  }
+});

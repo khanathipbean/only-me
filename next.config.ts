@@ -36,6 +36,9 @@ const nextConfig: NextConfig = {
       { source: "/projects/:id/notes", destination: "/projects/:id/resources/notes", permanent: true },
       { source: "/projects/:id/notes/links", destination: "/projects/:id/resources/links", permanent: true },
       { source: "/projects/:id/files", destination: "/projects/:id/resources/files", permanent: true },
+      /* Import was a tab of its own too. It fills the Modules list, so it is
+       * an action on that page now rather than a destination beside it. */
+      { source: "/projects/:id/import", destination: "/projects/:id/modules/import", permanent: true },
     ];
   },
 

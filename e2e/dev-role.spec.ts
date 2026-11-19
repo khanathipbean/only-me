@@ -66,14 +66,39 @@ test("is offered only the four pages it may open", async ({ page }) => {
      and links are three views of one page now, reached by the switcher on
      it. `files.view` is still its own capability — it decides whether that
      switcher offers a Files pill, not whether this nav entry exists. */
-  for (const label of ["My Work", "Dashboard", "Modules", "Resources"]) {
+  for (const label of ["My Work", "Overview", "Test Cases", "Resources"]) {
     await expect(tabs.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
-  /* First for a DEV, who has no Overview in front of it. */
-  await expect(tabs.getByRole("link").first()).toHaveText("My Work");
-  for (const label of ["Overview", "Problem Cases", "Test Runs", "Import", "Audit Trail"]) {
+  /* Overview leads the row for everybody now, including a DEV — for them it
+     opens the Dashboard, the one reading they hold. It used to fall away
+     here and leave My Work at the front; that happened because the filter
+     dropped it, not because anything ordered the tabs by role, and the tab
+     no longer falls away. My Work is still where a DEV lands, which the
+     test above this one covers. */
+  await expect(tabs.getByRole("link").first()).toHaveText("Overview");
+  /* Dashboard, Problem Cases and the Audit Trail are views of Overview now
+     rather than tabs, and Import is a button on the Test Cases page — each
+     is checked where it actually lives, below. */
+  for (const label of ["Dashboard", "Problem Cases", "Test Runs", "Audit Trail"]) {
     await expect(tabs.getByRole("link", { name: label, exact: true })).toHaveCount(0);
   }
+});
+
+test("is sent to the one reading view it holds, not to the Overview", async ({ page }) => {
+  /* The trap this is written against: a DEV holds reading.dashboard and
+     neither of the other two, so an Overview tab aimed at the project root
+     would bounce them straight back out to My Work. It has to aim at the
+     first view they can actually open. */
+  await page.goto(`/projects/${projectId}/my-work`);
+  await page
+    .getByRole("navigation", { name: "Project" })
+    .getByRole("link", { name: "Overview", exact: true })
+    .click();
+  await page.waitForURL(/\/dashboard$/);
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+
+  /* And no switcher, because one pill is a label that looks pressable. */
+  await expect(page.getByRole("navigation", { name: "Overview view" })).toHaveCount(0);
 });
 
 /* The four addresses, typed in. A page that merely hid its controls would
@@ -81,7 +106,7 @@ test("is offered only the four pages it may open", async ({ page }) => {
 for (const [label, path] of [
   ["Problem Cases", "problem-cases"],
   ["Test Runs", "runs"],
-  ["Import", "import"],
+  ["Import", "modules/import"],
   ["Audit Trail", "audit-log"],
 ] as const) {
   test(`is refused ${label} by the URL, not just by the menu`, async ({ page }) => {
@@ -344,8 +369,8 @@ test("is shown a Test Case to read, not to change", async ({ page }) => {
 
 test("may still read a Test Case, and the rounds it has been through", async ({ page }) => {
   /* Deliberate, and written down in the plan: what a DEV is kept out of is
-     managing rounds, not the history of what happened to a case. Modules is
-     open to them, and Run History sits five levels below it. */
+     managing rounds, not the history of what happened to a case. Test Cases
+     is open to them, and Run History sits five levels below it. */
   await page.goto(`/projects/${projectId}/modules`);
-  await expect(page.getByRole("heading", { name: /modules/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /test cases/i })).toBeVisible();
 });

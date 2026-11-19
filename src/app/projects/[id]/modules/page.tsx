@@ -21,6 +21,7 @@ import { ResultCount } from "@/components/ui/ResultCount";
 import { modulesListBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { MenuButton, menuItemClass } from "@/components/ui/MenuButton";
 import { Modal } from "@/components/ui/Modal";
 import { Pagination } from "@/components/ui/Pagination";
 import { RequiredMark } from "@/components/forms/RequiredMark";
@@ -30,7 +31,7 @@ import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
-import { TrashIcon } from "@/components/icons";
+import { FileCsvIcon, FileExcelIcon, TrashIcon, UploadIcon } from "@/components/icons";
 import { invalidateRouteCache } from "@/lib/revalidate";
 import { listHrefWithFilters } from "@/lib/hrefs";
 import {
@@ -50,7 +51,7 @@ import {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Modules · ${project.name}` : "Modules" };
+  return { title: project ? `Test Cases · ${project.name}` : "Test Cases" };
 }
 
 export default async function ModulesPage({
@@ -81,6 +82,9 @@ export default async function ModulesPage({
    * is not there: it reads as the app being broken rather than as the reader
    * not being allowed. */
   const canEdit = await can(membership.role, "authoring.edit");
+  /* Its own capability still, separate from authoring: this only decides
+     whether the button is offered, and the Import page checks for itself. */
+  const canImport = await can(membership.role, "project.import");
 
   const showArchived = archived === "1";
   const hasFilters = Boolean(search || showArchived);
@@ -208,22 +212,39 @@ export default async function ModulesPage({
         segments={modulesListBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
       <PageHeader
-        title="Modules"
-        subtitle="One menu of the system under test. Requirements are filed under these."
+        title="Test Cases"
+        subtitle="Everything this project tests, filed under Modules — one menu of the system under test. Requirements, Scenarios and Test Cases sit beneath them."
         actions={
           <>
-            <a
-              href={`/api/projects/${projectId}/export`}
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+            {/* The pair, in the order they happen: one fills the hierarchy
+                from a sheet, the other two take it back out. Import used to
+                be a tab of its own, which put it on a page nobody opened
+                while staring at an empty Modules list. */}
+            {canImport && (
+              <Link
+                href={`/projects/${projectId}/modules/import`}
+                className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+              >
+                Import from sheet
+              </Link>
+            )}
+            {/* One button, two formats. They were two buttons of their own,
+                which made a four-wide header row and spent the same weight
+                on the choice of file type as on the import beside it. Still
+                plain links inside, so the download works without JS. */}
+            <MenuButton
+              label="Export"
+              icon={<UploadIcon className="size-4 rotate-180" />}
             >
-              Export as CSV
-            </a>
-            <a
-              href={`/api/projects/${projectId}/export?format=xlsx`}
-              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
-            >
-              Export as Excel
-            </a>
+              <a href={`/api/projects/${projectId}/export?format=xlsx`} className={menuItemClass}>
+                <FileExcelIcon />
+                Excel (.xlsx)
+              </a>
+              <a href={`/api/projects/${projectId}/export`} className={menuItemClass}>
+                <FileCsvIcon />
+                CSV (.csv)
+              </a>
+            </MenuButton>
             {canEdit && (
             <Modal
               triggerLabel="+ New Module"
@@ -298,7 +319,7 @@ export default async function ModulesPage({
             ? "No archived Modules."
             : hasFilters
               ? "No Modules match your search."
-              : "No Modules yet. Create one to get started."}
+              : "No Modules yet. Add one at a time, or fill the whole hierarchy — Modules, Requirements, Scenarios, Test Groups and Test Cases — from a single sheet."}
         </p>
       ) : (
         <div className={tableWrapClass}>

@@ -16,24 +16,29 @@ export function parseUtcDateTimeLocal(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-/** Every `action` the app writes to the audit log — the filter's dropdown
- * options. Kept here next to the query so a newly logged action can't be
- * added without the filter that has to find it being right beside it. */
-export const AUDIT_ACTIONS = [
-  "create",
-  "update",
-  "delete",
-  "archive",
-  "restore",
-  "duplicate",
-  "move",
-  "update-assignee",
-  "update-result",
-  "reorder-test-groups",
-  "import-create",
-  "import-update",
-  "import-skip",
+/**
+ * Every `action` the app writes to the audit log, in the groups the filter
+ * shows them under.
+ *
+ * Kept here next to the query so a newly logged action can't be added
+ * without the filter that has to find it being right beside it — and now
+ * without somebody having to decide, separately and later, where it belongs
+ * in the list. Thirteen bare verbs in one column read as one undifferentiated
+ * run; four short groups say what kind of thing each one is before the eye
+ * has to read any of them.
+ */
+export const AUDIT_ACTION_GROUPS = [
+  {
+    label: "General",
+    actions: ["create", "update", "delete", "archive", "restore", "duplicate"],
+  },
+  { label: "Organization", actions: ["move", "reorder-test-groups"] },
+  { label: "Assignment & testing", actions: ["update-assignee", "update-result"] },
+  { label: "Import", actions: ["import-create", "import-update", "import-skip"] },
 ] as const;
+
+/** The same actions, flat, for everything that only needs the list. */
+export const AUDIT_ACTIONS = AUDIT_ACTION_GROUPS.flatMap((group) => group.actions);
 
 export type AuditLogFilters = {
   /** Exact match, for callers that already hold a user id (the API route). */

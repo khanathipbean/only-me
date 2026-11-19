@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   type ReactNode,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
@@ -12,7 +13,15 @@ import {
 import { createPortal } from "react-dom";
 import { ChevronRightIcon } from "@/components/icons";
 
-export type SelectOption = { value: string; label: string };
+export type SelectOption = {
+  value: string;
+  label: string;
+  /** A heading to draw above this option and the run that follows it.
+   *  Options carrying the same `group` must sit together in the array —
+   *  the heading is drawn where the value changes, so the order in the list
+   *  is the order on screen and nothing has to be sorted here. */
+  group?: string;
+};
 
 /** Past this many options, the list grows a filter box. Below it, a filter is
  *  one more thing standing between the click and the choice; above it,
@@ -371,11 +380,23 @@ export function Select({
           {/* A required select needs a matching empty option for an unset
               value to actually count as invalid. */}
           {!options.some((option) => option.value === "") && <option value="" />}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+          {options.map((option, index) =>
+            option.group && option.group !== options[index - 1]?.group ? (
+              <optgroup key={`${option.value}-group`} label={option.group}>
+                {options
+                  .filter((other) => other.group === option.group)
+                  .map((other) => (
+                    <option key={other.value} value={other.value}>
+                      {other.label}
+                    </option>
+                  ))}
+              </optgroup>
+            ) : option.group ? null : (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ),
+          )}
         </select>
       )}
 
@@ -486,7 +507,24 @@ export function Select({
               {visible.map((option, index) => {
                 const isSelected = option.value === selected;
                 const isActive = index === activeIndex;
+                /* Drawn where the group changes, so a heading never repeats
+                   and the filter box can hide a whole run without leaving
+                   its heading behind over somebody else's options. */
+                const heading =
+                  option.group && option.group !== visible[index - 1]?.group ? option.group : null;
                 return (
+                  <Fragment key={`${option.value}-group`}>
+                  {heading && (
+                    /* `presentation`, not an option: it is a label, and a
+                       listbox that counts it as one would let the arrow keys
+                       land on something that cannot be chosen. */
+                    <li
+                      role="presentation"
+                      className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wider text-muted uppercase"
+                    >
+                      {option.group}
+                    </li>
+                  )}
                   <li
                     key={option.value}
                     id={`${listboxId}-${index}`}
@@ -501,6 +539,7 @@ export function Select({
                   >
                     {option.label}
                   </li>
+                  </Fragment>
                 );
               })}
             </ul>

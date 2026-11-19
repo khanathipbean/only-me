@@ -50,7 +50,7 @@ import {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Resources · ${project.name}` : "Resources" };
+  return { title: project ? `Notes · ${project.name}` : "Notes" };
 }
 
 /** Parsed back at UTC midnight: this field is a day, not a moment, and
@@ -318,8 +318,15 @@ export default async function NotesPage({
       <Breadcrumb
         segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
+
+      {/* Above the title and at the left edge: this control changes which
+          page you are on, so it leads the page rather than trailing its
+          name. On the breadcrumb line it sat far from the title it governs
+          and wrapped under the crumbs on a narrow screen. */}
+      <ResourceTabs projectId={projectId} active="notes" canSeeFiles={canSeeFiles} />
+
       <PageHeader
-        title="Resources"
+        title="Notes"
         subtitle="What a meeting decided, why a Requirement reads the way it does — filed under a Module or against the Project, visible to everyone on it."
         actions={
           /* No longer hidden while the Project has no Modules. That guard was
@@ -352,7 +359,6 @@ export default async function NotesPage({
 
       {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
 
-      <ResourceTabs projectId={projectId} active="notes" canSeeFiles={canSeeFiles} />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">

@@ -30,7 +30,7 @@ export function ProjectQuickActions({ projectId }: { projectId: string }) {
     {
       label: "Import test structure",
       description: "Import modules, requirements and test cases from a file.",
-      href: `${base}/import`,
+      href: `${base}/modules/import`,
       icon: <UploadIcon />,
     },
     {

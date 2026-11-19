@@ -28,7 +28,7 @@ const testCase = { id: "tc1", name: "Test Case A" };
 
 const PROJECTS = { label: "Projects", href: "/projects" };
 const PROJECT = { label: "Project A", href: "/projects/prj1" };
-const MODULES = { label: "Modules", href: "/projects/prj1/modules" };
+const MODULES = { label: "Test Cases", href: "/projects/prj1/modules" };
 const MODULE = { label: "Module A", href: "/projects/prj1/modules/mod1/requirements" };
 const REQUIREMENT = {
   label: "Requirement A",
@@ -76,11 +76,15 @@ describe("breadcrumb path builders", () => {
     ]);
   });
 
-  it("renders the Import path", () => {
+  it("renders the Import path under Modules", () => {
+    /* Four crumbs, not three: importing is how the Modules list gets
+       filled, so the trail leads back to what it filled rather than to the
+       Project. */
     expect(importBreadcrumb(project)).toEqual([
       PROJECTS,
       PROJECT,
-      { label: "Import", href: "/projects/prj1/import" },
+      { label: "Test Cases", href: "/projects/prj1/modules" },
+      { label: "Import", href: "/projects/prj1/modules/import" },
     ]);
   });
 

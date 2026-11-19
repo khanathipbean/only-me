@@ -48,43 +48,77 @@ export function ProjectTabs({
    * arrived together in one commit and Test Runs was slotted in later, so
    * nothing had ever placed the seven against each other.
    */
-  const everyTab: { label: string; href: string; needs: CapabilityKey }[] = [
-    { label: "Overview", href: overviewHref, needs: "reading.overview" },
+  /**
+   * A tab may stand for more than one page.
+   *
+   * Overview, Dashboard and Problem Cases were three tabs that all answered
+   * the same kind of question — how are we doing — so they are one tab with
+   * a switcher on the page now. They cannot be one entry with one capability
+   * though: `reading.dashboard` is open to everybody while the other two are
+   * not, so a DEV holds exactly one of the three. The tab therefore points
+   * at the first view this reader can actually open; pointing it at the
+   * Overview for a DEV would have sent them straight back out to My Work.
+   */
+  const everyTab: {
+    label: string;
+    views: readonly { href: string; needs: CapabilityKey }[];
+  }[] = [
+    {
+      label: "Overview",
+      views: [
+        { href: overviewHref, needs: "reading.overview" },
+        { href: `${overviewHref}/dashboard`, needs: "reading.dashboard" },
+        { href: `${overviewHref}/problem-cases`, needs: "reading.problems" },
+        /* Last of the four, and it was a tab of its own until it joined
+           them: it is opened to settle a question about who changed what
+           rather than to see how far along a round is, but that is still
+           reading the project and changing nothing. */
+        { href: `${overviewHref}/audit-log`, needs: "project.audit" },
+      ],
+    },
     /* After Overview, and first for a DEV — who has no Overview, so the
      * filter above leaves this at the front for them without the order
      * having to know about roles. Where a DEV lands and what they came for;
      * for everybody else, the part of the project's work that is in their
      * hands, which is worth a link even when it is usually empty. */
-    { label: "My Work", href: `${overviewHref}/my-work`, needs: "handoff.view" },
-    { label: "Dashboard", href: `${overviewHref}/dashboard`, needs: "reading.dashboard" },
-    /* With Dashboard rather than with the work: both are places you go to
-       look at what the numbers say and change nothing. Dashboard answers how
-       far along a round is; this one answers which cases keep going wrong. */
-    { label: "Problem Cases", href: `${overviewHref}/problem-cases`, needs: "reading.problems" },
-    { label: "Modules", href: `${overviewHref}/modules`, needs: "authoring.view" },
-    { label: "Test Runs", href: `${overviewHref}/runs`, needs: "runs.view" },
+    { label: "My Work", views: [{ href: `${overviewHref}/my-work`, needs: "handoff.view" }] },
+    /* "Test Cases", not "Modules": a Module is only the first of the five
+       levels behind this tab, and naming the door after its doorstep said
+       nothing about what the section is for. It also pairs with Test Runs
+       beside it — what we test, and the rounds of running it — which the
+       old name gave no hint of. The address stays /modules, which is what
+       the page still lists. */
+    { label: "Test Cases", views: [{ href: `${overviewHref}/modules`, needs: "authoring.view" }] },
+    { label: "Test Runs", views: [{ href: `${overviewHref}/runs`, needs: "runs.view" }] },
     /* One tab for the three kinds of material this project keeps: what the
        team wrote down, the documents it holds, and links out to what lives
        elsewhere. Files used to sit beside this and is now a view inside it,
        reached by the switcher on the page — which is why `files.view` is
        not named here. The Files view checks it for itself, and the All view
        leaves file rows out for a reader who does not hold it. */
-    { label: "Resources", href: `${overviewHref}/resources`, needs: "notes.view" },
-    /* Import writes, so an editor is what the page asks for — the link is
-     * dropped here only so the menu does not offer what it will refuse. */
-    { label: "Import", href: `${overviewHref}/import`, needs: "project.import" },
-    { label: "Audit Trail", href: `${overviewHref}/audit-log`, needs: "project.audit" },
+    { label: "Resources", views: [{ href: `${overviewHref}/resources`, needs: "notes.view" }] },
   ];
 
   /* Only the ones this membership can open — a link to a 404 is worse than
-     no link at all. */
-  const tabs = everyTab.filter((tab) => allowed.includes(tab.needs));
+     no link at all — and each one aimed at the first of its views that is
+     open to them. */
+  const tabs = everyTab.flatMap((tab) => {
+    const open = tab.views.filter((view) => allowed.includes(view.needs));
+    return open.length === 0 ? [] : [{ label: tab.label, href: open[0].href, views: open }];
+  });
 
   return (
     <nav aria-label="Project" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
       {tabs.map((tab) => {
-        const isActive =
-          tab.href === overviewHref ? pathname === overviewHref : pathname.startsWith(tab.href);
+        /* Any of the tab's views lights it, not only the one it points at:
+           a DEV sent to the Dashboard must still see Overview marked, and so
+           must anybody who switched to Problem Cases. The project root is an
+           exact match because every other address starts with it. */
+        const isActive = tab.views.some((view) =>
+          view.href === overviewHref
+            ? pathname === overviewHref
+            : pathname.startsWith(view.href),
+        );
         return (
           <Link
             key={tab.href}

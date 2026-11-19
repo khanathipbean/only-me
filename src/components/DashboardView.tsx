@@ -655,7 +655,7 @@ function SummaryWidget({
           <LinkButton href={`/projects/${projectId}/modules`} variant="primary">
             Go to Modules
           </LinkButton>
-          <LinkButton href={`/projects/${projectId}/import`} variant="secondary">
+          <LinkButton href={`/projects/${projectId}/modules/import`} variant="secondary">
             Import Data
           </LinkButton>
         </div>

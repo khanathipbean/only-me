@@ -22,7 +22,7 @@ test("a short option in a narrow filter stays on one line", async ({ page }) => 
      segment and a row link elsewhere on these pages, and the plain
      query matched all of them. */
   await page.getByRole("navigation", { name: "Project" })
-    .getByRole("link", { name: "Modules" })
+    .getByRole("link", { name: "Test Cases" })
     .click();
   await page.waitForURL(/\/modules/);
 

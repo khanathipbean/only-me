@@ -150,7 +150,7 @@ export function ProjectOverviewSummary({
     {
       label: "Import test structure",
       description: "Import from a file",
-      href: `${base}/import`,
+      href: `${base}/modules/import`,
       icon: <UploadIcon />,
       tone: "orange" as const,
     },

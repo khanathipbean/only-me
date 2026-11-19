@@ -38,7 +38,7 @@ import { errorHref, listHrefWithFilters } from "@/lib/hrefs";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Resources · ${project.name}` : "Resources" };
+  return { title: project ? `Files · ${project.name}` : "Files" };
 }
 
 export default async function ProjectFilesPage({
@@ -131,14 +131,20 @@ export default async function ProjectFilesPage({
       <Breadcrumb
         segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
+
+      {/* Above the title and at the left edge: this control changes which
+          page you are on, so it leads the page rather than trailing its
+          name. On the breadcrumb line it sat far from the title it governs
+          and wrapped under the crumbs on a narrow screen. */}
+      <ResourceTabs projectId={projectId} active="files" canSeeFiles />
+
       <PageHeader
-        title="Resources"
+        title="Files"
         subtitle="Documents kept against this project, grouped by module."
       />
 
       {/* `canSeeFiles` is true by definition here: this page already
           refused anybody without `files.view` above. */}
-      <ResourceTabs projectId={projectId} active="files" canSeeFiles />
 
       {canEdit && (
       <Card className="flex flex-col gap-4">

@@ -110,8 +110,13 @@ export function testRunBreadcrumb(project: NamedEntity, run: NamedEntity): Bread
 }
 
 
+/** Under Modules, not under the Project: importing is how the Modules list
+ *  gets filled, and the trail should lead back to what it filled. */
 export function importBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
-  return [...projectBreadcrumb(project), { label: "Import", href: `/projects/${project.id}/import` }];
+  return [
+    ...modulesListBreadcrumb(project),
+    { label: "Import", href: `${modulesListHref(project.id)}/import` },
+  ];
 }
 
 /** One crumb for all four views. The switcher on the page says which of
@@ -124,7 +129,10 @@ export function resourcesBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
 }
 
 export function modulesListBreadcrumb(project: NamedEntity): BreadcrumbSegment[] {
-  return [...projectBreadcrumb(project), { label: "Modules", href: modulesListHref(project.id) }];
+  return [
+    ...projectBreadcrumb(project),
+    { label: "Test Cases", href: modulesListHref(project.id) },
+  ];
 }
 
 export function moduleBreadcrumb(

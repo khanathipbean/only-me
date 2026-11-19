@@ -7,6 +7,7 @@ import { archiveProject, getProjectById, restoreProject } from "@/lib/projects";
 import { listModulesForProject } from "@/lib/modules";
 import { getProjectOverviewSummary } from "@/lib/project-overview";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { OverviewTabs } from "./OverviewTabs";
 import { projectBreadcrumb } from "@/lib/breadcrumb";
 import { withToast } from "@/lib/toast";
 import { ConfirmForm } from "@/components/ConfirmForm";
@@ -59,6 +60,13 @@ export default async function ProjectOverviewPage({
   // nothing for any of these queries to find.
   const summary = hasModules ? await getProjectOverviewSummary(id) : null;
   const canEdit = await can(membership?.role, "project.edit");
+  /* Only to decide which pills the switcher offers — each page checks
+     for itself. A DEV never reaches here: they are sent to My Work. */
+  const [canSeeDashboard, canSeeProblems, canSeeAudit] = await Promise.all([
+    can(membership?.role, "reading.dashboard"),
+    can(membership?.role, "reading.problems"),
+    can(membership?.role, "project.audit"),
+  ]);
 
   async function archive() {
     "use server";
@@ -83,10 +91,25 @@ export default async function ProjectOverviewPage({
 
   return (
     <main className={pageClass}>
+      <Breadcrumb segments={projectBreadcrumb(project)} />
+
+      {/* Above the title and at the left edge, as on every other page in
+          this switcher. The project's own actions share the row, which is
+          where they were asked for and where they have height to spare. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Breadcrumb segments={projectBreadcrumb(project)} />
+        <OverviewTabs
+          projectId={id}
+          active="overview"
+          canSeeOverview
+          canSeeDashboard={canSeeDashboard}
+          canSeeProblems={canSeeProblems}
+          canSeeAudit={canSeeAudit}
+        />
         {summary && canEdit && (
-          <div className="flex shrink-0 items-center gap-2">
+          /* `ml-auto` as well as the row's `justify-between`: the switcher
+             draws nothing when a reader holds only one of the three views,
+             and a lone Settings button would then slide to the left. */
+          <div className="flex shrink-0 items-center gap-2 ml-auto">
             <Link
               href={editHref}
               className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-black/[.03] dark:hover:bg-white/[.05]"
@@ -120,6 +143,7 @@ export default async function ProjectOverviewPage({
           </div>
         )}
       </div>
+
       {summary ? (
         <ProjectOverviewSummary project={project} summary={summary} />
       ) : (

@@ -91,11 +91,24 @@ test("a viewer is not offered the Import tab it cannot open", async ({ page }) =
 
   const nav = page.getByRole("navigation", { name: "Project" });
   await expect(nav).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Import" })).toHaveCount(0);
+  /* Import is no longer a tab for anybody, so looking for it here would
+     pass without proving anything. The control that exists is the button on
+     the Modules page, and a VIEWER must not be offered it. */
   // The tabs a VIEWER may open are still there.
-  await expect(nav.getByRole("link", { name: "Modules" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Audit Trail" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Test Cases" })).toBeVisible();
+  /* The Audit Trail is a view of Overview now, not a tab, so a VIEWER
+     reaches it through the switcher — which must offer it to them. */
+  await expect(nav.getByRole("link", { name: "Audit Trail" })).toHaveCount(0);
+  await page.goto(`/projects/${projectId}`);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Overview view" })
+      .getByRole("link", { name: "Audit Trail" }),
+  ).toBeVisible();
+
+  await page.goto(`/projects/${projectId}/modules`);
+  await expect(page.getByRole("link", { name: "Import from sheet" })).toHaveCount(0);
 
   // And the address behind it was never open to them anyway.
-  expect((await page.goto(`/projects/${projectId}/import`))?.status()).toBe(404);
+  expect((await page.goto(`/projects/${projectId}/modules/import`))?.status()).toBe(404);
 });

@@ -50,7 +50,7 @@ import {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProjectById(id);
-  return { title: project ? `Resources · ${project.name}` : "Resources" };
+  return { title: project ? `Links · ${project.name}` : "Links" };
 }
 
 /**
@@ -295,8 +295,15 @@ export default async function LinksPage({
       <Breadcrumb
         segments={resourcesBreadcrumb({ id: projectId, name: nameOr(project, projectId) })}
       />
+
+      {/* Above the title and at the left edge: this control changes which
+          page you are on, so it leads the page rather than trailing its
+          name. On the breadcrumb line it sat far from the title it governs
+          and wrapped under the crumbs on a narrow screen. */}
+      <ResourceTabs projectId={projectId} active="links" canSeeFiles={canSeeFiles} />
+
       <PageHeader
-        title="Resources"
+        title="Links"
         subtitle="Addresses for the things this project depends on that live somewhere else — a ticket, a sheet, a design, the environment under test."
         actions={
           canEdit && (
@@ -323,7 +330,6 @@ export default async function LinksPage({
 
       {error && !editId && <DismissibleAlert>{error}</DismissibleAlert>}
 
-      <ResourceTabs projectId={projectId} active="links" canSeeFiles={canSeeFiles} />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterForm showClear={hasFilters} className="flex-1">
