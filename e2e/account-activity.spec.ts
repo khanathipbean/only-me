@@ -7,6 +7,14 @@ import { E2E_VIEWER_EMAIL, E2E_VIEWER_PASSWORD } from "./support/credentials";
  * page rather than only through the library.
  */
 test("an administrator can see what was done to an account, and get back", async ({ page }) => {
+  /* Three times the usual budget, because this one sets a password and
+     hashing it is slow on purpose. On its own it takes about 22 seconds
+     against a 30-second limit; inside the full suite, with the dev server
+     compiling routes alongside it, it went over twice. A test that fails
+     for want of seconds teaches nothing and hides the ones that fail for a
+     reason. */
+  test.slow();
+
   await page.goto("/members");
 
   // Two tabs, People first.
