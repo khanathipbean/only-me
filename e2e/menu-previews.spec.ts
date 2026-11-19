@@ -109,6 +109,54 @@ test("the Resources menu draws its own three", async ({ page }) => {
   await expect(pane(page).getByText(/link(s)?$|No links yet/)).toBeVisible();
 });
 
+test("every pane reaches the foot of the panel", async ({ page }) => {
+  await openFixture(page);
+
+  /* The complaint this answers: a pane is as tall as the list beside it
+     however much it has to say, so the short ones left an inch of nothing
+     under the drawing and read as a panel that had failed to finish
+     loading. The line at the foot is what closes it, and only a
+     measurement can say it is really at the foot. */
+  for (const [entry, items] of [
+    ["Overview", ["Summary", "Dashboard", "Problem Cases", "Audit Trail"]],
+    ["Resources", ["Notes", "Files", "Links"]],
+  ] as const) {
+    await openMenu(page, entry);
+    const panel = page.getByRole("menu", { name: entry });
+
+    for (const item of items) {
+      await panel.getByRole("menuitem", { name: new RegExp(`^${item}`) }).hover();
+
+      const foot = pane(page).getByText(`Open ${item} →`);
+      await expect(foot, `${item} has no line at the foot`).toBeVisible();
+
+      const panelBox = (await panel.boundingBox())!;
+      const footBox = (await foot.boundingBox())!;
+      const gap = panelBox.y + panelBox.height - (footBox.y + footBox.height);
+      expect(gap, `${item} leaves ${Math.round(gap)}px of empty panel below it`).toBeLessThan(28);
+    }
+
+    await page.keyboard.press("Escape");
+  }
+});
+
+test("the panes carry the figures a reader opens the page for", async ({ page }) => {
+  await openFixture(page);
+  await openMenu(page, "Overview");
+  const menu = page.getByRole("menu", { name: "Overview" });
+
+  /* The ring above is the project's whole life; this is the sitting
+     somebody is in, which is usually why the Dashboard is opened. */
+  await menu.getByRole("menuitem", { name: /^Dashboard/ }).hover();
+  await expect(pane(page).getByText(/\d+ of \d+/)).toBeVisible();
+
+  /* And the cases themselves, not only how many of them there are. */
+  await menu.getByRole("menuitem", { name: /^Problem Cases/ }).hover();
+  /* Two of them are named, so this takes the first rather than asserting
+     on a locator that matches both. */
+  await expect(pane(page).getByText(/\d+ fails?$/).first()).toBeVisible();
+});
+
 test("nothing is fetched until a menu is opened, and then only once", async ({ page }) => {
   const asked: string[] = [];
   page.on("request", (request) => {

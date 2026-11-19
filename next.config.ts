@@ -63,11 +63,24 @@ const nextConfig: NextConfig = {
    * but the build itself.
    *
    * Remove this when the machine moves to a Node where the bug is gone.
+   *
+   * Declared only on the webpack path, and not as a plain `webpack` key:
+   * `next dev` runs Turbopack, which refuses to start at all with "This
+   * build is using Turbopack, with a `webpack` config and no `turbopack`
+   * config" — so the first version of this took the dev server and the
+   * whole end-to-end suite down with it. `process.env.TURBOPACK` is set by
+   * `parseBundlerArgs` before this file is read (see
+   * `next/dist/lib/bundler.js`), which makes it the one thing here that
+   * knows which bundler is about to run.
    */
-  webpack: (config) => {
-    config.output = { ...config.output, hashFunction: "sha256" };
-    return config;
-  },
+  ...(process.env.TURBOPACK
+    ? {}
+    : {
+        webpack: (config: { output?: Record<string, unknown> }) => {
+          config.output = { ...config.output, hashFunction: "sha256" };
+          return config;
+        },
+      }),
 
   async headers() {
     return [
