@@ -40,7 +40,12 @@ test("an administrator can see what was done to an account, and get back", async
   await setViewerPassword(E2E_VIEWER_PASSWORD);
 
   await page.getByRole("link", { name: "Account activity" }).click();
-  await expect(page).toHaveURL(/tab=activity/);
+  /* `waitForURL`, not `toHaveURL`: this is a navigation, and the budget for
+     one is the navigation timeout rather than the ten seconds an assertion
+     gets. `test.slow()` above lengthens the test, not each expectation, so
+     a cold route taking longer than ten seconds to compile went red here
+     with nothing wrong. */
+  await page.waitForURL(/tab=activity/);
   await expect(activityTab).toHaveAttribute("aria-current", "page");
 
   /* The newest entry says what happened, who did it and to whom. The actor's
@@ -56,7 +61,7 @@ test("an administrator can see what was done to an account, and get back", async
 
   // And the way back works.
   await page.getByRole("link", { name: "People" }).click();
-  await expect(page).toHaveURL(/\/members$/);
+  await page.waitForURL(/\/members$/);
 });
 
 /**
