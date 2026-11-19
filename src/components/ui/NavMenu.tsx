@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useId, useRef, useState, type ComponentType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 
 export type NavMenuItem = {
   label: string;
@@ -13,6 +21,16 @@ export type NavMenuItem = {
   active: boolean;
   icon?: ComponentType<{ className?: string }>;
 };
+
+/** How wide the panel is drawn, so it can be kept on screen before it is
+ *  drawn at all. Measuring it afterwards would mean one frame in the wrong
+ *  place, which on a narrow window is a frame hanging off the edge. */
+const LIST_WIDTH = 288;
+/* Wider than the list beside it. At the same width the Dashboard's legend
+   had to truncate the very words it exists to say — "Pass…", "Skipp…",
+   "Not …" — and a label clipped to an ellipsis is worse than no label. */
+const PREVIEW_WIDTH = 384;
+const VIEWPORT_MARGIN = 8;
 
 /**
  * A menu bar entry that opens a list of the pages behind it.
@@ -45,6 +63,8 @@ export function NavMenu({
   active,
   className = "",
   activeClassName = "",
+  onOpen,
+  renderPreview,
 }: {
   label: string;
   items: readonly NavMenuItem[];
@@ -52,8 +72,19 @@ export function NavMenu({
   active: boolean;
   className?: string;
   activeClassName?: string;
+  /** Told every time the menu opens, so the caller can fetch what the
+   *  preview needs the first time and never before. */
+  onOpen?: () => void;
+  /** Draws the pane beside the list, for whichever item the reader is
+   *  pointing at. Left out, the menu is the list alone and no wider than it
+   *  ever was. */
+  renderPreview?: (item: NavMenuItem) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  /* Which item the pane is showing. Follows the pointer and the keyboard
+     alike, so arrowing down the list changes the drawing exactly as moving
+     the mouse down it does. */
+  const [pointed, setPointed] = useState(0);
   /* Where to draw the panel, measured from the trigger when it opens.
      Null until then, which is also how this knows the document exists —
      the portal cannot be built during the server render. */
@@ -129,10 +160,23 @@ export function NavMenu({
   const show = useCallback(() => {
     const rect = wrapperRef.current?.getBoundingClientRect();
     if (rect) {
-      setBox({ top: rect.bottom + 2, left: rect.left });
+      const width = LIST_WIDTH + (renderPreview ? PREVIEW_WIDTH : 0);
+      /* Kept inside the window. The panel hangs from the trigger's left
+         edge, and a menu near the right of the bar is twice as wide as the
+         one that used to hang there — far enough over to run off. */
+      const furthestLeft = Math.max(
+        VIEWPORT_MARGIN,
+        window.innerWidth - width - VIEWPORT_MARGIN,
+      );
+      setBox({ top: rect.bottom + 2, left: Math.min(rect.left, furthestLeft) });
     }
+    /* Opening lands on the page the reader is already on, where there is
+       one, so the drawing beside the list is of where they are. */
+    const here = items.findIndex((item) => item.active);
+    setPointed(here === -1 ? 0 : here);
     setOpen(true);
-  }, []);
+    onOpen?.();
+  }, [items, onOpen, renderPreview]);
 
   /** Arrow keys walk the panel; Home and End jump to its ends. */
   function onPanelKeyDown(event: React.KeyboardEvent) {
@@ -255,37 +299,65 @@ export function NavMenu({
           onMouseEnter={cancelClose}
           onMouseLeave={closeSoon}
           style={{ top: box.top, left: box.left }}
-          className="fixed z-30 flex w-80 flex-col gap-0.5 rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+          className="fixed z-30 flex overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
         >
-          {items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                role="menuitem"
-                aria-current={item.active ? "page" : undefined}
-                onClick={closeNow}
-                className={`flex items-start gap-3 rounded-lg px-2.5 py-2 ${
-                  item.active ? "bg-black/[.05] dark:bg-white/[.07]" : "hover:bg-black/[.03] dark:hover:bg-white/[.05]"
-                }`}
-              >
-                {Icon && (
-                  <span
-                    className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-black/[.05] dark:bg-white/[.07] [&>svg]:size-4 ${
-                      item.active ? "text-brand" : "text-muted"
-                    }`}
-                  >
-                    <Icon />
+          <div
+            style={{ width: LIST_WIDTH }}
+            className="flex shrink-0 flex-col gap-0.5 p-1.5"
+          >
+            {items.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  role="menuitem"
+                  aria-current={item.active ? "page" : undefined}
+                  onClick={closeNow}
+                  /* Pointing and focusing both move the pane. `onFocus`
+                     rather than a key handler: the arrow keys already move
+                     focus, so one listener covers the mouse, the keyboard
+                     and anything else that focuses a link. */
+                  onMouseEnter={() => setPointed(index)}
+                  onFocus={() => setPointed(index)}
+                  className={`flex items-start gap-3 rounded-lg px-2.5 py-2 ${
+                    index === pointed
+                      ? "bg-black/[.05] dark:bg-white/[.07]"
+                      : "hover:bg-black/[.03] dark:hover:bg-white/[.05]"
+                  }`}
+                >
+                  {Icon && (
+                    <span
+                      className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-black/[.05] dark:bg-white/[.07] [&>svg]:size-4 ${
+                        item.active ? "text-brand" : "text-muted"
+                      }`}
+                    >
+                      <Icon />
+                    </span>
+                  )}
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-sm font-semibold text-foreground">{item.label}</span>
+                    <span className="text-xs leading-snug text-muted">{item.detail}</span>
                   </span>
-                )}
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-semibold text-foreground">{item.label}</span>
-                  <span className="text-xs leading-snug text-muted">{item.detail}</span>
-                </span>
-              </Link>
-            );
-          })}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Hidden from a screen reader on purpose. A menu is a list of
+              places to go, and this pane repeats what the place itself
+              shows — announcing a panel that changes on every arrow key
+              would talk over the names the reader is trying to hear. */}
+          {renderPreview && items[pointed] && (
+            <div
+              aria-hidden="true"
+              data-testid="nav-menu-preview"
+              style={{ width: PREVIEW_WIDTH }}
+              className="flex shrink-0 flex-col border-l border-border bg-background p-4"
+            >
+              {renderPreview(items[pointed])}
+            </div>
+          )}
         </div>,
         document.body,
       )}

@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCallback, useRef, useState } from "react";
 import type { CapabilityKey } from "@/lib/permissions";
+import type { MenuPreview as MenuPreviewPayload } from "@/lib/menu-preview-types";
+import { MenuPreview, type PreviewKey } from "@/components/project/MenuPreview";
 import { NavMenu, type NavMenuItem } from "@/components/ui/NavMenu";
 import {
   BarChartIcon,
@@ -45,6 +48,38 @@ export function ProjectTabs({
   const overviewHref = `/projects/${projectId}`;
 
   /*
+   * What the menus draw beside their lists, fetched the first time one is
+   * opened and never again.
+   *
+   * Not rendered into the layout with the tabs: that would put seven queries
+   * on every page in the project, paid for by every reader whether or not
+   * they ever open a menu — and the menu is a thing you pass through, not a
+   * thing you look at. `asked` is a ref rather than state because it must be
+   * true for the rest of this render, not after the next one: hovering
+   * across three entries fires `onOpen` three times before any state the
+   * first one set has landed.
+   */
+  const [preview, setPreview] = useState<MenuPreviewPayload | null>(null);
+  const asked = useRef(false);
+
+  const loadPreview = useCallback(() => {
+    if (asked.current) {
+      return;
+    }
+    asked.current = true;
+    fetch(`/api/projects/${projectId}/menu-preview`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: MenuPreviewPayload | null) => {
+        if (data) {
+          setPreview(data);
+        }
+      })
+      /* Silently. The menu is a working list of links without any of this,
+         and an error about a drawing nobody asked for would be noise. */
+      .catch(() => {});
+  }, [projectId]);
+
+  /*
    * Three groups, left to right: read, work, reach for.
    *
    * Overview and Dashboard are both places you go to look at numbers and
@@ -80,6 +115,8 @@ export function ProjectTabs({
       label?: string;
       detail?: string;
       icon?: NavMenuItem["icon"];
+      /** Which drawing the pane beside the menu shows for this view. */
+      preview?: PreviewKey;
     }[];
   }[] = [
     {
@@ -91,6 +128,7 @@ export function ProjectTabs({
           label: "Summary",
           detail: "What this project holds, and what happened lately.",
           icon: HomeIcon,
+          preview: "summary",
         },
         {
           href: `${overviewHref}/dashboard`,
@@ -98,6 +136,7 @@ export function ProjectTabs({
           label: "Dashboard",
           detail: "How far each round has got, by result and priority.",
           icon: BarChartIcon,
+          preview: "dashboard",
         },
         {
           href: `${overviewHref}/problem-cases`,
@@ -105,6 +144,7 @@ export function ProjectTabs({
           label: "Problem Cases",
           detail: "Which cases keep going wrong, and in what shape.",
           icon: PulseIcon,
+          preview: "problems",
         },
         /* Last of the four, and it was a tab of its own until it joined
            them: it is opened to settle a question about who changed what
@@ -116,6 +156,7 @@ export function ProjectTabs({
           label: "Audit Trail",
           detail: "Who changed what, and when.",
           icon: ShieldIcon,
+          preview: "audit",
         },
       ],
     },
@@ -152,6 +193,7 @@ export function ProjectTabs({
           label: "Notes",
           detail: "What a meeting decided, and why something reads as it does.",
           icon: ClipboardListIcon,
+          preview: "notes",
         },
         {
           href: `${overviewHref}/resources/files`,
@@ -159,6 +201,7 @@ export function ProjectTabs({
           label: "Files",
           detail: "Documents kept against this project, grouped by module.",
           icon: FileIcon,
+          preview: "files",
         },
         {
           href: `${overviewHref}/resources/links`,
@@ -166,6 +209,7 @@ export function ProjectTabs({
           label: "Links",
           detail: "Addresses for the things that live somewhere else.",
           icon: LinkIcon,
+          preview: "links",
         },
       ],
     },
@@ -190,6 +234,16 @@ export function ProjectTabs({
    *  an exact match because every other address starts with it. */
   const isOn = (href: string) =>
     href === overviewHref ? pathname === overviewHref : pathname.startsWith(href);
+
+  /* Which drawing belongs to which address. The menu hands back the item it
+     is pointing at, and an address is what the two sides already share — so
+     nothing new has to be threaded through `NavMenu`, which knows about
+     menus and should not learn about this project's pages. */
+  const sectionFor = new Map<string, PreviewKey>(
+    everyTab.flatMap((tab) =>
+      tab.views.flatMap((view) => (view.preview ? [[view.href, view.preview] as const] : [])),
+    ),
+  );
 
   return (
     <nav aria-label="Project" className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
@@ -223,6 +277,18 @@ export function ProjectTabs({
             active={isActive}
             className={`${entryClass} ${restingClass}`}
             activeClassName={litClass}
+            onOpen={loadPreview}
+            renderPreview={(item) => {
+              const section = sectionFor.get(item.href);
+              return section ? (
+                <MenuPreview
+                  section={section}
+                  label={item.label}
+                  data={preview}
+                  loading={preview === null}
+                />
+              ) : null;
+            }}
             items={tab.views.map((view) => ({
               label: view.label ?? tab.label,
               href: view.href,
