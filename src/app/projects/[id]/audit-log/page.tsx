@@ -9,6 +9,7 @@ import {
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { auditLogBreadcrumb, nameOr } from "@/lib/breadcrumb";
 import { FilterForm } from "@/components/FilterForm";
+import { DateTimeField } from "@/components/ui/DateTimeField";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ResultCount } from "@/components/ui/ResultCount";
 import { Pagination } from "@/components/ui/Pagination";
@@ -130,11 +131,23 @@ export default async function AuditLogPage({
           </label>
           <label className={labelClass}>
             From
-            <input type="datetime-local" name="from" defaultValue={from} className={inputClass} />
+            <DateTimeField
+              name="from"
+              defaultValue={from}
+              label="From"
+              hint="Select start date"
+              className="min-w-52"
+            />
           </label>
           <label className={labelClass}>
             To
-            <input type="datetime-local" name="to" defaultValue={to} className={inputClass} />
+            <DateTimeField
+              name="to"
+              defaultValue={to}
+              label="To"
+              hint="Select end date"
+              className="min-w-52"
+            />
           </label>
         </FilterForm>
         <ResultCount total={result.total} />

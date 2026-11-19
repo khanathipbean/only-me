@@ -168,6 +168,18 @@ input[type="datetime-local"]:focus::-webkit-calendar-picker-indicator {
   opacity: 1;
 }
 
+/* A field that draws its own calendar mark and chevron (see
+ * `DateTimeField`) has no use for the browser's button as well — two
+ * calendars on one control, one of them unstyleable. Written here rather
+ * than as an arbitrary variant: a Tailwind variant for a vendor
+ * pseudo-element that silently generates no rule is worse than one line of
+ * CSS that plainly does, which is why `.data-table` below is here too.
+ * After the rules above on purpose — the two have the same specificity, so
+ * order is what decides. */
+.date-field-bare::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
 .select-field {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-position: right 0.75rem center;
