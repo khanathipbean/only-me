@@ -331,6 +331,33 @@ export async function seedBaseline() {
    * one short English name produces a header nothing can go wrong in — and
    * the thing that went wrong was a long one pushing the page's buttons off
    * their row. A fixture that cannot reproduce it cannot guard it. */
+  /* A Requirement nothing tests, which the Hierarchy panel exists to show.
+   * Without one in the fixture the panel's "no test cases" line and its
+   * No Cases filter have nothing to be right or wrong about. Idempotent like
+   * everything else here: the seed runs again on every suite. */
+  const untestedName = "REQ-UNTESTED-001 การเพิกถอนสิทธิ์เมื่อพนักงานลาออก";
+  const alreadyThere = await prisma.requirement.findFirst({
+    where: { projectId: project.id, name: untestedName, deletedAt: null },
+    select: { id: true },
+  });
+  if (!alreadyThere) {
+    /* In the wide Module, beside a Requirement that does have cases: the
+     * panel is read one Module at a time, and a covered and an uncovered
+     * Requirement side by side is what the columns are for. Other specs
+     * leave Modules of their own behind in this project, so the one this
+     * lands in has to be named rather than picked by order. */
+    const home = await prisma.module.upsert({
+      where: { projectId_name: { projectId: project.id, name: E2E_WIDE_MODULE } },
+      update: { deletedAt: null },
+      create: { projectId: project.id, name: E2E_WIDE_MODULE, sequence: 99 },
+    });
+    await createRequirement(
+      project.id,
+      { name: untestedName, moduleId: home.id, priority: "HIGH", status: "READY" },
+      user.id,
+    );
+  }
+
   const wideCase = await fixtureCase(E2E_WIDE_CASE, async () => {
     const wideModule = await prisma.module.upsert({
       where: { projectId_name: { projectId: project.id, name: E2E_WIDE_MODULE } },

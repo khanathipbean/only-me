@@ -11,6 +11,64 @@ import type {
   WorkflowStatus,
 } from "@/generated/prisma/client";
 
+/** An empty roll-up, which is also what a Requirement nothing tests holds. */
+export function emptyResults(): NodeResults {
+  return { total: 0, passed: 0, failed: 0, notRun: 0, other: 0, recorded: 0 };
+}
+
+/** Adds `from` into `into`, which is how every level above a Test Group gets
+ *  its figures. */
+function addResults(into: NodeResults, from: NodeResults): void {
+  into.total += from.total;
+  into.passed += from.passed;
+  into.failed += from.failed;
+  into.notRun += from.notRun;
+  into.other += from.other;
+  into.recorded += from.recorded;
+}
+
+/** One case's contribution, by the result that actually applies to it — the
+ *  round's own where a round is chosen, which the caller has resolved. */
+function countOne(into: NodeResults, result: TestResult): void {
+  into.total += 1;
+  if (result === "PASSED") {
+    into.passed += 1;
+  } else if (result === "FAILED") {
+    into.failed += 1;
+  } else if (result === "NOT_RUN") {
+    into.notRun += 1;
+  } else {
+    into.other += 1;
+  }
+  if (result !== "NOT_RUN") {
+    into.recorded += 1;
+  }
+}
+
+/**
+ * Whether anything on this dashboard narrows by the test cases themselves.
+ *
+ * It decides one thing: whether a Requirement with no test cases can be shown
+ * at all. One with none cannot match a question about results, a round, a
+ * priority or an assignee, so while such a filter is on it is not absent — it
+ * is unanswerable, and the panel says that instead of printing a zero that
+ * reads as good news.
+ */
+export function narrowsByCase(filters: DashboardFilters): boolean {
+  return Boolean(
+    filters.search ||
+      filters.testResult ||
+      filters.priority ||
+      filters.status ||
+      filters.assigneeId ||
+      filters.testRunId ||
+      filters.phase ||
+      filters.scenarioId ||
+      filters.testGroupId ||
+      (filters.tags && filters.tags.length > 0),
+  );
+}
+
 /** Pure: no divide-by-zero when a project has no Test Cases yet. */
 export function calculateTestProgress(testCasesWithResult: number, totalTestCases: number): number {
   return totalTestCases === 0 ? 0 : (testCasesWithResult / totalTestCases) * 100;
@@ -53,6 +111,29 @@ export type DashboardFilters = {
   phase?: string;
 };
 
+/**
+ * What the Hierarchy panel's columns read off a node.
+ *
+ * Counted once, on the way up: every level is the sum of the level below it,
+ * so a Module and the Requirements inside it can never disagree about how
+ * many cases failed.
+ *
+ * `other` is skipped and blocked together. They have no column of their own —
+ * the panel shows Passed, Failed and Not Run — so three figures out of five
+ * results will not add up to `total`. Carrying the remainder lets the row say
+ * so rather than leave a reader to find the gap and mistrust the rest.
+ */
+export type NodeResults = {
+  total: number;
+  passed: number;
+  failed: number;
+  notRun: number;
+  other: number;
+  /** Cases with any result recorded: the numerator of Execution %, and the
+   *  same sum the Overview card calls Test Progress. */
+  recorded: number;
+};
+
 export type DashboardTestCaseNode = {
   id: string;
   name: string;
@@ -65,6 +146,7 @@ export type DashboardTestGroupNode = {
   id: string;
   name: string;
   testCaseCount: number;
+  results: NodeResults;
   testCases: DashboardTestCaseNode[];
 };
 
@@ -75,6 +157,7 @@ export type DashboardScenarioNode = {
   moduleId: string;
   requirementId: string;
   testCaseCount: number;
+  results: NodeResults;
   testGroups: DashboardTestGroupNode[];
 };
 
@@ -84,6 +167,9 @@ export type DashboardRequirementNode = {
   code: string | null;
   feature: string | null;
   testCaseCount: number;
+  results: NodeResults;
+  /** Still being written, so having no test case yet is not a debt. */
+  isDraft: boolean;
   scenarios: DashboardScenarioNode[];
 };
 
@@ -91,6 +177,7 @@ export type DashboardModuleNode = {
   id: string;
   name: string;
   testCaseCount: number;
+  results: NodeResults;
   requirements: DashboardRequirementNode[];
 };
 
@@ -163,6 +250,22 @@ export type ProjectDashboard = {
    *  says how many keep failing, which is a different question and the one
    *  Problem Cases was built to answer. */
   attention: { total: number; byPattern: Record<AttentionPattern, number> };
+  /**
+   * How much of the project has a test case at all.
+   *
+   * Null while a filter about test cases is on. A requirement with none
+   * cannot answer a question about results, rounds, priorities or people, so
+   * the figure is unanswerable rather than zero — and a zero here would read
+   * as there being nothing left to write.
+   */
+  requirementCoverage: {
+    total: number;
+    withCases: number;
+    withoutCases: number;
+    /** Of those, the ones still being drafted: not the same debt as a
+     *  requirement signed off two sprints ago and never tested. */
+    draftWithoutCases: number;
+  } | null;
 };
 
 /** A live Test Case under a live Test Group under a live Scenario in this
@@ -309,6 +412,7 @@ export async function getProjectDashboard(
           name: true,
           code: true,
           feature: true,
+          status: true,
           moduleId: true,
           module: { select: { id: true, name: true, sequence: true } },
         },
@@ -340,10 +444,13 @@ export async function getProjectDashboard(
     moduleId: scenario.requirement.moduleId,
     requirementId: scenario.requirementId,
     testCaseCount: scenario.testGroups.reduce((sum, group) => sum + group.testCases.length, 0),
+    /* Filled from the groups once they are built, just below. */
+    results: emptyResults(),
     testGroups: scenario.testGroups.map((group) => ({
       id: group.id,
       name: group.name,
       testCaseCount: group.testCases.length,
+      results: emptyResults(),
       testCases: group.testCases.map((testCase) => {
         // The round's own result when a round is chosen. Read once here and
         // used for the breakdown, the progress and the tree node alike, so
@@ -380,6 +487,16 @@ export async function getProjectDashboard(
     })),
   }));
 
+  /* Rolled up after the nodes are built rather than inside the map above:
+   * a node cannot count into itself while it is still being made, and one
+   * more pass over cases already in hand costs nothing. */
+  scenarioNodes.forEach((scenario) => {
+    scenario.testGroups.forEach((group) => {
+      group.testCases.forEach((testCase) => countOne(group.results, testCase.testResult));
+      addResults(scenario.results, group.results);
+    });
+  });
+
   /* Grouped here rather than by querying Modules downward: the filters all
    * bite at Test Case level, and only a Scenario that survived them should
    * bring its Module and Requirement into the tree. Starting from Modules
@@ -397,6 +514,7 @@ export async function getProjectDashboard(
         id: scenarioModule.id,
         name: scenarioModule.name,
         testCaseCount: 0,
+        results: emptyResults(),
         requirements: [],
       };
       moduleNodes.set(scenarioModule.id, moduleNode);
@@ -410,6 +528,8 @@ export async function getProjectDashboard(
         code: requirement.code,
         feature: requirement.feature,
         testCaseCount: 0,
+        results: emptyResults(),
+        isDraft: requirement.status === "DRAFT",
         scenarios: [],
       };
       requirementNodes.set(requirement.id, requirementNode);
@@ -419,6 +539,8 @@ export async function getProjectDashboard(
     requirementNode.scenarios.push(node);
     requirementNode.testCaseCount += node.testCaseCount;
     moduleNode.testCaseCount += node.testCaseCount;
+    addResults(requirementNode.results, node.results);
+    addResults(moduleNode.results, node.results);
   });
 
   const tree = Array.from(moduleNodes.values());
@@ -435,6 +557,7 @@ export async function getProjectDashboard(
     inAnyRun,
     notInAnyRun,
     attention,
+    untestedRequirements,
   ] = await Promise.all([
       prisma.module.findMany({
         where: { projectId, deletedAt: null },
@@ -518,7 +641,101 @@ export async function getProjectDashboard(
         phase: filters.phase,
         moduleId: filters.moduleId,
       }),
+      /* The requirements no live Test Case reaches — the one thing this
+       * panel could not show at all, since its tree is built upward from
+       * cases and a Requirement with none never entered it.
+       *
+       * Only the filters that describe where a Requirement lives are
+       * honoured. The rest ask about cases, and asking a Requirement with
+       * no cases about a priority or a round has no answer — so when one
+       * of those is set this query is skipped and the panel says the
+       * figure is unavailable rather than showing a zero.
+       *
+       * `scenarios: { none: … }` covers both shapes of empty: a
+       * Requirement with no Scenarios at all, and one whose Scenarios
+       * hold no live case. */
+      narrowsByCase(filters)
+        ? []
+        : prisma.requirement.findMany({
+            where: {
+              projectId,
+              deletedAt: null,
+              ...(filters.requirementId ? { id: filters.requirementId } : {}),
+              ...(filters.moduleId ? { moduleId: filters.moduleId } : {}),
+              ...(filters.feature ? { feature: filters.feature } : {}),
+              scenarios: {
+                none: {
+                  deletedAt: null,
+                  testGroups: {
+                    some: { deletedAt: null, testCases: { some: { deletedAt: null } } },
+                  },
+                },
+              },
+            },
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              feature: true,
+              status: true,
+              module: { select: { id: true, name: true } },
+            },
+            orderBy: [{ code: "asc" }, { name: "asc" }],
+          }),
     ]);
+
+  /* Added to the tree they were missing from, each at the end of its own
+   * Module so that nothing already on screen moves. A Module that holds
+   * only untested Requirements has no node yet and gets one here, which
+   * is why the list is sorted afterwards: appending would otherwise put
+   * it below Modules it belongs above. */
+  untestedRequirements.forEach((requirement) => {
+    let moduleNode = moduleNodes.get(requirement.module.id);
+    if (!moduleNode) {
+      moduleNode = {
+        id: requirement.module.id,
+        name: requirement.module.name,
+        testCaseCount: 0,
+        results: emptyResults(),
+        requirements: [],
+      };
+      moduleNodes.set(moduleNode.id, moduleNode);
+      tree.push(moduleNode);
+    }
+    moduleNode.requirements.push({
+      id: requirement.id,
+      name: requirement.name,
+      code: requirement.code,
+      feature: requirement.feature,
+      testCaseCount: 0,
+      results: emptyResults(),
+      isDraft: requirement.status === "DRAFT",
+      scenarios: [],
+    });
+  });
+
+  /* The order the Modules page uses, so a reader finds them where they
+   * expect rather than in whichever order a Scenario happened to be
+   * created. */
+  const moduleOrder = new Map(moduleOptions.map((module, index) => [module.id, index]));
+  tree.sort(
+    (a, b) => (moduleOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+      (moduleOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+  );
+
+  /* Null, not zero, while a case-level filter is on: the question cannot
+   * be answered then, and a zero would read as there being nothing to
+   * fix. The panel shows a sentence in its place. */
+  const allRequirements = tree.flatMap((module) => module.requirements);
+  const withoutCases = allRequirements.filter((requirement) => requirement.results.total === 0);
+  const requirementCoverage = narrowsByCase(filters)
+    ? null
+    : {
+        total: allRequirements.length,
+        withCases: allRequirements.length - withoutCases.length,
+        withoutCases: withoutCases.length,
+        draftWithoutCases: withoutCases.filter((requirement) => requirement.isDraft).length,
+      };
 
   const runProgress: DashboardRunProgress[] = testRunOptions.map((run) => {
     const byResult = zeroCountRecord(TEST_RESULT_VALUES);
@@ -561,6 +778,10 @@ export async function getProjectDashboard(
       phases: phaseRows.map((row) => row.phase as string),
     },
     attention,
+    /* How much of the project has a test case at all, which the figures
+     * above cannot say: every one of them counts test cases, and a
+     * requirement with none is invisible to all of them. */
+    requirementCoverage,
     runProgress,
     coverage: phaseResults
       ? { inAnyRun: totalTestCases, notInAnyRun: 0 }

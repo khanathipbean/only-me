@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { calculateTestProgress } from "@/lib/dashboard";
+import { calculateTestProgress, type ProjectDashboard } from "@/lib/dashboard";
 import { createScenario } from "@/lib/scenarios";
-import { findOrCreateUnassignedRequirement } from "@/lib/requirements";
+import { createRequirement, findOrCreateUnassignedRequirement } from "@/lib/requirements";
 import { createTestGroup } from "@/lib/test-groups";
 import { createTestCase, updateAssignee, updateTestResultAndNotes } from "@/lib/test-cases";
 import {
@@ -23,7 +23,9 @@ import { createUser, jsonRequest, sessionFor, uniqueCode, uniqueEmail } from "./
 
 const mockAuth = vi.mocked(auth);
 
-async function dashboard(projectId: string, query = "") {
+/* Typed, so a test that reads a figure the dashboard does not return fails
+ * here rather than by comparing undefined to undefined and passing. */
+async function dashboard(projectId: string, query = ""): Promise<ProjectDashboard> {
   return (
     await getDashboard(
       jsonRequest(`http://test/api/projects/${projectId}/dashboard${query}`, "GET"),
@@ -118,6 +120,140 @@ describe("project dashboard", () => {
     expect(calculateTestProgress(3, 3)).toBe(100);
   });
 
+  /* The Hierarchy panel's columns. Every figure on a row is the sum of the
+     rows under it, so one assertion per level is what proves the roll-up
+     rather than one per figure. */
+  it("rolls every level's results up from the cases under it", async () => {
+    const owner = await createUser(uniqueEmail("dash-rollup"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id);
+
+    const result = await dashboard(project.id);
+    const [moduleNode] = result.tree;
+    const [requirement] = moduleNode.requirements;
+
+    // TC1 passed, TC2 failed, TC3 never ran.
+    expect(moduleNode.results).toEqual({
+      total: 3,
+      passed: 1,
+      failed: 1,
+      notRun: 1,
+      other: 0,
+      recorded: 2,
+    });
+    expect(requirement.results).toEqual(moduleNode.results);
+
+    const [scenarioA, scenarioB] = requirement.scenarios;
+    expect(scenarioA.results.total).toBe(2);
+    expect(scenarioA.results.passed).toBe(1);
+    expect(scenarioA.results.failed).toBe(1);
+    expect(scenarioB.results).toMatchObject({ total: 1, notRun: 1, recorded: 0 });
+    expect(scenarioA.testGroups[0].results.total).toBe(2);
+  });
+
+  /* Skipped and blocked have no column on the panel, so they are carried
+     apart from the three that do - otherwise the figures silently stop
+     adding up to the total. */
+  it("keeps skipped and blocked apart from the three columns", async () => {
+    const owner = await createUser(uniqueEmail("dash-other"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project, tc3 } = await seedDashboardFixture(owner.id);
+    await updateTestResultAndNotes(tc3.id, { testResult: "SKIPPED" }, owner.id);
+
+    const result = await dashboard(project.id);
+
+    expect(result.tree[0].results).toMatchObject({ total: 3, notRun: 0, other: 1, recorded: 3 });
+  });
+
+  /* The whole point of the change: a Requirement nothing tests was invisible
+     here, because the tree is built upward from cases and it has none. */
+  it("shows a requirement that no test case reaches", async () => {
+    const owner = await createUser(uniqueEmail("dash-untested"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id);
+    const [existing] = await prisma.module.findMany({ where: { projectId: project.id } });
+    const untested = await createRequirement(
+      project.id,
+      { name: "Nothing tests this", moduleId: existing.id, priority: "HIGH", status: "READY" },
+      owner.id,
+    );
+
+    const result = await dashboard(project.id);
+    const names = result.tree.flatMap((module) =>
+      module.requirements.map((requirement) => requirement.name),
+    );
+
+    expect(names).toContain("Nothing tests this");
+    const node = result.tree
+      .flatMap((module) => module.requirements)
+      .find((requirement) => requirement.id === untested.id);
+    expect(node?.results.total).toBe(0);
+    expect(node?.scenarios).toEqual([]);
+    expect(result.requirementCoverage).toMatchObject({
+      total: 2,
+      withCases: 1,
+      withoutCases: 1,
+      draftWithoutCases: 0,
+    });
+  });
+
+  it("counts a draft requirement's missing cases apart from a ready one's", async () => {
+    const owner = await createUser(uniqueEmail("dash-draft"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id);
+    const [existing] = await prisma.module.findMany({ where: { projectId: project.id } });
+    await createRequirement(
+      project.id,
+      { name: "Still being written", moduleId: existing.id, priority: "LOW", status: "DRAFT" },
+      owner.id,
+    );
+
+    const result = await dashboard(project.id);
+
+    expect(result.requirementCoverage).toMatchObject({ withoutCases: 1, draftWithoutCases: 1 });
+  });
+
+  /* A requirement with no cases cannot answer a question about cases, so the
+     figure is withheld rather than reported as zero - which would read as
+     there being nothing left to write. */
+  it("withholds requirement coverage while a test-case filter is on", async () => {
+    const owner = await createUser(uniqueEmail("dash-withheld"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id);
+    const [existing] = await prisma.module.findMany({ where: { projectId: project.id } });
+    await createRequirement(
+      project.id,
+      { name: "Nothing tests this either", moduleId: existing.id, priority: "HIGH" },
+      owner.id,
+    );
+
+    const filtered = await dashboard(project.id, "?testResult=PASSED");
+
+    expect(filtered.requirementCoverage).toBeNull();
+    const names = filtered.tree.flatMap((module) =>
+      module.requirements.map((requirement) => requirement.name),
+    );
+    expect(names).not.toContain("Nothing tests this either");
+  });
+
+  /* A Module filter describes where a Requirement lives, so it can be
+     honoured without making the question unanswerable. */
+  it("keeps requirement coverage when only the module is narrowed", async () => {
+    const owner = await createUser(uniqueEmail("dash-module-scope"));
+    mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
+    const { project } = await seedDashboardFixture(owner.id);
+    const [existing] = await prisma.module.findMany({ where: { projectId: project.id } });
+    await createRequirement(
+      project.id,
+      { name: "Untested in this module", moduleId: existing.id, priority: "HIGH" },
+      owner.id,
+    );
+
+    const scoped = await dashboard(project.id, `?moduleId=${existing.id}`);
+
+    expect(scoped.requirementCoverage).toMatchObject({ withoutCases: 1 });
+  });
+
   it("matches a known seeded dataset for totals, breakdowns, and Test Progress", async () => {
     const owner = await createUser(uniqueEmail("dash-owner"));
     mockAuth.mockResolvedValue(sessionFor(owner.id) as never);
@@ -160,7 +296,9 @@ describe("project dashboard", () => {
 
     const scenarios = moduleNode.requirements[0].scenarios;
     expect(scenarios).toHaveLength(2);
-    const scenarioANode = scenarios.find((s: { name: string }) => s.name === "Scenario A");
+    /* The fixture always seeds it; the bang is what says so now that the
+       helper is typed. */
+    const scenarioANode = scenarios.find((s: { name: string }) => s.name === "Scenario A")!;
     expect(scenarioANode.testCaseCount).toBe(2);
     expect(scenarioANode.testGroups[0].testCaseCount).toBe(2);
   });
@@ -409,7 +547,7 @@ describe("project dashboard", () => {
 
     const result = await dashboard(project.id);
 
-    const sprint = result.runProgress.find((row: { name: string }) => row.name === "Sprint 1");
+    const sprint = result.runProgress.find((row: { name: string }) => row.name === "Sprint 1")!;
     expect(sprint.total).toBe(2);
     expect(sprint.recorded).toBe(1);
     expect(sprint.byResult).toMatchObject({ PASSED: 1, NOT_RUN: 1 });
@@ -451,7 +589,7 @@ describe("project dashboard", () => {
     const filtered = await dashboard(project.id, `?testResult=PASSED&testRunId=${run.id}`);
     expect(filtered.counts.testCases).toBe(0);
     expect(filtered.coverage).toEqual({ inAnyRun: 2, notInAnyRun: 1 });
-    expect(filtered.runProgress.find((row: { name: string }) => row.name === "Sprint 1").total).toBe(2);
+    expect(filtered.runProgress.find((row: { name: string }) => row.name === "Sprint 1")!.total).toBe(2);
   });
 
   it("narrows the whole page to one phase, counting only the cases its rounds scheduled", async () => {

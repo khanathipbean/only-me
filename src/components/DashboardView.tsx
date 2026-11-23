@@ -80,7 +80,26 @@ type TreeTestCase = {
   assigneeName: string | null;
 };
 
-type TreeTestGroup = { id: string; name: string; testCaseCount: number; testCases: TreeTestCase[] };
+/** What the panel's columns read off a node, summed on the server so that
+ *  a Module and the Requirements under it can never disagree. `other` is
+ *  skipped and blocked, which have no column and would otherwise be a gap
+ *  between the three figures and the total. */
+type TreeResults = {
+  total: number;
+  passed: number;
+  failed: number;
+  notRun: number;
+  other: number;
+  recorded: number;
+};
+
+type TreeTestGroup = {
+  id: string;
+  name: string;
+  testCaseCount: number;
+  results: TreeResults;
+  testCases: TreeTestCase[];
+};
 type TreeScenario = {
   id: string;
   name: string;
@@ -88,6 +107,7 @@ type TreeScenario = {
   moduleId: string;
   requirementId: string;
   testCaseCount: number;
+  results: TreeResults;
   testGroups: TreeTestGroup[];
 };
 
@@ -97,6 +117,8 @@ type TreeRequirement = {
   code: string | null;
   feature: string | null;
   testCaseCount: number;
+  results: TreeResults;
+  isDraft: boolean;
   scenarios: TreeScenario[];
 };
 
@@ -104,6 +126,7 @@ type TreeModule = {
   id: string;
   name: string;
   testCaseCount: number;
+  results: TreeResults;
   requirements: TreeRequirement[];
 };
 
@@ -155,6 +178,15 @@ type DashboardData = {
     byResult: Record<string, number>;
   }>;
   coverage: { inAnyRun: number; notInAnyRun: number };
+  /** Null while a filter about test cases is on: a requirement with none
+   *  cannot answer such a question, so the figure is unavailable rather
+   *  than zero. */
+  requirementCoverage: {
+    total: number;
+    withCases: number;
+    withoutCases: number;
+    draftWithoutCases: number;
+  } | null;
 };
 
 type Filters = {
@@ -598,10 +630,23 @@ export function DashboardView({ projectId }: { projectId: string }) {
   );
 }
 
-function WidgetShell({ label, children }: { label: string; children: ReactNode }) {
+function WidgetShell({
+  label,
+  aside,
+  children,
+}: {
+  label: string;
+  /** A line beside the title, for a figure that belongs to the panel as a
+   *  whole rather than to any row in it. */
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <Card aria-label={label}>
-      <h2 className="text-sm font-semibold text-foreground">{label}</h2>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h2 className="text-sm font-semibold text-foreground">{label}</h2>
+        {aside}
+      </div>
       <div className="mt-3">{children}</div>
     </Card>
   );
@@ -1141,188 +1186,542 @@ function TreeWidget({
   }
 
   return (
-    <WidgetShell label="Hierarchy">
-      <ul className="flex flex-col gap-0.5">
-        {data.tree.map((moduleNode) => (
-          <li key={moduleNode.id}>
-            <TreeRow
-              expanded={expanded.has(moduleNode.id)}
-              onToggle={() => onToggle(moduleNode.id)}
-              label={moduleNode.name}
-              count={moduleNode.testCaseCount}
-              level="Module"
-              levelTone="indigo"
-              bold
-            />
-            <Collapsible open={expanded.has(moduleNode.id)}>
-              <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
-                {moduleNode.requirements.map((requirement) => (
-                  <li key={requirement.id}>
-                    <TreeRow
-                      expanded={expanded.has(requirement.id)}
-                      onToggle={() => onToggle(requirement.id)}
-                      label={
-                        requirement.code
-                          ? `${requirement.code} — ${requirement.name}`
-                          : requirement.name
-                      }
-                      tag={requirement.feature}
-                      count={requirement.testCaseCount}
-                      level="Requirement"
-                      levelTone="cyan"
-                      bold
-                    />
-                    <Collapsible open={expanded.has(requirement.id)}>
-                      <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
-                        {requirement.scenarios.map((scenario) => (
-                          <li key={scenario.id}>
-                            <TreeRow
-                              expanded={expanded.has(scenario.id)}
-                              onToggle={() => onToggle(scenario.id)}
-                              onPreview={() =>
-                                onPreview({
-                                  type: "scenario",
-                                  id: scenario.id,
-                                  href: testGroupsListHref(idsOf(projectId, scenario)),
-                                  name: scenario.name,
-                                })
-                              }
-                              label={scenario.name}
-                              count={scenario.testCaseCount}
-                              level="Scenario"
-                              levelTone="blue"
-                              bold
-                            />
-                            <Collapsible open={expanded.has(scenario.id)}>
-                              <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
-                                {scenario.testGroups.map((group) => (
-                                  <li key={group.id}>
-                                    <TreeRow
-                                      expanded={expanded.has(group.id)}
-                                      onToggle={() => onToggle(group.id)}
-                                      onPreview={() =>
-                                        onPreview({
-                                          type: "testGroup",
-                                          id: group.id,
-                                          href: testCasesListHref({ ...idsOf(projectId, scenario), testGroupId: group.id }),
-                                          name: group.name,
-                                        })
-                                      }
-                                      label={group.name}
-                                      count={group.testCaseCount}
-                                      level="Test Group"
-                                      levelTone="purple"
-                                    />
-                                    <Collapsible open={expanded.has(group.id)}>
-                                      <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-4">
-                                        {group.testCases.map((testCase) => (
-                                          <li key={testCase.id}>
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                onPreview({
-                                                  type: "testCase",
-                                                  id: testCase.id,
-                                                  href: testCaseHref({
-                                                    ...idsOf(projectId, scenario),
-                                                    testGroupId: group.id,
-                                                    testCaseId: testCase.id,
-                                                  }),
-                                                  name: testCase.name,
-                                                  assigneeName: testCase.assigneeName,
-                                                })
-                                              }
-                                              className="flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-[26px] text-left text-sm text-foreground hover:bg-black/[.03] hover:text-brand hover:underline dark:hover:bg-white/[.05]"
-                                            >
-                                              <Badge tone="gray">Test Case</Badge>
-                                              <span className="min-w-0 flex-1 truncate">{testCase.name}</span>
-                                              <Badge tone={testResultTone(testCase.testResult)}>
-                                                {testCase.testResult.replace(/_/g, " ")}
-                                              </Badge>
-                                            </button>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </Collapsible>
-                                  </li>
-                                ))}
-                              </ul>
-                            </Collapsible>
-                          </li>
-                        ))}
-                      </ul>
-                    </Collapsible>
-                  </li>
-                ))}
-              </ul>
-            </Collapsible>
-          </li>
-        ))}
-      </ul>
+    <HierarchyPanel
+      data={data}
+      projectId={projectId}
+      expanded={expanded}
+      onToggle={onToggle}
+      onPreview={onPreview}
+    />
+  );
+}
+
+/**
+ * The panel proper, split from the loading and empty states above so that
+ * its own state — which requirements it is showing — has somewhere to live
+ * that is not called before those early returns.
+ */
+function HierarchyPanel({
+  data,
+  projectId,
+  expanded,
+  onToggle,
+  onPreview,
+}: {
+  data: DashboardData;
+  projectId: string;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
+  onPreview: (target: PreviewTarget) => void;
+}) {
+  const [covered, setCovered] = useState<Covered>("all");
+  const rows = buildRows({
+    tree: data.tree,
+    projectId,
+    expanded,
+    onToggle,
+    onPreview,
+    /* The filter only exists while the figure behind it does. */
+    covered: data.requirementCoverage ? covered : "all",
+  });
+
+  return (
+    <WidgetShell label="Hierarchy" aside={<CoverageLine coverage={data.requirementCoverage} />}>
+      {data.requirementCoverage && (
+        <CoverageFilter
+          coverage={data.requirementCoverage}
+          value={covered}
+          onChange={setCovered}
+        />
+      )}
+
+      {/* Wide on purpose, and scrolled rather than squeezed: seven columns of
+          figures that have to line up down the page cannot be made narrower
+          without taking the lining up away, which is the whole use of them. */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[60rem] border-collapse">
+          <thead>
+            <tr className="border-b border-border text-[10px] font-semibold uppercase tracking-wide text-muted">
+              <th scope="col" className="py-2 pr-3 text-left">
+                Hierarchy
+              </th>
+              {COLUMNS.map((column) => (
+                <th key={column.label} scope="col" className={`px-2 py-2 ${column.head}`}>
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <TreeRow key={row.key} row={row} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {rows.length === 0 && (
+        <p className="mt-4 text-sm text-muted">No rows match the current filters.</p>
+      )}
     </WidgetShell>
   );
 }
 
-function TreeRow({
+const COLUMNS = [
+  { label: "Requirements", head: "text-center" },
+  { label: "Test Cases", head: "text-center" },
+  { label: "Coverage", head: "text-center" },
+  { label: "Passed", head: "text-center" },
+  { label: "Failed", head: "text-center" },
+  { label: "Not Run", head: "text-center" },
+  { label: "Execution %", head: "text-left" },
+] as const;
+
+/** Which requirements the panel is showing, by whether anything tests them. */
+type Covered = "all" | "with" | "without";
+
+type HierarchyRow = {
+  key: string;
+  depth: number;
+  level: string;
+  tone: Tone;
+  label: string;
+  code?: string | null;
+  feature?: string | null;
+  bold?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+  onPreview?: () => void;
+  /** Only a Module can answer this one. */
+  requirements?: number;
+  /** Absent on a Test Case, which is one case rather than a count of them. */
+  results?: TreeResults;
+  /** A share for a Module, a yes or no for a Requirement, nothing below. */
+  coverage?: { share: number } | { hasCases: boolean };
+  /** A Test Case's own result, which goes in the column that counts it. */
+  result?: string;
+};
+
+/**
+ * The tree flattened to the rows that are actually on screen.
+ *
+ * Flat rather than nested because this is a table now: a row of figures that
+ * line up down the page cannot be wrapped in the animated panel the nested
+ * version used, and collapsing by leaving rows out is what a table does.
+ */
+function buildRows({
+  tree,
+  projectId,
   expanded,
   onToggle,
   onPreview,
-  label,
-  tag,
-  count,
-  level,
-  levelTone,
-  bold = false,
+  covered,
 }: {
-  expanded: boolean;
-  onToggle: () => void;
-  /** Omitted for the two levels with no record of their own to show, where
-   *  clicking the name expands the row instead. */
-  onPreview?: () => void;
-  label: string;
-  /** Shown after the label. Used for a Requirement's Feature, which groups
-   *  rows inside a Module without being a level of its own. */
-  tag?: string | null;
-  count: number;
-  level: string;
-  levelTone: Tone;
-  bold?: boolean;
-}) {
+  tree: TreeModule[];
+  projectId: string;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
+  onPreview: (target: PreviewTarget) => void;
+  covered: Covered;
+}): HierarchyRow[] {
+  const rows: HierarchyRow[] = [];
+  /* With the filter on, the Modules open themselves and lose their twisty.
+     Collapsed, the panel answered "No Cases" with a list of Modules and
+     nothing else - the rows the reader had just asked for were one click
+     further in, and the filter read as broken. */
+  const filtering = covered !== "all";
+
+  tree.forEach((moduleNode) => {
+    const requirements = moduleNode.requirements.filter((requirement) => {
+      if (covered === "with") return requirement.results.total > 0;
+      if (covered === "without") return requirement.results.total === 0;
+      return true;
+    });
+    if (requirements.length === 0) {
+      return;
+    }
+
+    /* The Module's own figures follow what is on screen: filtering to the
+       untested ones and leaving the Module reading as if nothing had changed
+       would be two answers to one question. */
+    const results = requirements.reduce(
+      (sum, requirement) => addInto(sum, requirement.results),
+      emptyResults(),
+    );
+    const withCases = requirements.filter((requirement) => requirement.results.total > 0).length;
+
+    rows.push({
+      key: moduleNode.id,
+      depth: 0,
+      level: "Module",
+      tone: "indigo",
+      label: moduleNode.name,
+      bold: true,
+      expanded: filtering || expanded.has(moduleNode.id),
+      onToggle: filtering ? undefined : () => onToggle(moduleNode.id),
+      requirements: requirements.length,
+      results,
+      coverage: { share: (withCases / requirements.length) * 100 },
+    });
+    if (!filtering && !expanded.has(moduleNode.id)) {
+      return;
+    }
+
+    requirements.forEach((requirement) => {
+      rows.push({
+        key: requirement.id,
+        depth: 1,
+        level: "Requirement",
+        tone: "cyan",
+        label: requirement.code ? `${requirement.code} — ${requirement.name}` : requirement.name,
+        feature: requirement.feature,
+        bold: true,
+        expanded: expanded.has(requirement.id),
+        /* A Requirement nothing tests has nothing to open. */
+        onToggle: requirement.scenarios.length > 0 ? () => onToggle(requirement.id) : undefined,
+        results: requirement.results,
+        coverage: { hasCases: requirement.results.total > 0 },
+      });
+      if (!expanded.has(requirement.id)) {
+        return;
+      }
+
+      requirement.scenarios.forEach((scenario) => {
+        rows.push({
+          key: scenario.id,
+          depth: 2,
+          level: "Scenario",
+          tone: "blue",
+          label: scenario.name,
+          bold: true,
+          expanded: expanded.has(scenario.id),
+          onToggle: () => onToggle(scenario.id),
+          onPreview: () =>
+            onPreview({
+              type: "scenario",
+              id: scenario.id,
+              href: testGroupsListHref(idsOf(projectId, scenario)),
+              name: scenario.name,
+            }),
+          results: scenario.results,
+        });
+        if (!expanded.has(scenario.id)) {
+          return;
+        }
+
+        scenario.testGroups.forEach((group) => {
+          rows.push({
+            key: group.id,
+            depth: 3,
+            level: "Test Group",
+            tone: "purple",
+            label: group.name,
+            expanded: expanded.has(group.id),
+            onToggle: () => onToggle(group.id),
+            onPreview: () =>
+              onPreview({
+                type: "testGroup",
+                id: group.id,
+                href: testCasesListHref({ ...idsOf(projectId, scenario), testGroupId: group.id }),
+                name: group.name,
+              }),
+            results: group.results,
+          });
+          if (!expanded.has(group.id)) {
+            return;
+          }
+
+          group.testCases.forEach((testCase) => {
+            rows.push({
+              key: testCase.id,
+              depth: 4,
+              level: "Test Case",
+              tone: "gray",
+              label: testCase.name,
+              result: testCase.testResult,
+              onPreview: () =>
+                onPreview({
+                  type: "testCase",
+                  id: testCase.id,
+                  href: testCaseHref({
+                    ...idsOf(projectId, scenario),
+                    testGroupId: group.id,
+                    testCaseId: testCase.id,
+                  }),
+                  name: testCase.name,
+                  assigneeName: testCase.assigneeName,
+                }),
+            });
+          });
+        });
+      });
+    });
+  });
+
+  return rows;
+}
+
+/** `emptyResults` is a server module's export and this is a client file, so
+ *  the two-line sum lives here rather than dragging Prisma into the bundle. */
+function emptyResults(): TreeResults {
+  return { total: 0, passed: 0, failed: 0, notRun: 0, other: 0, recorded: 0 };
+}
+
+function addInto(sum: TreeResults, from: TreeResults): TreeResults {
+  return {
+    total: sum.total + from.total,
+    passed: sum.passed + from.passed,
+    failed: sum.failed + from.failed,
+    notRun: sum.notRun + from.notRun,
+    other: sum.other + from.other,
+    recorded: sum.recorded + from.recorded,
+  };
+}
+
+/**
+ * How many requirements nothing tests — the one figure the Overview card
+ * above cannot give, since every number in it counts test cases and a
+ * requirement with none is invisible to all of them.
+ */
+function CoverageLine({ coverage }: { coverage: DashboardData["requirementCoverage"] }) {
+  if (!coverage) {
+    /* A filter about test cases is on. Saying so beats printing a zero that
+       would read as there being nothing left to write. */
+    return (
+      <span className="text-xs text-muted">
+        Requirement coverage is set aside while a test-case filter is on
+      </span>
+    );
+  }
+  if (coverage.total === 0) {
+    return null;
+  }
+  if (coverage.withoutCases === 0) {
+    return (
+      <span className="text-xs text-muted">
+        Every requirement here has at least one test case
+      </span>
+    );
+  }
   return (
-    <div className="flex items-center gap-2 rounded-md py-1.5 pr-2 text-sm hover:bg-black/[.03] dark:hover:bg-white/[.05]">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex size-5 shrink-0 items-center justify-center rounded text-muted hover:text-foreground"
-        aria-label={expanded ? "Collapse" : "Expand"}
-      >
-        <ChevronRightIcon className={`size-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
-      </button>
-      <Badge tone={levelTone}>{level}</Badge>
-      {/* No `flex-1`: that stretched the name across the whole row and left
-          the tag stranded at the far right, reading as a column of its own
-          rather than as something about this Requirement. It hugs the name
-          here, the way the Requirements list sets it. */}
-      <button
-        type="button"
-        onClick={onPreview ?? onToggle}
-        className={`min-w-0 truncate text-left text-foreground hover:text-brand hover:underline ${bold ? "font-medium" : ""}`}
-      >
-        {label}
-      </button>
-      {/* Outline, not cyan: cyan is the Requirement level's own badge, and the
-          two sat side by side on the same row meaning different things. */}
-      {tag && (
-        <span className="shrink-0">
-          <Badge tone="gray" variant="outline">
-            {tag}
-          </Badge>
-        </span>
-      )}
-      {/* The count keeps its right edge: it is the one thing on these rows
-          worth comparing down the column. */}
-      <span className="ml-auto shrink-0">
-        <Badge tone="gray">{count}</Badge>
+    <span className="text-xs text-muted">
+      <span className="font-semibold text-amber-600 dark:text-amber-400">
+        {coverage.withoutCases}
+      </span>{" "}
+      of {coverage.total} requirements have no test cases
+      {coverage.draftWithoutCases > 0 ? ` (Draft ${coverage.draftWithoutCases})` : ""}
+    </span>
+  );
+}
+
+function CoverageFilter({
+  coverage,
+  value,
+  onChange,
+}: {
+  coverage: NonNullable<DashboardData["requirementCoverage"]>;
+  value: Covered;
+  onChange: (next: Covered) => void;
+}) {
+  const options: Array<{ key: Covered; label: string; count: number; tone: Tone }> = [
+    { key: "with", label: "Has Cases", count: coverage.withCases, tone: "green" },
+    { key: "without", label: "No Cases", count: coverage.withoutCases, tone: "amber" },
+  ];
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          /* Pressing the one already chosen clears it, so the filter needs no
+             third button to undo itself. */
+          onClick={() => onChange(value === option.key ? "all" : option.key)}
+          aria-pressed={value === option.key}
+          className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
+            value === option.key
+              ? "border-brand text-foreground"
+              : "border-border text-muted hover:text-foreground"
+          }`}
+        >
+          <span className={`size-2 rounded-xs ${toneBarClass(option.tone)}`} />
+          {option.label}
+          <span className="font-semibold tabular-nums text-foreground">{option.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const cellClass = "border-b border-border/60 px-2 py-1.5 text-center text-sm tabular-nums";
+
+/** The question does not apply at this level — never a zero, which would be
+ *  an answer. */
+function Dash() {
+  return <span className="text-muted">—</span>;
+}
+
+function TreeRow({ row }: { row: HierarchyRow }) {
+  const results = row.results;
+  const isCase = row.level === "Test Case";
+
+  return (
+    <tr
+      className="hover:bg-black/[.02] dark:hover:bg-white/[.04]"
+      /* Skipped and blocked have no column here, so three figures out of five
+         results will not add up to Test Cases. The row says where the rest
+         went rather than leaving a reader to find the gap. */
+      title={results && results.other > 0 ? `${results.other} skipped or blocked` : undefined}
+    >
+      <td className="border-b border-border/60 py-1.5 pr-3">
+        <div className="flex items-center gap-2" style={{ paddingLeft: row.depth * 18 }}>
+          {row.onToggle ? (
+            <button
+              type="button"
+              onClick={row.onToggle}
+              className="flex size-5 shrink-0 items-center justify-center rounded text-muted hover:text-foreground"
+              aria-label={row.expanded ? "Collapse" : "Expand"}
+              aria-expanded={row.expanded}
+            >
+              <ChevronRightIcon
+                className={`size-3.5 transition-transform ${row.expanded ? "rotate-90" : ""}`}
+              />
+            </button>
+          ) : (
+            <span className="size-5 shrink-0" />
+          )}
+          <Badge tone={row.tone}>{row.level}</Badge>
+          {row.onPreview ? (
+            <button
+              type="button"
+              onClick={row.onPreview}
+              className={`min-w-0 truncate text-left text-sm text-foreground hover:text-brand hover:underline ${
+                row.bold ? "font-medium" : ""
+              }`}
+            >
+              {row.label}
+            </button>
+          ) : (
+            <span className={`min-w-0 truncate text-sm ${row.bold ? "font-medium" : ""}`}>
+              {row.label}
+            </span>
+          )}
+          {/* Outline, not a filled tone: every filled one already means a
+              state, and a Feature is only a name. */}
+          {row.feature && (
+            <span className="shrink-0">
+              <Badge tone="gray" variant="outline">
+                {row.feature}
+              </Badge>
+            </span>
+          )}
+        </div>
+      </td>
+
+      <td className={cellClass}>{row.requirements ?? <Dash />}</td>
+
+      {/* A skipped or blocked case has no column of its own, so it shows here
+          — the one column that means only that this row exists. */}
+      <td className={cellClass}>
+        {isCase ? (
+          row.result === "SKIPPED" || row.result === "BLOCKED" ? (
+            <Badge tone={testResultTone(row.result)}>{TEST_RESULT_LABELS[row.result]}</Badge>
+          ) : (
+            <Dash />
+          )
+        ) : (
+          (results?.total ?? 0)
+        )}
+      </td>
+
+      <td className={cellClass}>
+        {row.coverage ? (
+          "share" in row.coverage ? (
+            <Badge tone={shareTone(row.coverage.share)}>{row.coverage.share.toFixed(1)}%</Badge>
+          ) : (
+            <Badge tone={row.coverage.hasCases ? "green" : "amber"}>
+              {row.coverage.hasCases ? "Has Cases" : "No Cases"}
+            </Badge>
+          )
+        ) : (
+          <Dash />
+        )}
+      </td>
+
+      <td className={cellClass}>
+        {isCase ? (
+          row.result === "PASSED" ? (
+            <Badge tone="green">Passed</Badge>
+          ) : (
+            <Dash />
+          )
+        ) : (
+          <span className="font-medium text-emerald-600 dark:text-emerald-400">
+            {results?.passed ?? 0}
+          </span>
+        )}
+      </td>
+
+      {/* A badge either way: the eye runs down this column for the rows that
+          are not zero, and a bare 0 beside a badge breaks that shape. */}
+      <td className={cellClass}>
+        {isCase ? (
+          row.result === "FAILED" ? (
+            <Badge tone="red">Failed</Badge>
+          ) : (
+            <Dash />
+          )
+        ) : (
+          <Badge tone={(results?.failed ?? 0) > 0 ? "red" : "gray"}>{results?.failed ?? 0}</Badge>
+        )}
+      </td>
+
+      <td className={cellClass}>
+        {isCase ? (
+          row.result === "NOT_RUN" ? (
+            <Badge tone="gray">Not run</Badge>
+          ) : (
+            <Dash />
+          )
+        ) : (
+          <Badge tone="gray">{results?.notRun ?? 0}</Badge>
+        )}
+      </td>
+
+      <td className="border-b border-border/60 px-2 py-1.5">
+        {results && results.total > 0 ? (
+          <ExecutionBar done={results.recorded} total={results.total} />
+        ) : (
+          <div className="text-center">
+            <Dash />
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/** Green only at the whole of it; amber from half; red below. Three steps are
+ *  what a column read at a glance can carry. */
+function shareTone(share: number): Tone {
+  if (share >= 100) return "green";
+  return share >= 50 ? "amber" : "red";
+}
+
+/**
+ * How much of the testing has been done, not how much of it passed — the same
+ * sum the Overview card calls Test Progress. Indigo rather than green for
+ * exactly that reason: the Passed and Failed columns beside it say whether it
+ * went well, and a green bar here would answer their question wrongly.
+ */
+function ExecutionBar({ done, total }: { done: number; total: number }) {
+  const percent = (done / total) * 100;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.08]">
+        <div className="h-1.5 rounded-full bg-brand" style={{ width: `${percent}%` }} />
+      </div>
+      <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted">
+        {Math.round(percent)}%
       </span>
     </div>
   );
@@ -1346,13 +1745,6 @@ const PREVIEW_TONE: Record<PreviewType, Tone> = {
   testCase: "gray",
 };
 
-/**
- * A single shared, externally-controlled dialog — opened by clicking any
- * Scenario/Test Group/Test Case name in the Hierarchy tree, rather than each
- * row navigating immediately. Fetches the item's full record on open (the
- * tree API only carries name+count, not enough for a useful preview) from
- * the same GET routes the standalone detail pages already use.
- */
 function PreviewModal({ target, onClose }: { target: PreviewTarget | null; onClose: () => void }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const backdrop = useBackdropDismiss(onClose);
