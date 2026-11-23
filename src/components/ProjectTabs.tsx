@@ -13,6 +13,7 @@ import {
   FileIcon,
   HomeIcon,
   LinkIcon,
+  ListChecksIcon,
   PulseIcon,
   ShieldIcon,
 } from "@/components/icons";
@@ -166,14 +167,39 @@ export function ProjectTabs({
      * for everybody else, the part of the project's work that is in their
      * hands, which is worth a link even when it is usually empty. */
     { label: "My Work", views: [{ href: `${overviewHref}/my-work`, needs: "handoff.view" }] },
-    /* "Test Cases", not "Modules": a Module is only the first of the five
-       levels behind this tab, and naming the door after its doorstep said
-       nothing about what the section is for. It also pairs with Test Runs
-       beside it — what we test, and the rounds of running it — which the
-       old name gave no hint of. The address stays /modules, which is what
-       the page still lists. */
-    { label: "Test Cases", views: [{ href: `${overviewHref}/modules`, needs: "authoring.view" }] },
-    { label: "Test Runs", views: [{ href: `${overviewHref}/runs`, needs: "runs.view" }] },
+    /* One entry for the testing itself: what we test, and the rounds of
+       running it. They were two tabs beside each other, which read as two
+       sections of the app rather than two halves of one job — and the bar
+       has to make room for Test Plans next.
+
+       The addresses do not move. /modules is still the list of modules and
+       /runs still the rounds; only the way in changes, so nothing anyone
+       has bookmarked or pasted into a chat breaks.
+
+       A DEV holds `authoring.view` and not `runs.view`, so for them this
+       entry is a plain link to Test Cases — the same shape Overview already
+       takes for them. */
+    {
+      label: "Testing",
+      views: [
+        {
+          href: `${overviewHref}/modules`,
+          needs: "authoring.view",
+          label: "Test Cases",
+          detail: "Modules, requirements, scenarios and the cases themselves.",
+          icon: ListChecksIcon,
+          preview: "testCases",
+        },
+        {
+          href: `${overviewHref}/runs`,
+          needs: "runs.view",
+          label: "Test Runs",
+          detail: "One round of testing, and what each case did in it.",
+          icon: PulseIcon,
+          preview: "testRuns",
+        },
+      ],
+    },
     /* One tab for the three kinds of material this project keeps: what the
        team wrote down, the documents it holds, and links out to what lives
        elsewhere. Files used to sit beside this and is now a view inside it,

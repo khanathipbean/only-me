@@ -57,7 +57,11 @@ async function openHandoffRun(page: import("@playwright/test").Page) {
   await page.waitForURL(/\/projects\/[^/]+$/);
   await page
     .getByRole("navigation", { name: "Project" })
-    .getByRole("link", { name: "Test Runs" })
+    .getByRole("button", { name: "Testing" })
+    .click();
+  await page
+    .getByRole("menu", { name: "Testing" })
+    .getByRole("menuitem", { name: /^Test Runs/ })
     .click();
   await page.waitForURL(/\/runs$/);
   await page.getByRole("link", { name: E2E_HANDOFF_RUN }).click();

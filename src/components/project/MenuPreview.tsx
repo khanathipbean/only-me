@@ -1,6 +1,6 @@
 "use client";
 
-import { toneBarClass, testResultTone, type Tone } from "@/components/ui/Badge";
+import { Badge, toneBarClass, testResultTone, type Tone } from "@/components/ui/Badge";
 import type { MenuPreview as Payload } from "@/lib/menu-preview-types";
 
 /**
@@ -74,6 +74,13 @@ function body(section: PreviewKey, data: Payload | null, loading: boolean) {
   switch (section) {
     case "summary":
       return data.summary ? <SummaryPanel data={data.summary} /> : <PreviewSkeleton />;
+    /* The same drawing as the Summary: both answer what the project is made
+       of, and two pictures of one answer would be a reason to wonder which
+       is right. */
+    case "testCases":
+      return data.testCases ? <SummaryPanel data={data.testCases} /> : <PreviewSkeleton />;
+    case "testRuns":
+      return data.testRuns ? <TestRunsPanel data={data.testRuns} /> : <PreviewSkeleton />;
     case "dashboard":
       return data.dashboard ? <DashboardPanel data={data.dashboard} /> : <PreviewSkeleton />;
     case "problems":
@@ -191,6 +198,63 @@ function SummaryPanel({ data }: { data: NonNullable<Payload["summary"]> }) {
       </div>
     </div>
   );
+}
+
+function TestRunsPanel({ data }: { data: NonNullable<Payload["testRuns"]> }) {
+  if (data.total === 0) {
+    return (
+      <AtRest
+        title="No rounds yet"
+        detail="A round is one sitting of testing: the cases it covers, and what each one did."
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <span className={eyebrowClass}>
+        {data.total} round{data.total === 1 ? "" : "s"} · newest first
+      </span>
+
+      <div className="flex flex-col gap-2.5">
+        {data.recent.map((run) => (
+          <div key={run.id} className="flex flex-col gap-1">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                {run.name}
+              </span>
+              {run.open && (
+                <span className="shrink-0">
+                  <Badge tone="blue">Open</Badge>
+                </span>
+              )}
+              <span className="shrink-0 text-[10px] tabular-nums text-muted">
+                {run.recorded}/{run.cases}
+              </span>
+            </span>
+            {/* Passed and failed against the whole round, so the empty part
+                of the bar is what the round has not answered for yet. */}
+            <span className="flex h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.07]">
+              <span
+                style={{ width: `${share(run.passed, run.cases)}%` }}
+                className={toneBarClass("green")}
+              />
+              <span
+                style={{ width: `${share(run.failed, run.cases)}%` }}
+                className={toneBarClass("red")}
+              />
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Zero cases in a round is possible — one can be opened before anything is
+ *  put in it — and a width of NaN draws nothing at all. */
+function share(part: number, whole: number) {
+  return whole === 0 ? 0 : (part / whole) * 100;
 }
 
 const RING_RADIUS = 34;

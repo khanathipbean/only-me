@@ -17,6 +17,13 @@
  *  Absent is not empty: empty is a project with nothing in it yet. */
 export type MenuPreview = {
   summary?: SummaryPreview;
+  /** The same shape as the Summary, and deliberately so: both answer "what
+   *  is in this project", and the two menus would otherwise disagree about
+   *  the same figures. They are separate sections because they are separate
+   *  permissions — a DEV may author test cases and may not read the
+   *  Overview. */
+  testCases?: SummaryPreview;
+  testRuns?: TestRunsPreview;
   dashboard?: DashboardPreview;
   problems?: ProblemsPreview;
   audit?: AuditPreview;
@@ -71,6 +78,22 @@ export type AuditPreview = {
   week: { day: string; count: number; share: number }[];
   total: number;
   recent: { id: string; initials: string; what: string; when: string }[];
+};
+
+export type TestRunsPreview = {
+  total: number;
+  /** Newest first: the round somebody wants is almost always the one they
+   *  just opened. */
+  recent: {
+    id: string;
+    name: string;
+    open: boolean;
+    cases: number;
+    /** Cases with a result recorded, which is what the bar fills to. */
+    recorded: number;
+    passed: number;
+    failed: number;
+  }[];
 };
 
 export type NotesPreview = {

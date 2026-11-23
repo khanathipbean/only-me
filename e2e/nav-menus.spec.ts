@@ -24,6 +24,7 @@ test("each menu opens, lists its views, and reaches them", async ({ page }) => {
 
   for (const [entry, items] of [
     ["Overview", ["Summary", "Dashboard", "Problem Cases", "Audit Trail"]],
+    ["Testing", ["Test Cases", "Test Runs"]],
     ["Resources", ["Notes", "Files", "Links"]],
   ] as const) {
     const trigger = projectNav(page).getByRole("button", { name: entry });
@@ -44,6 +45,32 @@ test("each menu opens, lists its views, and reaches them", async ({ page }) => {
 
     await page.keyboard.press("Escape");
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  }
+});
+
+test("Testing keeps the two addresses it took over", async ({ page }) => {
+  const projectId = await openFixture(page);
+
+  /* The entry is new; the pages are not. Anything anyone has bookmarked or
+     pasted into a chat still has to land, which is the whole reason the
+     merge touched the menu and nothing else. */
+  for (const [item, path] of [
+    ["Test Cases", "modules"],
+    ["Test Runs", "runs"],
+  ] as const) {
+    await projectNav(page).getByRole("button", { name: "Testing" }).click();
+    await page
+      .getByRole("menu", { name: "Testing" })
+      .getByRole("menuitem", { name: new RegExp(`^${item}`) })
+      .click();
+    await page.waitForURL(new RegExp(`/projects/${projectId}/${path}$`));
+
+    /* And the entry stays lit on the page it opened, so a reader two levels
+       in can still see which part of the app they are in. */
+    await expect(projectNav(page).getByRole("button", { name: "Testing" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
   }
 });
 

@@ -94,8 +94,15 @@ test("a viewer is not offered the Import tab it cannot open", async ({ page }) =
   /* Import is no longer a tab for anybody, so looking for it here would
      pass without proving anything. The control that exists is the button on
      the Modules page, and a VIEWER must not be offered it. */
-  // The tabs a VIEWER may open are still there.
-  await expect(nav.getByRole("link", { name: "Test Cases" })).toBeVisible();
+  /* The tabs a VIEWER may open are still there. Test Cases is inside the
+     Testing menu now, and a VIEWER holds both of its views, so for them
+     that entry is a menu rather than a link. */
+  await expect(nav.getByRole("button", { name: "Testing" })).toBeVisible();
+  await nav.getByRole("button", { name: "Testing" }).click();
+  await expect(
+    page.getByRole("menu", { name: "Testing" }).getByRole("menuitem", { name: /^Test Cases/ }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
   /* The Audit Trail is behind the Overview menu now, not a tab of its own,
      so a VIEWER reaches it by opening that menu — which must offer it. */
   await expect(nav.getByRole("link", { name: "Audit Trail" })).toHaveCount(0);

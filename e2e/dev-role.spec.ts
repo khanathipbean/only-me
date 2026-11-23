@@ -67,7 +67,10 @@ test("is offered only the four pages it may open", async ({ page }) => {
      plain link for them, while Resources, where they hold all three, opens
      a menu. The difference is not cosmetic: a menu with one item in it
      would cost a click to do what the link already does. */
-  for (const label of ["My Work", "Overview", "Test Cases"]) {
+  /* Testing, not Test Cases: a DEV holds `authoring.view` and not
+     `runs.view`, so that entry stands for one page for them and is drawn as
+     a link straight to it — the same shape Overview already takes here. */
+  for (const label of ["My Work", "Overview", "Testing"]) {
     await expect(tabs.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
   await expect(tabs.getByRole("button", { name: "Resources" })).toBeVisible();
@@ -81,7 +84,7 @@ test("is offered only the four pages it may open", async ({ page }) => {
   /* Dashboard, Problem Cases and the Audit Trail are views of Overview now
      rather than tabs, and Import is a button on the Test Cases page — each
      is checked where it actually lives, below. */
-  for (const label of ["Dashboard", "Problem Cases", "Test Runs", "Audit Trail"]) {
+  for (const label of ["Dashboard", "Problem Cases", "Test Runs", "Audit Trail", "Test Cases"]) {
     await expect(tabs.getByRole("link", { name: label, exact: true })).toHaveCount(0);
   }
 });

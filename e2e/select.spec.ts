@@ -18,11 +18,16 @@ test("a short option in a narrow filter stays on one line", async ({ page }) => 
   await page.goto("/projects?search=E2E-FIXTURE");
   await page.getByRole("link", { name: "E2E Fixture" }).click();
   await page.waitForURL(/\/projects\/[^/]+$/);
-  /* Inside the project's own tab bar: the same word is a breadcrumb
-     segment and a row link elsewhere on these pages, and the plain
-     query matched all of them. */
+  /* Through the Testing menu, which is where Test Cases lives now. Scoped
+     to the project's own tab bar: the same words are a breadcrumb segment
+     and a row link elsewhere on these pages, and a plain query matched all
+     of them. */
   await page.getByRole("navigation", { name: "Project" })
-    .getByRole("link", { name: "Test Cases" })
+    .getByRole("button", { name: "Testing" })
+    .click();
+  await page
+    .getByRole("menu", { name: "Testing" })
+    .getByRole("menuitem", { name: /^Test Cases/ })
     .click();
   await page.waitForURL(/\/modules/);
 

@@ -5,6 +5,7 @@ import { ATTENTION_PATTERNS, failureCount, listProblemCases } from "@/lib/run-hi
 import type { CapabilityKey } from "@/lib/permissions";
 import type {
   AuditPreview,
+  TestRunsPreview,
   DashboardPreview,
   FilesPreview,
   LinksPreview,
@@ -305,6 +306,54 @@ async function buildDashboard(projectId: string, groups: GroupRow[]): Promise<Da
   };
 }
 
+/**
+ * The project's last few rounds, with how far each got.
+ *
+ * Two queries whatever the number of rounds: the rows for every round in one
+ * grouped count, split up here. The Dashboard's own run progress is built the
+ * same way, for the same reason.
+ */
+async function buildTestRuns(projectId: string): Promise<TestRunsPreview> {
+  const [total, recent] = await Promise.all([
+    prisma.testRun.count({ where: { projectId, deletedAt: null } }),
+    prisma.testRun.findMany({
+      where: { projectId, deletedAt: null },
+      select: { id: true, name: true, status: true },
+      orderBy: { createdAt: "desc" },
+      take: RECENT_TAKE,
+    }),
+  ]);
+
+  const ids = recent.map((run) => run.id);
+  const rows =
+    ids.length === 0
+      ? []
+      : await prisma.testRunCase.groupBy({
+          by: ["testRunId", "testResult"],
+          where: { testRunId: { in: ids } },
+          _count: { _all: true },
+        });
+
+  return {
+    total,
+    recent: recent.map((run) => {
+      const mine = rows.filter((row) => row.testRunId === run.id);
+      const count = (result: string) =>
+        mine.find((row) => row.testResult === result)?._count._all ?? 0;
+      const cases = mine.reduce((sum, row) => sum + row._count._all, 0);
+      return {
+        id: run.id,
+        name: run.name,
+        open: run.status === "OPEN",
+        cases,
+        recorded: cases - count("NOT_RUN"),
+        passed: count("PASSED"),
+        failed: count("FAILED"),
+      };
+    }),
+  };
+}
+
 async function buildProblems(projectId: string): Promise<ProblemsPreview> {
   /* The report rather than the count beside it. `countCasesNeedingAttention`
      stops before it reads a single name, which is right for the Dashboard's
@@ -512,18 +561,37 @@ export async function getMenuPreview(
 ): Promise<MenuPreview> {
   const holds = (capability: CapabilityKey) => allowed.includes(capability);
 
-  const needsGroups = holds("reading.overview") || holds("reading.dashboard");
+  const needsGroups =
+    holds("reading.overview") || holds("reading.dashboard") || holds("authoring.view");
   const groups = needsGroups ? await readGroupsByModule(projectId) : [];
 
-  const [summary, dashboard, problems, audit, notes, files, links] = await Promise.all([
-    holds("reading.overview") ? buildSummary(projectId, groups) : undefined,
+  /* Built once where both are held: the Overview's Summary and the Testing
+     menu's Test Cases ask the same question, and asking it twice would be
+     two of the same queries for one menu. */
+  const summary =
+    holds("reading.overview") || holds("authoring.view")
+      ? await buildSummary(projectId, groups)
+      : undefined;
+
+  const [dashboard, problems, audit, notes, files, links, testRuns] = await Promise.all([
     holds("reading.dashboard") ? buildDashboard(projectId, groups) : undefined,
     holds("reading.problems") ? buildProblems(projectId) : undefined,
     holds("project.audit") ? buildAudit(projectId, now) : undefined,
     holds("notes.view") ? buildNotes(projectId) : undefined,
     holds("files.view") ? buildFiles(projectId) : undefined,
     holds("notes.view") ? buildLinks(projectId) : undefined,
+    holds("runs.view") ? buildTestRuns(projectId) : undefined,
   ]);
 
-  return { summary, dashboard, problems, audit, notes, files, links };
+  return {
+    summary: holds("reading.overview") ? summary : undefined,
+    testCases: holds("authoring.view") ? summary : undefined,
+    testRuns,
+    dashboard,
+    problems,
+    audit,
+    notes,
+    files,
+    links,
+  };
 }
