@@ -119,7 +119,7 @@ test("every pane reaches the foot of the panel", async ({ page }) => {
      measurement can say it is really at the foot. */
   for (const [entry, items] of [
     ["Overview", ["Summary", "Dashboard", "Problem Cases", "Audit Trail"]],
-    ["Testing", ["Test Cases", "Test Runs"]],
+    ["Testing", ["Test Cases", "Test Plans", "Test Runs"]],
     ["Resources", ["Notes", "Files", "Links"]],
   ] as const) {
     await openMenu(page, entry);

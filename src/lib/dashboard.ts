@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { phaseResults as resolvePhaseResults } from "@/lib/latest-results";
 import {
   countCasesNeedingAttention,
   type AttentionPattern,
@@ -278,35 +279,9 @@ function liveCaseInProject(projectId: string) {
   };
 }
 
-/**
- * One result per Test Case across a phase's rounds.
- *
- * A phase is six sprints, so a case can be tested more than once inside it and
- * carry a different result each time. The rule here is the one
- * `TestCase.testResult` itself follows: the newest round to actually report
- * wins, and a case every round left NOT_RUN stays NOT_RUN. Rounds come oldest
- * first so each later report simply overwrites the one before it.
- *
- * The keys are the phase's membership as well as its results: a case with no
- * entry here was never scheduled into the phase at all.
- */
-async function resolvePhaseResults(projectId: string, phase: string) {
-  const rows = await prisma.testRunCase.findMany({
-    // Live rounds only, for the reason the coverage count learned the hard
-    // way: an archived round still owns its `TestRunCase` rows.
-    where: { testRun: { projectId, deletedAt: null, phase } },
-    select: { testCaseId: true, testResult: true },
-    orderBy: { testRun: { createdAt: "asc" } },
-  });
-
-  const resolved = new Map<string, TestResult>();
-  for (const row of rows) {
-    if (!resolved.has(row.testCaseId) || row.testResult !== "NOT_RUN") {
-      resolved.set(row.testCaseId, row.testResult);
-    }
-  }
-  return resolved;
-}
+/* The rule that resolves a phase lives in `@/lib/latest-results` now: a
+ * Test Plan asks the same question of the rounds under it, and two copies of
+ * it would be two answers to "did this case pass". */
 
 function zeroCountRecord<K extends string>(keys: K[]): Record<K, number> {
   return Object.fromEntries(keys.map((key) => [key, 0])) as Record<K, number>;

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { requireCapabilityOrNotFound } from "@/lib/permissions";
@@ -601,6 +602,17 @@ export default async function TestRunPage({
               <Badge tone="gray" variant="outline">
                 {run.phase}
               </Badge>
+            )}
+            {/* The plan this round answers to, where it has one. A plan reads
+                what this round recorded; the link says so in both directions,
+                and the round stays usable on its own. */}
+            {run.testPlan && (
+              <Link
+                href={`/projects/${projectId}/plans/${run.testPlan.id}`}
+                className="hover:underline"
+              >
+                <Badge tone="indigo">{run.testPlan.name}</Badge>
+              </Link>
             )}
             <span>
               {ran} of {casePage.totalInRun} run

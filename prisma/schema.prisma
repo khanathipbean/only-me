@@ -42,6 +42,8 @@ model User {
   createdNotes           Note[]
   createdLinks           Link[]
   createdTestRuns        TestRun[]         @relation("TestRunCreatedBy")
+  ownedTestPlans         TestPlan[]        @relation("TestPlanOwner")
+  createdTestPlans       TestPlan[]        @relation("TestPlanCreatedBy")
   ranTestRunCases        TestRunCase[]     @relation("TestRunCaseRanBy")
   recordedRunResults     TestResultEvent[] @relation("TestResultEventRecordedBy")
   workEventsActed        WorkEvent[]       @relation("WorkEventActor")
@@ -91,6 +93,7 @@ model Project {
   modules       Module[]
   requirements  Requirement[]
   testRuns      TestRun[]
+  testPlans     TestPlan[]
   notifications Notification[]
   notes         Note[]
   links         Link[]
@@ -356,6 +359,7 @@ model TestCase {
   steps        TestStep[]
   attachments  Attachment[]
   runCases     TestRunCase[]
+  planCases    TestPlanCase[]
   /// Every answer anyone has recorded about this case, in a round or not.
   resultEvents TestResultEvent[]
 
@@ -383,23 +387,102 @@ model TestRun {
   endsOn      DateTime?
   status      TestRunStatus @default(OPEN)
   closedAt    DateTime?
+  /// The plan this round belongs to, where it belongs to one. Optional for
+  /// good: rounds existed before plans did, and a round opened to check one
+  /// thing has no plan to be part of.
+  testPlanId  String?
   createdById String
   deletedAt   DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   project   Project       @relation(fields: [projectId], references: [id])
+  testPlan  TestPlan?     @relation(fields: [testPlanId], references: [id])
   createdBy User          @relation("TestRunCreatedBy", fields: [createdById], references: [id])
   cases     TestRunCase[]
 
   @@unique([projectId, name])
   @@index([projectId, status])
   @@index([projectId, phase])
+  @@index([testPlanId])
 }
 
 enum TestRunStatus {
   OPEN
   CLOSED
+}
+
+/// A plan's own states, kept apart from `WorkflowStatus`: Requirement,
+/// Scenario and Test Case share that one and none of them can be put on
+/// hold, which is the state this set exists for.
+enum TestPlanStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
+/// One phase of testing, with a record of its own.
+///
+/// A phase was already here as `TestRun.phase` — a label, nothing more. This
+/// is the same phase with the things a label cannot hold: what it is for, who
+/// owns it, when it runs, and which Test Cases are in its scope. The rounds
+/// stay where they are and keep recording the results; a plan reads them.
+///
+/// It records no result of its own, deliberately. Everything a plan says
+/// about pass and fail is read from the `TestRun`s linked to it.
+model TestPlan {
+  id          String         @id @default(cuid())
+  projectId   String
+  name        String
+  /// The same free-text phase a round carries, copied onto any round linked
+  /// to this plan so the two can never disagree about which phase they are in.
+  phase       String
+  objective   String
+  description String?
+  /// Where the testing happens and what was deployed there. Both optional: a
+  /// plan is often written before either is settled.
+  environment String?
+  build       String?
+  startsOn    DateTime?
+  endsOn      DateTime?
+  ownerId     String
+  status      TestPlanStatus @default(DRAFT)
+  deletedAt   DateTime?
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  project   Project        @relation(fields: [projectId], references: [id])
+  owner     User           @relation("TestPlanOwner", fields: [ownerId], references: [id])
+  createdBy User           @relation("TestPlanCreatedBy", fields: [createdById], references: [id])
+  cases     TestPlanCase[]
+  runs      TestRun[]
+
+  /// The same rule a round follows: two plans in one project cannot share a
+  /// name, or a reader has no way to tell which round belongs to which.
+  @@unique([projectId, name])
+  @@index([projectId, status])
+  @@index([projectId, phase])
+}
+
+/// One Test Case in one plan's scope.
+///
+/// A snapshot, not a rule: choosing a Module writes a row per case it held at
+/// that moment. A case added to that Module next week does not join the plan
+/// on its own — the plan's page offers it instead, because a denominator that
+/// moves while nobody is looking makes every figure above it unreadable.
+model TestPlanCase {
+  id         String   @id @default(cuid())
+  testPlanId String
+  testCaseId String
+  createdAt  DateTime @default(now())
+
+  testPlan TestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+  testCase TestCase @relation(fields: [testCaseId], references: [id])
+
+  @@unique([testPlanId, testCaseId])
+  @@index([testCaseId])
 }
 
 /// One Test Case inside one round, and the result it got there. The row stays

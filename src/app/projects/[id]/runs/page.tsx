@@ -30,6 +30,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Select } from "@/components/ui/Select";
 import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
 import { FormSubmitButton } from "@/components/FormSubmitButton";
+import { linkRunToPlan, listTestPlansForProjectPage } from "@/lib/test-plans";
 import { invalidateRouteCache } from "@/lib/revalidate";
 import { listHrefWithFilters } from "@/lib/hrefs";
 import {
@@ -115,13 +116,21 @@ export default async function TestRunsPage({
     pageSize,
   });
 
+  /* Every live plan in the project, for the field below. A round belongs to
+     at most one, and to none at all is the normal case — rounds existed
+     before plans did. */
+  const planOptions = (
+    await listTestPlansForProjectPage(projectId, { pageSize: 100 })
+  ).plans.map((plan) => ({ value: plan.id, label: `${plan.name} · ${plan.phase}` }));
+
   async function create(formData: FormData) {
     "use server";
     invalidateRouteCache();
     const session = await auth();
     await requireCapabilityOrNotFound(session!.user.id, projectId, "runs.manage");
+    const testPlanId = (formData.get("testPlanId") as string) || null;
     try {
-      await createRun(
+      const run = await createRun(
         projectId,
         {
           name: formData.get("name") as string,
@@ -131,6 +140,12 @@ export default async function TestRunsPage({
         },
         session!.user.id,
       );
+      /* After the round exists, because the link is on the round. The plan's
+         phase is copied onto it here, which is what stops a round sitting
+         under a Sprint 12 plan while its own label says Sprint 11. */
+      if (testPlanId) {
+        await linkRunToPlan(run.id, testPlanId, session!.user.id);
+      }
     } catch (err) {
       if (err instanceof TestRunValidationError) {
         const query = new URLSearchParams(listQueryString);
@@ -159,6 +174,13 @@ export default async function TestRunsPage({
               startsOn: parseDay(formData.get("startsOn")),
               endsOn: parseDay(formData.get("endsOn")),
             },
+            session!.user.id,
+          );
+          /* Joining or leaving a plan writes the link and the phase, and
+             nothing else: every result this round recorded stays as it is. */
+          await linkRunToPlan(
+            runId,
+            ((formData.get("testPlanId") as string) || null),
             session!.user.id,
           );
         } catch (err) {
@@ -252,6 +274,21 @@ export default async function TestRunsPage({
                   ))}
                 </datalist>
               </label>
+              {planOptions.length > 0 && (
+                <label className={`${labelClass} sm:col-span-2`}>
+                  Test Plan
+                  <Select
+                    name="testPlanId"
+                    defaultValue=""
+                    options={[{ value: "", label: "No plan" }, ...planOptions]}
+                    ariaLabel="Test Plan"
+                  />
+                  <span className={mutedTextClass}>
+                    Optional. A plan reads this round&apos;s results; choosing one also takes the
+                    plan&apos;s phase, so the two cannot name different ones.
+                  </span>
+                </label>
+              )}
               <label className={labelClass}>
                 Starts on
                 <input type="date" name="startsOn" className={inputClass} />
@@ -470,6 +507,21 @@ export default async function TestRunsPage({
                                 className={inputClass}
                               />
                             </label>
+                            {planOptions.length > 0 && (
+                              <label className={`${labelClass} sm:col-span-2`}>
+                                Test Plan
+                                <Select
+                                  name="testPlanId"
+                                  defaultValue={run.testPlanId ?? ""}
+                                  options={[{ value: "", label: "No plan" }, ...planOptions]}
+                                  ariaLabel="Test Plan"
+                                />
+                                <span className={mutedTextClass}>
+                                  The plan reads what this round recorded. Joining or leaving one
+                                  changes no result.
+                                </span>
+                              </label>
+                            )}
                             <label className={labelClass}>
                               Starts on
                               <input

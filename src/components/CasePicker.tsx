@@ -39,10 +39,15 @@ export function CasePicker({
   candidates,
   action,
   hasFilters,
+  target = "run",
 }: {
   candidates: CaseCandidate[];
   action: (formData: FormData) => void;
   hasFilters: boolean;
+  /** What the cases are being added to, for the button and the hint. One
+   *  picker serves a round and a plan, and "Add 12 to run" on a plan page
+   *  would be telling the reader they are doing something else. */
+  target?: "run" | "plan";
 }) {
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(candidates.map((candidate) => candidate.id)),
@@ -117,8 +122,8 @@ export function CasePicker({
           <Tooltip
             label={
               hasFilters
-                ? "Cases matching these filters that aren't in this run yet. How many are ticked is on the Add button."
-                : "Every case in this project that isn't in this run yet. How many are ticked is on the Add button."
+                ? `Cases matching these filters that aren't in this ${target} yet. How many are ticked is on the Add button.`
+                : `Every case in this project that isn't in this ${target} yet. How many are ticked is on the Add button.`
             }
           >
             <button
@@ -195,7 +200,7 @@ export function CasePicker({
         {/* Nothing ticked means nothing to do, so the button says so rather
             than submitting an empty batch. */}
         <SubmitButton pendingLabel="Adding…" disabled={selected.size === 0}>
-          {selected.size === 0 ? "Add to run" : `Add ${selected.size} to run`}
+          {selected.size === 0 ? `Add to ${target}` : `Add ${selected.size} to ${target}`}
         </SubmitButton>
       </div>
     </form>

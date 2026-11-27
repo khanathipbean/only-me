@@ -191,6 +191,14 @@ export function ProjectTabs({
           preview: "testCases",
         },
         {
+          href: `${overviewHref}/plans`,
+          needs: "plans.view",
+          label: "Test Plans",
+          detail: "A phase of testing: its scope, and the rounds under it.",
+          icon: ClipboardListIcon,
+          preview: "plans",
+        },
+        {
           href: `${overviewHref}/runs`,
           needs: "runs.view",
           label: "Test Runs",

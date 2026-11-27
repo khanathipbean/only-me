@@ -81,6 +81,8 @@ function body(section: PreviewKey, data: Payload | null, loading: boolean) {
       return data.testCases ? <SummaryPanel data={data.testCases} /> : <PreviewSkeleton />;
     case "testRuns":
       return data.testRuns ? <TestRunsPanel data={data.testRuns} /> : <PreviewSkeleton />;
+    case "plans":
+      return data.plans ? <PlansPanel data={data.plans} /> : <PreviewSkeleton />;
     case "dashboard":
       return data.dashboard ? <DashboardPanel data={data.dashboard} /> : <PreviewSkeleton />;
     case "problems":
@@ -194,6 +196,64 @@ function SummaryPanel({ data }: { data: NonNullable<Payload["summary"]> }) {
             <span className={figureClass}>{stat.value}</span>
             <span className="text-[10px] text-muted">{stat.label}</span>
           </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlansPanel({ data }: { data: NonNullable<Payload["plans"]> }) {
+  if (data.total === 0) {
+    return (
+      <AtRest
+        title="No plans yet"
+        detail="A plan is one phase of testing: what it covers, who owns it, and the rounds run against it."
+      />
+    );
+  }
+
+  const PLAN_TONE: Record<string, Tone> = {
+    IN_PROGRESS: "blue",
+    COMPLETED: "green",
+    ON_HOLD: "amber",
+    DRAFT: "gray",
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <span className={eyebrowClass}>
+        {data.total} plan{data.total === 1 ? "" : "s"}
+      </span>
+
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+        {data.byStatus
+          .filter((row) => row.count > 0)
+          .map((row) => (
+            <span key={row.status} className="flex items-center gap-1.5 text-[11px] text-muted">
+              <span className={`size-2 rounded-xs ${toneBarClass(PLAN_TONE[row.status] ?? "gray")}`} />
+              <span className="text-foreground">{row.label}</span> {row.count}
+            </span>
+          ))}
+      </div>
+
+      <div className={`flex flex-col gap-2.5 ${ruleClass}`}>
+        {data.recent.map((plan) => (
+          <div key={plan.id} className="flex flex-col gap-1">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                {plan.name}
+              </span>
+              <span className="shrink-0 text-[10px] tabular-nums text-muted">
+                {Math.round(plan.progress)}%
+              </span>
+            </span>
+            <span className="h-1.5 overflow-hidden rounded-full bg-black/[.06] dark:bg-white/[.07]">
+              <span
+                style={{ width: `${plan.progress}%` }}
+                className="block h-1.5 rounded-full bg-brand"
+              />
+            </span>
+          </div>
         ))}
       </div>
     </div>

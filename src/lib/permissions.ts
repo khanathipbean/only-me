@@ -132,6 +132,26 @@ export const CAPABILITY_GROUPS = [
     ],
   },
   {
+    key: "test-plans",
+    label: "Test Plans",
+    capabilities: [
+      {
+        key: "plans.view",
+        label: "View Test Plans",
+        detail: "access menu & view data",
+        /* The same readers as Test Runs: a plan is a phase of rounds, and
+           somebody who cannot open a round has nothing to read here. */
+        roles: NON_DEV_ROLES,
+      },
+      {
+        key: "plans.manage",
+        label: "Write a plan and set its scope",
+        detail: "create, edit, archive, choose test cases",
+        roles: EDITOR_ROLES,
+      },
+    ],
+  },
+  {
     key: "test-runs",
     label: "Test Runs",
     capabilities: [

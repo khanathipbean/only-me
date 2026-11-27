@@ -83,6 +83,20 @@ test("a viewer gets no Settings tab and no Settings page", async ({ page }) => {
  * 404 at the end of it. Each tab names the capability its own page checks
  * now, which is what closed it.
  */
+test("a viewer may read Test Plans and is offered no way to change one", async ({ page }) => {
+  await page.getByRole("link", { name: "E2E Fixture" }).click();
+  await page.waitForURL(/\/projects\/[^/]+$/);
+  const projectId = page.url().split("/projects/")[1].split("/")[0];
+
+  /* `plans.view` is open to a VIEWER and `plans.manage` is not, so the page
+     opens and every control that would write is absent. Hiding a control a
+     URL still reaches is not the guard — the page checks the capability
+     itself — but a reader should not be offered what they will be refused. */
+  await page.goto(`/projects/${projectId}/plans`);
+  await expect(page.getByRole("heading", { name: "Test Plans", level: 1 })).toBeVisible();
+  await expect(page.getByRole("button", { name: "+ New Test Plan" })).toHaveCount(0);
+});
+
 test("a viewer is not offered the Import tab it cannot open", async ({ page }) => {
   await page.goto("/projects?search=E2E-FIXTURE");
   await page.getByRole("link", { name: "E2E Fixture" }).click();

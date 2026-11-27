@@ -24,7 +24,7 @@ test("each menu opens, lists its views, and reaches them", async ({ page }) => {
 
   for (const [entry, items] of [
     ["Overview", ["Summary", "Dashboard", "Problem Cases", "Audit Trail"]],
-    ["Testing", ["Test Cases", "Test Runs"]],
+    ["Testing", ["Test Cases", "Test Plans", "Test Runs"]],
     ["Resources", ["Notes", "Files", "Links"]],
   ] as const) {
     const trigger = projectNav(page).getByRole("button", { name: entry });

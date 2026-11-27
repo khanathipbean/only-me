@@ -2,9 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { formatSize } from "@/lib/file-size";
 import { getFileKind } from "@/lib/project-files";
 import { ATTENTION_PATTERNS, failureCount, listProblemCases } from "@/lib/run-history";
+import { TEST_PLAN_STATUSES, summariseTestPlan } from "@/lib/test-plans";
+import { planStatusLabel } from "@/lib/test-plan-ui";
 import type { CapabilityKey } from "@/lib/permissions";
 import type {
   AuditPreview,
+  TestPlansPreview,
   TestRunsPreview,
   DashboardPreview,
   FilesPreview,
@@ -307,6 +310,46 @@ async function buildDashboard(projectId: string, groups: GroupRow[]): Promise<Da
 }
 
 /**
+ * The plans in flight, and how far each has got.
+ *
+ * The progress of a plan is read from the rounds under it, which is work per
+ * plan — so only the few drawn are summed, and the rest are a count by state.
+ */
+async function buildPlans(projectId: string): Promise<TestPlansPreview> {
+  const [plans, grouped] = await Promise.all([
+    prisma.testPlan.findMany({
+      where: { projectId, deletedAt: null },
+      select: { id: true, name: true, phase: true, status: true },
+      orderBy: { updatedAt: "desc" },
+      take: RECENT_TAKE,
+    }),
+    prisma.testPlan.groupBy({
+      by: ["status"],
+      where: { projectId, deletedAt: null },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const summaries = await Promise.all(plans.map((plan) => summariseTestPlan(plan.id)));
+
+  return {
+    total: grouped.reduce((sum, row) => sum + row._count._all, 0),
+    byStatus: TEST_PLAN_STATUSES.map((status) => ({
+      status,
+      label: planStatusLabel(status),
+      count: grouped.find((row) => row.status === status)?._count._all ?? 0,
+    })),
+    recent: plans.map((plan, index) => ({
+      id: plan.id,
+      name: plan.name,
+      phase: plan.phase,
+      status: plan.status,
+      progress: summaries[index].progress,
+    })),
+  };
+}
+
+/**
  * The project's last few rounds, with how far each got.
  *
  * Two queries whatever the number of rounds: the rows for every round in one
@@ -573,7 +616,7 @@ export async function getMenuPreview(
       ? await buildSummary(projectId, groups)
       : undefined;
 
-  const [dashboard, problems, audit, notes, files, links, testRuns] = await Promise.all([
+  const [dashboard, problems, audit, notes, files, links, testRuns, plans] = await Promise.all([
     holds("reading.dashboard") ? buildDashboard(projectId, groups) : undefined,
     holds("reading.problems") ? buildProblems(projectId) : undefined,
     holds("project.audit") ? buildAudit(projectId, now) : undefined,
@@ -581,12 +624,14 @@ export async function getMenuPreview(
     holds("files.view") ? buildFiles(projectId) : undefined,
     holds("notes.view") ? buildLinks(projectId) : undefined,
     holds("runs.view") ? buildTestRuns(projectId) : undefined,
+    holds("plans.view") ? buildPlans(projectId) : undefined,
   ]);
 
   return {
     summary: holds("reading.overview") ? summary : undefined,
     testCases: holds("authoring.view") ? summary : undefined,
     testRuns,
+    plans,
     dashboard,
     problems,
     audit,

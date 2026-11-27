@@ -24,6 +24,7 @@ export type MenuPreview = {
    *  Overview. */
   testCases?: SummaryPreview;
   testRuns?: TestRunsPreview;
+  plans?: TestPlansPreview;
   dashboard?: DashboardPreview;
   problems?: ProblemsPreview;
   audit?: AuditPreview;
@@ -78,6 +79,14 @@ export type AuditPreview = {
   week: { day: string; count: number; share: number }[];
   total: number;
   recent: { id: string; initials: string; what: string; when: string }[];
+};
+
+export type TestPlansPreview = {
+  total: number;
+  /** How many are in each state, in the order the page lists them. */
+  byStatus: { status: string; label: string; count: number }[];
+  /** The ones somebody is likely to be in the middle of, newest first. */
+  recent: { id: string; name: string; phase: string; status: string; progress: number }[];
 };
 
 export type TestRunsPreview = {

@@ -69,6 +69,9 @@ const RESULT_ORDER = ["NOT_RUN", "PASSED", "FAILED", "BLOCKED", "SKIPPED"] as co
 const RUN_WITH_PROGRESS = {
   _count: { select: { cases: true } },
   createdBy: { select: { id: true, name: true } },
+  /* The plan this round answers to, where it has one. Two columns, so the
+     list can show it per row without a query each. */
+  testPlan: { select: { id: true, name: true } },
 } as const;
 
 export type TestRunFilters = {
